@@ -21,10 +21,14 @@ library
   exposed-modules:     Control.Auto
                      , Control.Auto.Core
                      , Control.Auto.Event
+                     , Control.Auto.Run
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8
                      , binary
                      , profunctors
+                     , semigroups
+                     , transformers
+                     -- , bytestring
   hs-source-dirs:      src
   default-language:    Haskell2010
