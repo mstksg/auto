@@ -10,7 +10,7 @@ module Control.Auto.Core (
   , saveAuto
   , stepAuto
   -- * Auto constructors
-  -- ** Lifting functions
+  -- ** Lifting values and functions
   , mkConst
   , mkConstM
   , mkFunc
@@ -31,6 +31,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.Monad
+import Data.Profunctor
 import Control.Monad.Fix
 import Data.Binary
 import Data.Monoid
@@ -39,6 +40,10 @@ import Prelude hiding      ((.), id)
 data Output m a b = Output { outRes  :: !b
                            , outAuto :: !(Auto m a b)
                            } deriving Functor
+
+instance Monad m => Applicative (Output m a) where
+    pure x                      = Output x (pure x)
+    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
 
 onOutput :: (b -> b')
          -> (Auto m a b -> Auto m a' b')
@@ -132,14 +137,11 @@ mkStateM_ f s0 = mkAutoM_ $ \x -> do
                               (y, s1) <- f x s0
                               return (Output y (mkStateM_ f s1))
 
+
 instance Monad m => Functor (Auto m a) where
     fmap f (Auto l s o) = Auto (fmap f <$> l)
                                s
                                $ \x -> liftM (fmap f) (o x)
-
-instance Monad m => Applicative (Output m a) where
-    pure x                      = Output x (pure x)
-    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
 
 instance Monad m => Applicative (Auto m a) where
     pure                         = mkConst
@@ -155,6 +157,18 @@ instance Monad m => Category (Auto m) where
                                                 Output y fa' <- ft x
                                                 Output z ga' <- gt y
                                                 return (Output z (ga' . fa'))
+
+instance Monad m => Profunctor (Auto m) where
+    lmap f (Auto l s t) = mkAutoM (lmap f <$> l)
+                                  s
+                                  $ \x -> do
+                                      Output y a' <- t (f x)
+                                      return (Output y (lmap f a'))
+    rmap g (Auto l s t) = mkAutoM (rmap g <$> l)
+                                  s
+                                  $ \x -> do
+                                      Output y a' <- t x
+                                      return (Output (g y) (rmap g a'))
 
 instance Monad m => Arrow (Auto m) where
     arr                = mkFunc
