@@ -3,7 +3,9 @@
 
 name:                auto
 version:             0.1.0.0
-synopsis:            Arrow-based library providing denotational, composable semantics for discrete-time, locally stateful, interactive programs/automations.
+synopsis:            DSL providing denotational, composable semantics for
+                     discrete-step, locally stateful, interactive programs &
+                     automations.
 -- description:         
 license:             MIT
 license-file:        LICENSE
