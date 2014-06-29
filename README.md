@@ -34,7 +34,7 @@ automations.
     include turn-based games, chat bots, and cellular automata; bad examples
     include real-time games and day trading simulations.
 
-*   Locally stateful: Every component encapsulates its own local (and
+*   **Locally stateful**: Every component encapsulates its own local (and
     "hidden") state.  There is no global or impicitly shared state.  This is
     in contrast to those "giant state monad" libraries/abstractions where you
     carry around the entire game/program state in some giant data type, and
@@ -59,4 +59,6 @@ automations.
     this is for you!! :D
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
+
+Examples and further descriptions will appear here as development continues.
 
