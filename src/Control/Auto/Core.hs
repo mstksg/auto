@@ -20,6 +20,11 @@ module Control.Auto.Core (
   , mkStateM
   , mkState_
   , mkStateM_
+  -- ** from Scanners
+  , mkScan
+  , mkScanM
+  , mkScan_
+  , mkScanM_
   -- -- ** from iteratores
   -- , mkIterate
   -- , mkIterateM
@@ -112,57 +117,73 @@ mkState :: (Binary s, Monad m)
         => (a -> s -> (b, s))
         -> s
         -> Auto m a b
-mkState f s0 = mkAuto (mkState f <$> get)
-                      (put s0)
-                      $ \x -> let (y, s1) = f x s0
-                              in  Output y (mkState f s1)
+mkState f = a_
+  where
+    a_ s0 = mkAuto (a_ <$> get)
+                   (put s0)
+                   $ \x -> let (y, s1) = f x s0
+                           in  Output y (a_ s1)
 
 mkStateM :: (Binary s, Monad m)
          => (a -> s -> m (b, s))
          -> s
          -> Auto m a b
-mkStateM f s0 = mkAutoM (mkStateM f <$> get)
-                        (put s0)
-                        $ \x -> do
-                            (y, s1) <- f x s0
-                            return (Output y (mkStateM f s1))
+mkStateM f = a_
+  where
+    a_ s0 = mkAutoM (a_ <$> get)
+                    (put s0)
+                    $ \x -> do
+                        (y, s1) <- f x s0
+                        return (Output y (mkStateM f s1))
 
 mkState_ :: Monad m
          => (a -> s -> (b, s))
          -> s
          -> Auto m a b
-mkState_ f s0 = mkAuto_ $ \x -> let (y, s1) = f x s0
-                                in  Output y (mkState_ f s1)
+mkState_ f = a_
+  where
+    a_ s0 = mkAuto_ $ \x -> let (y, s1) = f x s0
+                        in  Output y (a_ s1)
 
 mkStateM_ :: Monad m
           => (a -> s -> m (b, s))
           -> s
           -> Auto m a b
-mkStateM_ f s0 = mkAutoM_ $ \x -> do
-                              (y, s1) <- f x s0
-                              return (Output y (mkStateM_ f s1))
+mkStateM_ f = a_
+  where
+    a_ s0 = mkAutoM_ $ \x -> do
+                         (y, s1) <- f x s0
+                         return (Output y (a_ s1))
 
 mkScan :: (Binary b, Monad m) => (b -> a -> b) -> b -> Auto m a b
-mkScan f y0 = mkAuto (mkScan f <$> get)
-                     (put y0)
-                     $ \x -> let y1 = f y0 x
-                             in  Output y1 (mkScan f y1)
+mkScan f = a_
+  where
+    a_ y0 = mkAuto (a_ <$> get)
+                   (put y0)
+                   $ \x -> let y1 = f y0 x
+                           in  Output y1 (a_ y1)
 
 mkScanM :: (Binary b, Monad m) => (b -> a -> m b) -> b -> Auto m a b
-mkScanM f y0 = mkAutoM (mkScanM f <$> get)
-                       (put y0)
-                       $ \x -> do
-                           y1 <- f y0 x
-                           return (Output y1 (mkScanM f y1))
+mkScanM f = a_
+  where
+    a_ y0 = mkAutoM (a_ <$> get)
+                    (put y0)
+                    $ \x -> do
+                        y1 <- f y0 x
+                        return (Output y1 (a_ y1))
 
 mkScan_ :: Monad m => (b -> a -> b) -> b -> Auto m a b
-mkScan_ f y0 = mkAuto_ $ \x -> let y1 = f y0 x
-                               in  Output y1 (mkScan_ f y1)
+mkScan_ f = a_
+  where
+    a_ y0 = mkAuto_ $ \x -> let y1 = f y0 x
+                            in  Output y1 (a_ y1)
 
 mkScanM_ :: Monad m => (b -> a -> m b) -> b -> Auto m a b
-mkScanM_ f y0 = mkAutoM_ $ \x -> do
-                             y1 <- f y0 x
-                             return (Output y1 (mkScanM_ f y1))
+mkScanM_ f = a_
+  where
+    a_ y0 = mkAutoM_ $ \x -> do
+                         y1 <- f y0 x
+                         return (Output y1 (a_ y1))
 
 -- mkIterate :: (Binary b, Monad m) => (b -> b) -> b -> Auto m a b
 -- mkIterate f x0 = mkAuto (mkIterate f <$> get)
@@ -205,16 +226,20 @@ instance Monad m => Category (Auto m) where
                                                 return (Output z (ga' . fa'))
 
 instance Monad m => Profunctor (Auto m) where
-    lmap f (Auto l s t) = mkAutoM (lmap f <$> l)
+    lmap f = a_
+      where
+        a_ (Auto l s t) = mkAutoM (a_ <$> l)
                                   s
                                   $ \x -> do
                                       Output y a' <- t (f x)
-                                      return (Output y (lmap f a'))
-    rmap g (Auto l s t) = mkAutoM (rmap g <$> l)
+                                      return (Output y (a_ a'))
+    rmap g = a_
+      where
+        a_ (Auto l s t) = mkAutoM (a_ <$> l)
                                   s
                                   $ \x -> do
                                       Output y a' <- t x
-                                      return (Output (g y) (rmap g a'))
+                                      return (Output (g y) (a_ a'))
 
 instance Monad m => Arrow (Auto m) where
     arr                = mkFunc
