@@ -81,4 +81,3 @@ superior semantics and set of concepts for working in such contexts.
 
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
-
