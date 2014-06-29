@@ -62,3 +62,22 @@ automations.
 
 Examples and further descriptions will appear here as development continues.
 
+Relation to FRP
+---------------
+
+**Auto** borrows a lot of concepts from *[Functional Reactive
+Programming][frp]* --- especially arrowized, locally stateful libraries like
+[netwire][].  **Auto** attempts to bring an applicable subset of FRP's
+high-level concepts and semantics and transplant them into the world of
+fundamentally discrete-step/discrete-time contexts.  Users of such libraries
+would likely be able to quickly pick up **Auto**, and the reverse is
+(hopefully) true too.
+
+Note that this library is not meant to be any sort of meaningful substitution
+for implementing situations which involve concepts of continuous ("real
+number-valued", as opposed to "integer valued") time (like real-time games);
+you can "fake" it using **Auto**, but in those situations, FRP provides a much
+superior semantics and set of concepts for working in such contexts.
+
+[frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
+[netwire]: https://hackage.haskell.org/package/netwire
