@@ -4,8 +4,8 @@
 name:                auto
 version:             0.1.0.0
 synopsis:            DSL providing denotational, composable semantics for
-                     discrete-step, locally stateful, interactive programs &
-                     automations.
+                     discrete-step, locally stateful, interactive programs,
+                     games & automations.
 -- description:         
 license:             MIT
 license-file:        LICENSE

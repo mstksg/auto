@@ -180,6 +180,8 @@ instance MonadFix m => ArrowLoop (Auto m) where
                                       . mfix
                                       $ \(Output (_, d) _) -> t (x, d)
 
+-- Utility instances
+
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
@@ -197,3 +199,64 @@ instance (Monad m, Fractional b) => Fractional (Auto m a b) where
     (/)          = liftA2 (/)
     recip        = liftA recip
     fromRational = pure . fromRational
+
+instance (Monad m, Floating b) => Floating (Auto m a b) where
+    pi      = pure pi
+    exp     = liftA exp
+    sqrt    = liftA sqrt
+    log     = liftA log
+    (**)    = liftA2 (**)
+    logBase = liftA2 logBase
+    sin     = liftA sin
+    tan     = liftA tan
+    cos     = liftA cos
+    asin    = liftA asin
+    atan    = liftA atan
+    acos    = liftA acos
+    sinh    = liftA sinh
+    tanh    = liftA tanh
+    cosh    = liftA cosh
+    asinh   = liftA asinh
+    atanh   = liftA atanh
+    acosh   = liftA acosh
+
+-- Monoid, Num, Fractional, and Floating instances for Output because why not.
+
+instance (Monad m, Monoid b) => Monoid (Output m a b) where
+    mempty  = pure mempty
+    mappend = liftA2 mappend
+
+instance (Monad m, Num b) => Num (Output m a b) where
+    (+)         = liftA2 (+)
+    (*)         = liftA2 (*)
+    (-)         = liftA2 (-)
+    negate      = liftA negate
+    abs         = liftA abs
+    signum      = liftA signum
+    fromInteger = pure . fromInteger
+
+instance (Monad m, Fractional b) => Fractional (Output m a b) where
+    (/)          = liftA2 (/)
+    recip        = liftA recip
+    fromRational = pure . fromRational
+
+instance (Monad m, Floating b) => Floating (Output m a b) where
+    pi      = pure pi
+    exp     = liftA exp
+    sqrt    = liftA sqrt
+    log     = liftA log
+    (**)    = liftA2 (**)
+    logBase = liftA2 logBase
+    sin     = liftA sin
+    tan     = liftA tan
+    cos     = liftA cos
+    asin    = liftA asin
+    atan    = liftA atan
+    acos    = liftA acos
+    sinh    = liftA sinh
+    tanh    = liftA tanh
+    cosh    = liftA cosh
+    asinh   = liftA asinh
+    atanh   = liftA atanh
+    acosh   = liftA acosh
+
