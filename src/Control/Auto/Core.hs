@@ -1,6 +1,31 @@
 {-# LANGUAGE DeriveFunctor #-}
 
-module Control.Auto.Core where
+module Control.Auto.Core (
+  -- * Auto output
+    Output(..)
+  , onOutput
+  -- * Auto type & accessors
+  , Auto
+  , loadAuto
+  , saveAuto
+  , stepAuto
+  -- * Auto constructors
+  -- ** Lifting functions
+  , mkConst
+  , mkConstM
+  , mkFunc
+  , mkFuncM
+  -- ** from State transformers
+  , mkState
+  , mkStateM
+  , mkState_
+  , mkStateM_
+  -- ** Arbitrary Autos
+  , mkAuto
+  , mkAutoM
+  , mkAuto_
+  , mkAutoM_
+  ) where
 
 import Control.Applicative
 import Control.Arrow
@@ -37,6 +62,7 @@ mkAutoM :: Get (Auto m a b)
         -> (a -> m (Output m a b))
         -> Auto m a b
 mkAutoM = Auto
+{-# INLINE mkAutoM #-}
 
 mkAuto_ :: Monad m
         => (a -> Output m a b)
@@ -48,7 +74,13 @@ mkAutoM_ :: Monad m
          -> Auto m a b
 mkAutoM_ f = a
   where
-    a = Auto (pure a) (put ()) f
+    a = mkAutoM (pure a) (put ()) f
+
+mkConst :: Monad m => b -> Auto m a b
+mkConst = mkFunc . const
+
+mkConstM :: Monad m => m b -> Auto m a b
+mkConstM = mkFuncM . const
 
 mkFunc :: Monad m
        => (a -> b)
@@ -56,15 +88,6 @@ mkFunc :: Monad m
 mkFunc f = a
   where
     a = mkAuto_ $ \x -> Output (f x) a
-
-mkState :: (Binary s, Monad m)
-        => (a -> s -> (b, s))
-        -> s
-        -> Auto m a b
-mkState f s0 = mkAuto (mkState f <$> get)
-                      (put s0)
-                      $ \x -> let (y, s1) = f x s0
-                              in  Output y (mkState f s1)
 
 mkFuncM :: Monad m
         => (a -> m b)
@@ -74,6 +97,15 @@ mkFuncM f = a
     a = mkAutoM_ $ \x -> do
                       y <- f x
                       return (Output y a)
+
+mkState :: (Binary s, Monad m)
+        => (a -> s -> (b, s))
+        -> s
+        -> Auto m a b
+mkState f s0 = mkAuto (mkState f <$> get)
+                      (put s0)
+                      $ \x -> let (y, s1) = f x s0
+                              in  Output y (mkState f s1)
 
 mkStateM :: (Binary s, Monad m)
          => (a -> s -> m (b, s))
@@ -99,9 +131,6 @@ mkStateM_ :: Monad m
 mkStateM_ f s0 = mkAutoM_ $ \x -> do
                               (y, s1) <- f x s0
                               return (Output y (mkStateM_ f s1))
-
-mkConst :: Monad m => b -> Auto m a b
-mkConst = mkFunc . const
 
 instance Monad m => Functor (Auto m a) where
     fmap f (Auto l s o) = Auto (fmap f <$> l)
@@ -151,7 +180,83 @@ instance MonadFix m => ArrowLoop (Auto m) where
                                       . mfix
                                       $ \(Output (_, d) _) -> t (x, d)
 
+-- Utility instances
+
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
+
+instance (Monad m, Num b) => Num (Auto m a b) where
+    (+)         = liftA2 (+)
+    (*)         = liftA2 (*)
+    (-)         = liftA2 (-)
+    negate      = liftA negate
+    abs         = liftA abs
+    signum      = liftA signum
+    fromInteger = pure . fromInteger
+
+instance (Monad m, Fractional b) => Fractional (Auto m a b) where
+    (/)          = liftA2 (/)
+    recip        = liftA recip
+    fromRational = pure . fromRational
+
+instance (Monad m, Floating b) => Floating (Auto m a b) where
+    pi      = pure pi
+    exp     = liftA exp
+    sqrt    = liftA sqrt
+    log     = liftA log
+    (**)    = liftA2 (**)
+    logBase = liftA2 logBase
+    sin     = liftA sin
+    tan     = liftA tan
+    cos     = liftA cos
+    asin    = liftA asin
+    atan    = liftA atan
+    acos    = liftA acos
+    sinh    = liftA sinh
+    tanh    = liftA tanh
+    cosh    = liftA cosh
+    asinh   = liftA asinh
+    atanh   = liftA atanh
+    acosh   = liftA acosh
+
+-- Monoid, Num, Fractional, and Floating instances for Output because why not.
+
+instance (Monad m, Monoid b) => Monoid (Output m a b) where
+    mempty  = pure mempty
+    mappend = liftA2 mappend
+
+instance (Monad m, Num b) => Num (Output m a b) where
+    (+)         = liftA2 (+)
+    (*)         = liftA2 (*)
+    (-)         = liftA2 (-)
+    negate      = liftA negate
+    abs         = liftA abs
+    signum      = liftA signum
+    fromInteger = pure . fromInteger
+
+instance (Monad m, Fractional b) => Fractional (Output m a b) where
+    (/)          = liftA2 (/)
+    recip        = liftA recip
+    fromRational = pure . fromRational
+
+instance (Monad m, Floating b) => Floating (Output m a b) where
+    pi      = pure pi
+    exp     = liftA exp
+    sqrt    = liftA sqrt
+    log     = liftA log
+    (**)    = liftA2 (**)
+    logBase = liftA2 logBase
+    sin     = liftA sin
+    tan     = liftA tan
+    cos     = liftA cos
+    asin    = liftA asin
+    atan    = liftA atan
+    acos    = liftA acos
+    sinh    = liftA sinh
+    tanh    = liftA tanh
+    cosh    = liftA cosh
+    asinh   = liftA asinh
+    atanh   = liftA atanh
+    acosh   = liftA acosh
 
