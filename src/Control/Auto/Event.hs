@@ -1,25 +1,31 @@
 module Control.Auto.Event (
-    event
+  -- * The Event type
+    Event
+  , event
   , merge
   , mergeL
   , mergeR
-  , (<&)
-  , (&>)
+  -- * Step/"time" based Event streams
   , never
   , now
   , after
   , every
   , eachAt
   , eachAt_
-  , filterE
+  -- * Modifying Event streams
+  , (<&)
+  , (&>)
   , once
   , notYet
+  , filterE
   , takeE
   , takeWhileE
   , dropE
   , dropWhileE
+  -- * Scanning/Accumulating Event streams
   , accumE
   , accumE_
+  -- * Composing with Events
   , perEvent
   , bindEvent
   ) where
