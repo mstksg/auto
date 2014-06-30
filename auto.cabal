@@ -21,6 +21,9 @@ library
   exposed-modules:     Control.Auto
                      , Control.Auto.Core
                      , Control.Auto.Event
+                     , Control.Auto.Event.Internal
+                     , Control.Auto.Interval
+                     , Control.Auto.Switch
                      , Control.Auto.Run
   -- other-modules:       
   -- other-extensions:    

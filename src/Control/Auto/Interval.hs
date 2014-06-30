@@ -111,7 +111,7 @@ _holdForF n = f   -- n should be >= 0
     f (x, i) _         = (x      , i - 1)
 
 (<|?>) :: Monad m => Auto m a (Maybe b) -> Auto m a (Maybe b) -> Auto m a (Maybe b)
-a1 <|?> a2 = mkAutoM ((<|?>) <$> loadAuto a1 <*> loadAuto a2)
+a1 <|?> a2 = mkAutoM (liftA2 (<|?>) (loadAuto a1) (loadAuto a2))
                      (saveAuto a1 *> saveAuto a2)
                      $ \x -> do
                          Output y1 a1' <- stepAuto a1 x
@@ -123,7 +123,7 @@ a1 <|?> a2 = mkAutoM ((<|?>) <$> loadAuto a1 <*> loadAuto a2)
                            _               -> Output Nothing next
 
 (<|!>) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
-a1 <|!> a2 = mkAutoM ((<|!>) <$> loadAuto a1 <*> loadAuto a2)
+a1 <|!> a2 = mkAutoM (liftA2 (<|!>) (loadAuto a1) (loadAuto a2))
                      (saveAuto a1 *> saveAuto a2)
                      $ \x -> do
                          Output y1 a1' <- stepAuto a1 x
