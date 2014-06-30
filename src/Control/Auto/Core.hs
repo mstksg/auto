@@ -10,7 +10,7 @@ module Control.Auto.Core (
   , saveAuto
   , stepAuto
   -- * Auto constructors
-  -- ** Lifting functions
+  -- ** Lifting values and functions
   , mkConst
   , mkConstM
   , mkFunc
@@ -20,6 +20,11 @@ module Control.Auto.Core (
   , mkStateM
   , mkState_
   , mkStateM_
+  -- ** from Accumulators
+  , mkAccum
+  , mkAccumM
+  , mkAccum_
+  , mkAccumM_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAutoM
@@ -31,6 +36,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.Monad
+import Data.Profunctor
 import Control.Monad.Fix
 import Data.Binary
 import Data.Monoid
@@ -39,6 +45,10 @@ import Prelude hiding      ((.), id)
 data Output m a b = Output { outRes  :: !b
                            , outAuto :: !(Auto m a b)
                            } deriving Functor
+
+instance Monad m => Applicative (Output m a) where
+    pure x                      = Output x (pure x)
+    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
 
 onOutput :: (b -> b')
          -> (Auto m a b -> Auto m a' b')
@@ -102,44 +112,89 @@ mkState :: (Binary s, Monad m)
         => (a -> s -> (b, s))
         -> s
         -> Auto m a b
-mkState f s0 = mkAuto (mkState f <$> get)
-                      (put s0)
-                      $ \x -> let (y, s1) = f x s0
-                              in  Output y (mkState f s1)
+mkState f = a_
+  where
+    a_ s0 = mkAuto (a_ <$> get)
+                   (put s0)
+                   $ \x -> let (y, s1) = f x s0
+                           in  Output y (a_ s1)
 
 mkStateM :: (Binary s, Monad m)
          => (a -> s -> m (b, s))
          -> s
          -> Auto m a b
-mkStateM f s0 = mkAutoM (mkStateM f <$> get)
-                        (put s0)
-                        $ \x -> do
-                            (y, s1) <- f x s0
-                            return (Output y (mkStateM f s1))
+mkStateM f = a_
+  where
+    a_ s0 = mkAutoM (a_ <$> get)
+                    (put s0)
+                    $ \x -> do
+                        (y, s1) <- f x s0
+                        return (Output y (mkStateM f s1))
 
 mkState_ :: Monad m
          => (a -> s -> (b, s))
          -> s
          -> Auto m a b
-mkState_ f s0 = mkAuto_ $ \x -> let (y, s1) = f x s0
-                                in  Output y (mkState_ f s1)
+mkState_ f = a_
+  where
+    a_ s0 = mkAuto_ $ \x -> let (y, s1) = f x s0
+                        in  Output y (a_ s1)
 
 mkStateM_ :: Monad m
           => (a -> s -> m (b, s))
           -> s
           -> Auto m a b
-mkStateM_ f s0 = mkAutoM_ $ \x -> do
-                              (y, s1) <- f x s0
-                              return (Output y (mkStateM_ f s1))
+mkStateM_ f = a_
+  where
+    a_ s0 = mkAutoM_ $ \x -> do
+                         (y, s1) <- f x s0
+                         return (Output y (a_ s1))
+
+mkAccum :: (Binary b, Monad m)
+        => (b -> a -> b)
+        -> b
+        -> Auto m a b
+mkAccum f = a_
+  where
+    a_ y0 = mkAuto (a_ <$> get)
+                   (put y0)
+                   $ \x -> let y1 = f y0 x
+                           in  Output y1 (a_ y1)
+
+mkAccumM :: (Binary b, Monad m)
+         => (b -> a -> m b)
+         -> b
+         -> Auto m a b
+mkAccumM f = a_
+  where
+    a_ y0 = mkAutoM (a_ <$> get)
+                    (put y0)
+                    $ \x -> do
+                        y1 <- f y0 x
+                        return (Output y1 (a_ y1))
+
+mkAccum_ :: Monad m
+         => (b -> a -> b)
+         -> b
+         -> Auto m a b
+mkAccum_ f = a_
+  where
+    a_ y0 = mkAuto_ $ \x -> let y1 = f y0 x
+                            in  Output y1 (a_ y1)
+
+mkAccumM_ :: Monad m
+          => (b -> a -> m b)
+          -> b
+          -> Auto m a b
+mkAccumM_ f = a_
+  where
+    a_ y0 = mkAutoM_ $ \x -> do
+                         y1 <- f y0 x
+                         return (Output y1 (a_ y1))
+
 
 instance Monad m => Functor (Auto m a) where
-    fmap f (Auto l s o) = Auto (fmap f <$> l)
-                               s
-                               $ \x -> liftM (fmap f) (o x)
-
-instance Monad m => Applicative (Output m a) where
-    pure x                      = Output x (pure x)
-    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
+    fmap = rmap
 
 instance Monad m => Applicative (Auto m a) where
     pure                         = mkConst
@@ -155,6 +210,22 @@ instance Monad m => Category (Auto m) where
                                                 Output y fa' <- ft x
                                                 Output z ga' <- gt y
                                                 return (Output z (ga' . fa'))
+
+instance Monad m => Profunctor (Auto m) where
+    lmap f = a_
+      where
+        a_ (Auto l s t) = mkAutoM (a_ <$> l)
+                                  s
+                                  $ \x -> do
+                                      Output y a' <- t (f x)
+                                      return (Output y (a_ a'))
+    rmap g = a_
+      where
+        a_ (Auto l s t) = mkAutoM (a_ <$> l)
+                                  s
+                                  $ \x -> do
+                                      Output y a' <- t x
+                                      return (Output (g y) (a_ a'))
 
 instance Monad m => Arrow (Auto m) where
     arr                = mkFunc
