@@ -1,9 +1,69 @@
-module Control.Auto.Interval where
+module Control.Auto.Interval (
+  -- * Static intervals
+    inhibit
+  , always
+  , for
+  , inhibitFor
+  , window
+  -- * Filter intervals
+  , when
+  , unless
+  -- * Choice
+  , (<|?>)
+  , (<|!>)
+  -- * Event-based intervals
+  , after
+  , before
+  , between
+  , hold
+  , hold_
+  , holdFor
+  , holdFor_
+  -- * Composing with intervals
+  , during
+  , bindI
+  ) where
 
-import Control.Auto.Core
 import Control.Applicative
-import Data.Binary
+import Control.Arrow
+import Control.Auto.Core
 import Control.Auto.Event.Internal
+import Control.Category
+import Data.Binary
+import Prelude hiding              ((.), id)
+
+inhibit :: Monad m => Auto m a (Maybe b)
+inhibit = pure Nothing
+
+always :: Monad m => Auto m a (Maybe a)
+always = arr Just
+
+for :: Monad m => Int -> Auto m a (Maybe a)
+for = mkState f . max 0
+  where
+    f _ 0 = (Nothing, 0    )
+    f x i = (Just x , i - 1)
+
+inhibitFor :: Monad m => Int -> Auto m a (Maybe a)
+inhibitFor = mkState f . max 0
+  where
+    f x 0 = (Just x , 0    )
+    f _ i = (Nothing, i - 1)
+
+window :: Monad m => Int -> Int -> Auto m a (Maybe a)
+window x y = bindI (inhibitFor x) . for y
+
+when :: Monad m => (a -> Bool) -> Auto m a (Maybe a)
+when p = arr f
+  where
+    f x | p x       = Just x
+        | otherwise = Nothing
+
+unless :: Monad m => (a -> Bool) -> Auto m a (Maybe a)
+unless p = arr f
+  where
+    f x | p x       = Nothing
+        | otherwise = Just x
 
 after :: Monad m => Auto m (a, Event b) (Maybe a)
 after = mkState f False
@@ -37,6 +97,19 @@ hold_ = mkAccum_ f Nothing
   where
     f x = event x Just
 
+holdFor :: (Binary a, Monad m) => Int -> Auto m (Event a) (Maybe a)
+holdFor n = fst <$> mkAccum (_holdForF n) (Nothing, max 0 n)
+
+holdFor_ :: Monad m => Int -> Auto m (Event a) (Maybe a)
+holdFor_ n = fst <$> mkAccum_ (_holdForF n) (Nothing, max 0 n)
+
+_holdForF :: Int -> (Maybe a, Int) -> Event a -> (Maybe a, Int)
+_holdForF n = f   -- n should be >= 0
+  where
+    f _      (Event x) = (Just x , n    )
+    f (_, 0) _         = (Nothing, 0    )
+    f (x, i) _         = (x      , i - 1)
+
 (<|?>) :: Monad m => Auto m a (Maybe b) -> Auto m a (Maybe b) -> Auto m a (Maybe b)
 a1 <|?> a2 = mkAutoM ((<|?>) <$> loadAuto a1 <*> loadAuto a2)
                      (saveAuto a1 *> saveAuto a2)
@@ -59,3 +132,27 @@ a1 <|!> a2 = mkAutoM ((<|!>) <$> loadAuto a1 <*> loadAuto a2)
                          return $ case (y1, y2) of
                            (Just y, _) -> Output y next
                            (_     , y) -> Output y next
+
+during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
+during a = a_
+  where
+    a_ = mkAutoM (during <$> loadAuto a)
+                 (saveAuto a)
+                 $ \x -> case x of
+                           Just x' -> do
+                             Output y a' <- stepAuto a x'
+                             return (Output (Just y) (during a'))
+                           Nothing ->
+                             return (Output Nothing  a_         )
+
+bindI :: Monad m => Auto m a (Maybe b) -> Auto m (Maybe a) (Maybe b)
+bindI a = a_
+  where
+    a_ = mkAutoM (bindI <$> loadAuto a)
+                 (saveAuto a)
+                 $ \x -> case x of
+                     Just x' -> do
+                       Output y a' <- stepAuto a x'
+                       return (Output y       (bindI a'))
+                     Nothing ->
+                       return (Output Nothing a_        )

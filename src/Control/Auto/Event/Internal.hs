@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Control.Auto.Event.Internal (
     Event(..)
@@ -9,10 +10,12 @@ module Control.Auto.Event.Internal (
 
 import Data.Semigroup
 import Data.Typeable
+import Data.Binary
+import GHC.Generics
 
 data Event a = NoEvent
              | Event a
-             deriving (Functor, Typeable, Show)
+             deriving (Functor, Typeable, Show, Generic)
 
 instance Semigroup a => Monoid (Event a) where
     mempty  = NoEvent
@@ -20,6 +23,8 @@ instance Semigroup a => Monoid (Event a) where
 
 instance Semigroup a => Semigroup (Event a) where
     (<>) = merge (<>)
+
+instance Binary a => Binary (Event a)
 
 merge :: (a -> a -> a) -> Event a -> Event a -> Event a
 merge _ ex NoEvent          = ex
