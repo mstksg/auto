@@ -30,9 +30,6 @@ module Control.Auto.Core (
   , mkAutoM
   , mkAuto_
   , mkAutoM_
-  -- -- ** Auto transformers
-  -- , fromAuto
-  -- , fromAutoM
   ) where
 
 import Control.Applicative
@@ -153,7 +150,10 @@ mkStateM_ f = a_
                          (y, s1) <- f x s0
                          return (Output y (a_ s1))
 
-mkAccum :: (Binary b, Monad m) => (b -> a -> b) -> b -> Auto m a b
+mkAccum :: (Binary b, Monad m)
+        => (b -> a -> b)
+        -> b
+        -> Auto m a b
 mkAccum f = a_
   where
     a_ y0 = mkAuto (a_ <$> get)
@@ -161,7 +161,10 @@ mkAccum f = a_
                    $ \x -> let y1 = f y0 x
                            in  Output y1 (a_ y1)
 
-mkAccumM :: (Binary b, Monad m) => (b -> a -> m b) -> b -> Auto m a b
+mkAccumM :: (Binary b, Monad m)
+         => (b -> a -> m b)
+         -> b
+         -> Auto m a b
 mkAccumM f = a_
   where
     a_ y0 = mkAutoM (a_ <$> get)
@@ -170,30 +173,24 @@ mkAccumM f = a_
                         y1 <- f y0 x
                         return (Output y1 (a_ y1))
 
-mkAccum_ :: Monad m => (b -> a -> b) -> b -> Auto m a b
+mkAccum_ :: Monad m
+         => (b -> a -> b)
+         -> b
+         -> Auto m a b
 mkAccum_ f = a_
   where
     a_ y0 = mkAuto_ $ \x -> let y1 = f y0 x
                             in  Output y1 (a_ y1)
 
-mkAccumM_ :: Monad m => (b -> a -> m b) -> b -> Auto m a b
+mkAccumM_ :: Monad m
+          => (b -> a -> m b)
+          -> b
+          -> Auto m a b
 mkAccumM_ f = a_
   where
     a_ y0 = mkAutoM_ $ \x -> do
                          y1 <- f y0 x
                          return (Output y1 (a_ y1))
-
--- fromAuto :: Monad m => (Auto m a b -> Auto m a' b') -> (a' -> a) -> (b -> b') -> Auto m a b -> Auto m a' b'
--- fromAuto m f g = fromAutoM m (return . f) (return . g)
-
--- fromAutoM :: Monad m => (Auto m a b -> Auto m a' b') -> (a' -> m a) -> (b -> m b') -> Auto m a b -> Auto m a' b'
--- fromAutoM m f g (Auto l s t) = mkAutoM (m <$> l)
---                                        s
---                                        $ \x -> do
---                                            x' <- f x
---                                            Output y a' <- t x'
---                                            y' <- g y
---                                            return (Output y' (fromAutoM m f g a'))
 
 
 instance Monad m => Functor (Auto m a) where

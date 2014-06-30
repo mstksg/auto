@@ -54,8 +54,6 @@ mergeR = merge (flip const)
 
 
 
-
-
 never :: Monad m => Auto m a (Event b)
 never = pure NoEvent
 
@@ -68,7 +66,7 @@ now = mkState f False
 after :: Monad m => Int -> Auto m a (Event a)
 after n = mkState f (n, False)
   where
-    f _ (_, True)              = (NoEvent, (0  , True ))
+    f _ (_, True )             = (NoEvent, (0  , True ))
     f x (i, False) | i <= 0    = (Event x, (0  , True ))
                    | otherwise = (NoEvent, (i-1, False))
 
@@ -106,16 +104,16 @@ filterE p = mkFunc $ \x -> case x of
 once :: Monad m => Auto m (Event a) (Event a)
 once = mkState f False
   where
-    f _           True = (NoEvent, True )
-    f e@(Event _) _    = (e,       True )
-    f _           _    = (NoEvent, False)
+    f _           True  = (NoEvent, True )
+    f e@(Event _) False = (e,       True )
+    f _           False = (NoEvent, False)
 
 notYet :: Monad m => Auto m (Event a) (Event a)
 notYet = mkState f False
   where
-    f e         True = (e      , True )
-    f (Event _) _    = (NoEvent, True )
-    f _         _    = (NoEvent, False)
+    f e         True  = (e      , True )
+    f (Event _) False = (NoEvent, True )
+    f _         False = (NoEvent, False)
 
 
 takeE :: Monad m => Int -> Auto m (Event a) (Event a)
@@ -128,9 +126,9 @@ takeE = mkState f
 takeWhileE :: Monad m => (a -> Bool) -> Auto m (Event a) (Event a)
 takeWhileE p = mkState f False
   where
-    f _           True       = (NoEvent, True )
-    f e@(Event x) _    | p x = (e      , False)
-    f _           _          = (NoEvent, True )
+    f _           True        = (NoEvent, True )
+    f e@(Event x) False | p x = (e      , False)
+    f _           False       = (NoEvent, True )
 
 dropE :: Monad m => Int -> Auto m (Event a) (Event a)
 dropE = mkState f
@@ -142,10 +140,10 @@ dropE = mkState f
 dropWhileE :: Monad m => (a -> Bool) -> Auto m (Event a) (Event a)
 dropWhileE p = mkState f False
   where
-    f e           True             = (e      , True )
-    f e@(Event x) _    | p x       = (NoEvent, False)
-                       | otherwise = (e      , True )
-    f _           _                = (NoEvent, False)
+    f e           True              = (e      , True )
+    f e@(Event x) False | p x       = (NoEvent, False)
+                        | otherwise = (e      , True )
+    f _           False             = (NoEvent, False)
 
 accumE :: (Monad m, Binary b) => (b -> a -> b) -> b -> Auto m (Event a) (Event b)
 accumE f = mkState (_accumEF f)
