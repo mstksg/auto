@@ -20,21 +20,19 @@ module Control.Auto.Core (
   , mkStateM
   , mkState_
   , mkStateM_
-  -- ** from Scanners
-  , mkScan
-  , mkScanM
-  , mkScan_
-  , mkScanM_
-  -- -- ** from iteratores
-  -- , mkIterate
-  -- , mkIterateM
-  -- , mkIterate_
-  -- , mkIterateM_
+  -- ** from Accumulators
+  , mkAccum
+  , mkAccumM
+  , mkAccum_
+  , mkAccumM_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAutoM
   , mkAuto_
   , mkAutoM_
+  -- -- ** Auto transformers
+  -- , fromAuto
+  -- , fromAutoM
   ) where
 
 import Control.Applicative
@@ -155,16 +153,16 @@ mkStateM_ f = a_
                          (y, s1) <- f x s0
                          return (Output y (a_ s1))
 
-mkScan :: (Binary b, Monad m) => (b -> a -> b) -> b -> Auto m a b
-mkScan f = a_
+mkAccum :: (Binary b, Monad m) => (b -> a -> b) -> b -> Auto m a b
+mkAccum f = a_
   where
     a_ y0 = mkAuto (a_ <$> get)
                    (put y0)
                    $ \x -> let y1 = f y0 x
                            in  Output y1 (a_ y1)
 
-mkScanM :: (Binary b, Monad m) => (b -> a -> m b) -> b -> Auto m a b
-mkScanM f = a_
+mkAccumM :: (Binary b, Monad m) => (b -> a -> m b) -> b -> Auto m a b
+mkAccumM f = a_
   where
     a_ y0 = mkAutoM (a_ <$> get)
                     (put y0)
@@ -172,40 +170,31 @@ mkScanM f = a_
                         y1 <- f y0 x
                         return (Output y1 (a_ y1))
 
-mkScan_ :: Monad m => (b -> a -> b) -> b -> Auto m a b
-mkScan_ f = a_
+mkAccum_ :: Monad m => (b -> a -> b) -> b -> Auto m a b
+mkAccum_ f = a_
   where
     a_ y0 = mkAuto_ $ \x -> let y1 = f y0 x
                             in  Output y1 (a_ y1)
 
-mkScanM_ :: Monad m => (b -> a -> m b) -> b -> Auto m a b
-mkScanM_ f = a_
+mkAccumM_ :: Monad m => (b -> a -> m b) -> b -> Auto m a b
+mkAccumM_ f = a_
   where
     a_ y0 = mkAutoM_ $ \x -> do
                          y1 <- f y0 x
                          return (Output y1 (a_ y1))
 
--- mkIterate :: (Binary b, Monad m) => (b -> b) -> b -> Auto m a b
--- mkIterate f x0 = mkAuto (mkIterate f <$> get)
---                         (put x0)
---                         $ \_ -> let x1 = f x0
---                                 in  Output x0 (mkIterate f x1)
+-- fromAuto :: Monad m => (Auto m a b -> Auto m a' b') -> (a' -> a) -> (b -> b') -> Auto m a b -> Auto m a' b'
+-- fromAuto m f g = fromAutoM m (return . f) (return . g)
 
--- mkIterateM :: (Binary b, Monad m) => (b -> m b) -> b -> Auto m a b
--- mkIterateM f x0 = mkAutoM (mkIterateM f <$> get)
---                           (put x0)
---                           $ \_ -> do
---                               x1 <- f x0
---                               return (Output x0 (mkIterateM f x1))
+-- fromAutoM :: Monad m => (Auto m a b -> Auto m a' b') -> (a' -> m a) -> (b -> m b') -> Auto m a b -> Auto m a' b'
+-- fromAutoM m f g (Auto l s t) = mkAutoM (m <$> l)
+--                                        s
+--                                        $ \x -> do
+--                                            x' <- f x
+--                                            Output y a' <- t x'
+--                                            y' <- g y
+--                                            return (Output y' (fromAutoM m f g a'))
 
--- mkIterate_ :: Monad m => (b -> b) -> b -> Auto m a b
--- mkIterate_ f x0 = mkAuto_ $ \_ -> let x1 = f x0
---                                   in  Output x0 (mkIterate_ f x1)
-
--- mkIterateM_ :: Monad m => (b -> m b) -> b -> Auto m a b
--- mkIterateM_ f x0 = mkAutoM_ $ \_ -> do
---                                 x1 <- f x0
---                                 return (Output x0 (mkIterateM_ f x1))
 
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
