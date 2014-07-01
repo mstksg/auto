@@ -26,6 +26,8 @@ module Control.Auto.Event (
   , accumE
   , accumE_
   -- * Edge events
+  , onChange
+  , onChange_
   , became
   , noLonger
   , onFlip
@@ -203,6 +205,17 @@ noLonger' p = became' (not . p)
 onFlip' :: Monad m => (a -> Bool) -> Auto m a (Event Bool)
 onFlip' p = fmap (True <$) (became' p) &> fmap (False <$) (noLonger' p)
 
+onChange :: (Binary a, Eq a, Monad m) => Auto m a (Event a)
+onChange = mkState _onChangeF Nothing
+
+onChange_ :: (Eq a, Monad m) => Auto m a (Event a)
+onChange_ = mkState_ _onChangeF Nothing
+
+_onChangeF :: Eq a => a -> Maybe a -> (Event a, Maybe a)
+_onChangeF x Nothing               = (NoEvent , Just x)
+_onChangeF x (Just x') | x == x'   = (NoEvent , Just x')
+                       | otherwise = (Event x', Just x')
+
 perEvent :: Monad m => Auto m a b -> Auto m (Event a) (Event b)
 perEvent a = a_
   where
@@ -226,3 +239,4 @@ bindE a = a_
                              return (Output y       (bindE a'))
                            NoEvent  ->
                              return (Output NoEvent a_        )
+
