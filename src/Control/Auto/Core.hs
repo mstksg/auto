@@ -9,6 +9,8 @@ module Control.Auto.Core (
   , loadAuto
   , saveAuto
   , stepAuto
+  , encodeAuto
+  , decodeAuto
   -- * Auto constructors
   -- ** Lifting values and functions
   , mkConst
@@ -36,11 +38,14 @@ import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.Monad
-import Data.Profunctor
 import Control.Monad.Fix
 import Data.Binary
+import Data.Binary.Put
+import Data.Binary.Get
+import Data.ByteString.Lazy
 import Data.Monoid
-import Prelude hiding      ((.), id)
+import Data.Profunctor
+import Prelude hiding       ((.), id)
 
 data Output m a b = Output { outRes  :: !b
                            , outAuto :: !(Auto m a b)
@@ -59,6 +64,12 @@ data Auto m a b = Auto { loadAuto :: !(Get (Auto m a b))
                        , saveAuto :: !Put
                        , stepAuto :: !(a -> m (Output m a b))
                        }
+
+encodeAuto :: Auto m a b -> ByteString
+encodeAuto = runPut . saveAuto
+
+decodeAuto :: Auto m a b -> ByteString -> Auto m a b
+decodeAuto a = runGet (loadAuto a)
 
 mkAuto :: Monad m
        => Get (Auto m a b)

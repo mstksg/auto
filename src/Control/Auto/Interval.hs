@@ -136,15 +136,9 @@ a1 <|?> a2 = mkAutoM (liftA2 (<|?>) (loadAuto a1) (loadAuto a2))
                            _               -> Output Nothing next
 
 (<|!>) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
-a1 <|!> a2 = mkAutoM (liftA2 (<|!>) (loadAuto a1) (loadAuto a2))
-                     (saveAuto a1 *> saveAuto a2)
-                     $ \x -> do
-                         Output y1 a1' <- stepAuto a1 x
-                         Output y2 a2' <- stepAuto a2 x
-                         let next = a1' <|!> a2'
-                         return $ case (y1, y2) of
-                           (Just y, _) -> Output y next
-                           (_     , y) -> Output y next
+a1 <|!> a2 = fmap fromJust (a1 <|?> fmap Just a2)
+
+
 
 during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
 during a = a_
