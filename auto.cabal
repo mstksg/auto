@@ -27,6 +27,7 @@ library
                      , Control.Auto.Interval
                      , Control.Auto.Run
                      , Control.Auto.Switch
+                     , Control.Auto.Time
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8

@@ -22,9 +22,11 @@ module Control.Auto.Event (
   , takeWhileE
   , dropE
   , dropWhileE
-  -- * Scanning/Accumulating Event streams
+  -- * Scanning & Accumulating Event streams
   , accumE
   , accumE_
+  , scanE
+  , scanE_
   -- * Edge events
   , onChange
   , onChange_
@@ -169,6 +171,15 @@ _accumEF f e y0 = case e of
                     Event x -> let y1 = f y0 x
                                in  (Event y1, y1)
                     NoEvent ->     (NoEvent , y0)
+
+scanE :: (Monad m, Binary b) => (b -> a -> b) -> b -> Auto m (Event a) b
+scanE f = mkAccum (_scanEF f)
+
+scanE_ :: Monad m => (b -> a -> b) -> b -> Auto m (Event a) b
+scanE_ f = mkAccum_ (_scanEF f)
+
+_scanEF :: (b -> a -> b) -> b -> Event a -> b
+_scanEF f y0 = event y0 (f y0)
 
 
 became :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Event a)
