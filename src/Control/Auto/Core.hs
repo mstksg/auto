@@ -25,11 +25,6 @@ module Control.Auto.Core (
   , mkAccumM
   , mkAccum_
   , mkAccumM_
-  -- ** from Iterators
-  , mkIterate
-  , mkIterateM
-  , mkIterate_
-  , mkIterateM_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAutoM
@@ -195,36 +190,6 @@ mkAccumM_ f = a_
   where
     a_ y0 = mkAutoM_ $ \x -> do
                          y1 <- f y0 x
-                         return (Output y1 (a_ y1))
-
-mkIterate :: (Binary b, Monad m) => (b -> b) -> b -> Auto m a b
-mkIterate f = a_
-  where
-    a_ y0 = mkAuto (a_ <$> get)
-                   (put y0)
-                   $ \_ -> let y1 = f y0
-                           in  Output y1 (a_ y1)
-
-mkIterateM :: (Binary b, Monad m) => (b -> m b) -> b -> Auto m a b
-mkIterateM f = a_
-  where
-    a_ y0 = mkAutoM (a_ <$> get)
-                    (put y0)
-                    $ \_ -> do
-                        y1 <- f y0
-                        return (Output y1 (a_ y1))
-
-mkIterate_ :: Monad m => (b -> b) -> b -> Auto m a b
-mkIterate_ f = a_
-  where
-    a_ y0 = mkAuto_ $ \_ -> let y1 = f y0
-                            in  Output y1 (a_ y1)
-
-mkIterateM_ :: Monad m => (b -> m b) -> b -> Auto m a b
-mkIterateM_ f = a_
-  where
-    a_ y0 = mkAutoM_ $ \_ -> do
-                         y1 <- f y0
                          return (Output y1 (a_ y1))
 
 instance Monad m => Functor (Auto m a) where
