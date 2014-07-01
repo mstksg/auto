@@ -6,8 +6,8 @@ import Control.Auto.Event.Internal
 import Data.Binary
 import Data.Maybe
 
-(-!>) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
-a1 -!> a2 = fmap fromJust (a1 -?> fmap Just a2)
+(-->) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
+a1 --> a2 = fmap fromJust (a1 -?> fmap Just a2)
 
 (-?>) :: Monad m => Auto m a (Maybe b) -> Auto m a (Maybe b) -> Auto m a (Maybe b)
 a1 -?> a2 = mkAutoM l s t
