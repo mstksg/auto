@@ -19,12 +19,13 @@ import Control.Auto.Event
 import Data.Binary
 import Control.Monad
 import Control.Applicative
+import Control.Auto.Generate
 
 cache :: (Binary b, Monad m) => m b -> Auto m a b
-cache m = snd <$> mkIterateM (_cacheF m) (False, undefined)
+cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
 
 cache_ :: Monad m => m b -> Auto m a b
-cache_ m = snd <$> mkIterateM_ (_cacheF m) (False, undefined)
+cache_ m = snd <$> iteratorM_ (_cacheF m) (False, undefined)
 
 _cacheF :: Monad m => m b -> (Bool, b) -> m (Bool, b)
 _cacheF m (False, _) = liftM (True,) m
