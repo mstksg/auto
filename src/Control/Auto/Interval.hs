@@ -2,6 +2,8 @@ module Control.Auto.Interval (
   -- * Static intervals
     inhibit
   , always
+  , uninhibit
+  , uninhibitWith
   , for
   , inhibitFor
   , window
@@ -30,6 +32,7 @@ import Control.Auto.Core
 import Control.Auto.Event.Internal
 import Control.Category
 import Data.Binary
+import Data.Maybe
 import Prelude hiding              ((.), id)
 
 inhibit :: Monad m => Auto m a (Maybe b)
@@ -37,6 +40,12 @@ inhibit = pure Nothing
 
 always :: Monad m => Auto m a (Maybe a)
 always = arr Just
+
+uninhibit :: Monad m => a -> Auto m (Maybe a) a
+uninhibit d = arr (fromMaybe d)
+
+uninhibitWith :: Monad m => b -> (a -> b) -> Auto m (Maybe a) b
+uninhibitWith d f = arr (maybe d f)
 
 for :: Monad m => Int -> Auto m a (Maybe a)
 for = mkState f . max 0
@@ -109,6 +118,10 @@ _holdForF n = f   -- n should be >= 0
     f _      (Event x) = (Just x , n    )
     f (_, 0) _         = (Nothing, 0    )
     f (x, i) _         = (x      , i - 1)
+
+
+-- It feels weird that both wires are stepped (even the second one), but
+-- that's how netwire does it so I guess it's okay.
 
 (<|?>) :: Monad m => Auto m a (Maybe b) -> Auto m a (Maybe b) -> Auto m a (Maybe b)
 a1 <|?> a2 = mkAutoM (liftA2 (<|?>) (loadAuto a1) (loadAuto a2))
