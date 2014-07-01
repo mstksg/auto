@@ -33,8 +33,7 @@ import Prelude hiding        (interact, mapM)
 readMaybe :: Read a => String -> Maybe a
 readMaybe = fmap fst . mfilter (null . snd) . listToMaybe . reads
 
-runM :: Monad m                  -- ^ The running monad
-     => Monad m'                 -- ^ The Auto monad
+runM :: (Monad m, Monad m')      -- ^ The running monad @m@ and the Auto monad @m'@
      => a                        -- ^ Starting input
      -> (b -> m (Maybe a))       -- ^ Handling output and next input in @m@
      -> (forall c. m' c -> m c)  -- ^ Natural transformation from @m'@ to @m@

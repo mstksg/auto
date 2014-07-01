@@ -22,7 +22,7 @@ a1 --> a2 = mkAutoM l s t
           Output y a2' <- stepAuto a2 x
           return (Output y (switched a2'))
     switched a = mkAutoM (switched <$> loadAuto a)
-                         (put True *> s)
+                         (put True  *> saveAuto a)
                          $ \x -> do
                              Output y a' <- stepAuto a x
                              return (Output y (switched a'))
