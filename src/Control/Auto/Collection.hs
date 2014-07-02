@@ -1,7 +1,19 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 
-module Control.Auto.Collection where
+module Control.Auto.Collection (
+  -- * Static collections
+    zipAuto
+  -- * Dynamic collections
+  , dynZip_
+  , dynMap_
+  -- * Multiplexers
+  , mux
+  , mux_
+  , muxI
+  , muxI_
+  ) where
 
 import Control.Applicative
 import Control.Arrow
@@ -27,6 +39,7 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                             let ys  = map outRes  res
                                 as' = map outAuto res
                             return (Output ys (zipAuto x0 as'))
+
 
 -- another problem
 dynZip_ :: Monad m => a -> Auto m ([a], Event [Auto m a (Maybe b)]) [b]
@@ -63,6 +76,7 @@ mux_ :: forall m a b k. (Ord k, Monad m)
 mux_ f = fromJust <$> muxI_ (fmap Just . f)
 
 
+-- make Auto m (Map k a) (Map k b)
 muxI :: forall m a b k. (Binary k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
      -> Auto m (k, a) (Maybe b)
@@ -99,6 +113,21 @@ _muxIF f go as (k, x) = do
                 Nothing -> M.delete k as
     return (Output y (go as'))
 
+-- dynMap :: forall m a b k. (Ord k, Binary k) => (k -> Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
+-- dynMap f = go mempty
+--   where
+--     go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
+--     go as = mkAutoM l (s as) (t as)
+--     l = do
+--       ks <- get
+--       let as' = M.fromList (map (id &&& f) ks)
+--       go <$> mapM loadAuto as'
+--     s as = put (M.keys as) *> mapM_ saveAuto as
+--     t as xs = do
+--       let stepped = M.foldrWithKey ff aS
+
+-- mapMWithKey :: (Monad m, Ord k) => (k -> a -> m b) -> Map k a -> m (Map k b)
+-- mapMWithKey f m = liftM M.fromList (mapM (\(k, v) -> liftM (k,) (f k v)) (M.toList m))
 
 
 
@@ -122,5 +151,5 @@ genericZipMapWithDefaults mm f x0 y0 = mm f' zx zy
 zipIntMapWithDefaults :: (a -> b -> c) -> Maybe a -> Maybe b -> IntMap a -> IntMap b -> IntMap c
 zipIntMapWithDefaults = genericZipMapWithDefaults IM.mergeWithKey
 
-zipMapWithDefaults :: Ord k => (a -> b -> c) -> Maybe a -> Maybe b -> Map k a -> Map k b -> Map k c
-zipMapWithDefaults = genericZipMapWithDefaults M.mergeWithKey
+_zipMapWithDefaults :: Ord k => (a -> b -> c) -> Maybe a -> Maybe b -> Map k a -> Map k b -> Map k c
+_zipMapWithDefaults = genericZipMapWithDefaults M.mergeWithKey
