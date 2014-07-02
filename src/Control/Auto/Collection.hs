@@ -10,8 +10,8 @@ module Control.Auto.Collection (
   , dynZip_
   , dynMap_
   -- * Multiplexers
-  -- , mux
-  -- , mux_
+  , mux
+  , mux_
   , muxI
   , muxI_
   ) where
@@ -27,6 +27,7 @@ import Data.IntMap.Strict           (IntMap)
 import Data.Map.Strict              (Map)
 import Data.Maybe
 import Data.Monoid
+import Data.Profunctor
 import Data.Traversable
 import Prelude hiding               (mapM, mapM_, concat, sequence)
 import qualified Data.IntMap.Strict as IM
@@ -67,14 +68,24 @@ dynMap_ x0 = go 0 mempty
                            return (Output ys (go newc as'))
 
 
--- mux :: forall m a b k. (Binary k, Ord k, Monad m)
---     => (k -> Auto m a b)
---     -> Auto m (k, a) b
--- mux f = fromJust <$> muxI (fmap Just . f)
+mux :: forall m a b k. (Binary k, Ord k, Monad m)
+    => (k -> Auto m a b)
+    -> Auto m (Map k a) (Map k b)
+mux f = muxI (fmap Just . f)
 
--- mux_ :: forall m a b k. (Ord k, Monad m)
---      => (k -> Auto m a b) -> Auto m (k, a) b
--- mux_ f = fromJust <$> muxI_ (fmap Just . f)
+mux_ :: forall m a b k. (Ord k, Monad m)
+     => (k -> Auto m a b) -> Auto m (Map k a) (Map k b)
+mux_ f = muxI_ (fmap Just . f)
+
+mux1 :: forall m a b k. (Binary k, Ord k, Monad m)
+     => (k -> Auto m a b)
+     -> Auto m (k, a) b
+mux1 f = dimap (uncurry M.singleton) (head . M.elems) (mux f)
+
+mux1_ :: forall m a b k. (Ord k, Monad m)
+      => (k -> Auto m a b)
+      -> Auto m (k, a) b
+mux1_ f = dimap (uncurry M.singleton) (head . M.elems) (mux_ f)
 
 
 -- make Auto m (Map k a) (Map k b)

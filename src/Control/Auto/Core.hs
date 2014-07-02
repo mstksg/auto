@@ -236,6 +236,13 @@ instance Monad m => Profunctor (Auto m) where
                                   $ \x -> do
                                       Output y a' <- t x
                                       return (Output (g y) (a_ a'))
+    dimap f g = a_
+      where
+        a_ (Auto l s t) = mkAutoM (a_ <$> l)
+                                  s
+                                  $ \x -> do
+                                      Output y a' <- t (f x)
+                                      return (Output (g y) (a_ a'))
 
 instance Monad m => Arrow (Auto m) where
     arr                = mkFunc
