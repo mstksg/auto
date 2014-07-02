@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Control.Auto.Collection (
   -- * Static collections
@@ -9,8 +10,8 @@ module Control.Auto.Collection (
   , dynZip_
   , dynMap_
   -- * Multiplexers
-  , mux
-  , mux_
+  -- , mux
+  -- , mux_
   , muxI
   , muxI_
   ) where
@@ -66,23 +67,23 @@ dynMap_ x0 = go 0 mempty
                            return (Output ys (go newc as'))
 
 
-mux :: forall m a b k. (Binary k, Ord k, Monad m)
-    => (k -> Auto m a b)
-    -> Auto m (k, a) b
-mux f = fromJust <$> muxI (fmap Just . f)
+-- mux :: forall m a b k. (Binary k, Ord k, Monad m)
+--     => (k -> Auto m a b)
+--     -> Auto m (k, a) b
+-- mux f = fromJust <$> muxI (fmap Just . f)
 
-mux_ :: forall m a b k. (Ord k, Monad m)
-     => (k -> Auto m a b) -> Auto m (k, a) b
-mux_ f = fromJust <$> muxI_ (fmap Just . f)
+-- mux_ :: forall m a b k. (Ord k, Monad m)
+--      => (k -> Auto m a b) -> Auto m (k, a) b
+-- mux_ f = fromJust <$> muxI_ (fmap Just . f)
 
 
 -- make Auto m (Map k a) (Map k b)
 muxI :: forall m a b k. (Binary k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
-     -> Auto m (k, a) (Maybe b)
+     -> Auto m (Map k a) (Map k b)
 muxI f = go mempty
   where
-    go :: Map k (Auto m a (Maybe b)) -> Auto m (k, a) (Maybe b)
+    go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
     go as = mkAutoM l (s as) (t as)
     l     = do
       ks <- get
@@ -93,25 +94,29 @@ muxI f = go mempty
 
 muxI_ :: forall m a b k. (Ord k, Monad m)
       => (k -> Auto m a (Maybe b))
-      -> Auto m (k, a) (Maybe b)
+      -> Auto m (Map k a) (Map k b)
 muxI_ f = go mempty
   where
-    go :: Map k (Auto m a (Maybe b)) -> Auto m (k, a) (Maybe b)
+    go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
     go = mkAutoM_ . _muxIF f go
 
-_muxIF :: (Ord k, Monad m)
-       => (k -> Auto m a (Maybe b))
-       -> (Map k (Auto m a (Maybe b)) -> Auto m (k, a) (Maybe b))
-       -> Map k (Auto m a (Maybe b))
-       -> (k, a)
-       -> m (Output m (k, a) (Maybe b))
-_muxIF f go as (k, x) = do
-    let a = M.findWithDefault (f k) k as
-    Output y a' <- stepAuto a x
-    let as' = case y of
-                Just _  -> M.insert k a' as
-                Nothing -> M.delete k as
-    return (Output y (go as'))
+_muxIF :: forall k m a b inMap.  (Ord k, Monad m, inMap ~ (Auto m a (Maybe b)))
+       => (k -> inMap)
+       -> (Map k inMap -> Auto m (Map k a) (Map k b))
+       -> Map k inMap
+       -> Map k a
+       -> m (Output m (Map k a) (Map k b))
+_muxIF f go as xs = do
+    let newas = M.mapWithKey (\k _ -> f k) (M.difference xs as)
+        allas = M.union as newas
+        steps :: Map k (m (Output m a (Maybe b)))
+        steps = M.intersectionWith stepAuto allas xs
+    outs <- sequence steps
+    let (outs', rems) = M.partition (isJust . outRes) outs
+        as'           = M.difference as rems
+        as''          = M.union as' (fmap outAuto outs')
+        ys            = fmap (fromJust . outRes) outs'
+    return (Output ys (go as''))
 
 -- dynMap :: forall m a b k. (Ord k, Binary k) => (k -> Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
 -- dynMap f = go mempty
