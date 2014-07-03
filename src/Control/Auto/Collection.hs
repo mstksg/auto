@@ -3,6 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
+
 module Control.Auto.Collection (
   -- * Static collections
     zipAuto
@@ -10,10 +11,22 @@ module Control.Auto.Collection (
   , dynZip_
   , dynMap_
   -- * Multiplexers
+  -- ** Key-based
   , mux
   , mux_
-  , muxI
-  , muxI_
+  -- , muxI
+  -- , muxI_
+  , muxMany
+  , muxMany_
+  , muxManyI
+  , muxManyI_
+  -- ** Function-based
+  , muxF
+  , muxF_
+  , muxFMany
+  , muxFMany_
+  , muxFManyI
+  , muxFManyI_
   ) where
 
 import Control.Applicative
@@ -67,57 +80,55 @@ dynMap_ x0 = go 0 mempty
                                as'  = outAuto <$> res'
                            return (Output ys (go newc as'))
 
-
-mux :: forall m a b k. (Binary k, Ord k, Monad m)
+muxMany :: forall m a b k. (Binary k, Ord k, Monad m)
     => (k -> Auto m a b)
     -> Auto m (Map k a) (Map k b)
-mux f = muxI (fmap Just . f)
+muxMany f = muxManyI (fmap Just . f)
 
-mux_ :: forall m a b k. (Ord k, Monad m)
+muxMany_ :: forall m a b k. (Ord k, Monad m)
      => (k -> Auto m a b) -> Auto m (Map k a) (Map k b)
-mux_ f = muxI_ (fmap Just . f)
+muxMany_ f = muxManyI_ (fmap Just . f)
 
-mux1 :: forall m a b k. (Binary k, Ord k, Monad m)
+mux :: forall m a b k. (Binary k, Ord k, Monad m)
      => (k -> Auto m a b)
      -> Auto m (k, a) b
-mux1 f = dimap (uncurry M.singleton) (head . M.elems) (mux f)
+mux f = dimap (uncurry M.singleton) (head . M.elems) (muxMany f)
 
-mux1_ :: forall m a b k. (Ord k, Monad m)
+mux_ :: forall m a b k. (Ord k, Monad m)
       => (k -> Auto m a b)
       -> Auto m (k, a) b
-mux1_ f = dimap (uncurry M.singleton) (head . M.elems) (mux_ f)
+mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 
 
--- make Auto m (Map k a) (Map k b)
-muxI :: forall m a b k. (Binary k, Ord k, Monad m)
+muxManyI :: forall m a b k. (Binary k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
      -> Auto m (Map k a) (Map k b)
-muxI f = go mempty
+muxManyI f = go mempty
   where
     go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
     go as = mkAutoM l (s as) (t as)
     l     = do
       ks <- get
-      let as' = M.fromList (map (id &&& f) ks)
-      go <$> mapM loadAuto as'
+      let as = M.fromList (map (id &&& f) ks)
+      go <$> mapM loadAuto as
     s as  = put (M.keys as) *> mapM_ saveAuto as
-    t     = _muxIF f go
+    t     = _muxManyIF f go
 
-muxI_ :: forall m a b k. (Ord k, Monad m)
+muxManyI_ :: forall m a b k. (Ord k, Monad m)
       => (k -> Auto m a (Maybe b))
       -> Auto m (Map k a) (Map k b)
-muxI_ f = go mempty
+muxManyI_ f = go mempty
   where
     go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
-    go = mkAutoM_ . _muxIF f go
+    go = mkAutoM_ . _muxManyIF f go
 
-_muxIF :: forall k m a b inMap.  (Ord k, Monad m, inMap ~ (Auto m a (Maybe b)))
+_muxManyIF :: forall k m a b inMap.  (Ord k, Monad m, inMap ~ (Auto m a (Maybe b)))
        => (k -> inMap)
        -> (Map k inMap -> Auto m (Map k a) (Map k b))
        -> Map k inMap
        -> Map k a
        -> m (Output m (Map k a) (Map k b))
-_muxIF f go as xs = do
+_muxManyIF f go as xs = do
     let newas = M.mapWithKey (\k _ -> f k) (M.difference xs as)
         allas = M.union as newas
         steps :: Map k (m (Output m a (Maybe b)))
@@ -128,6 +139,88 @@ _muxIF f go as xs = do
         as''          = M.union as' (fmap outAuto outs')
         ys            = fmap (fromJust . outRes) outs'
     return (Output ys (go as''))
+
+muxFMany :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+         => (k -> Maybe c -> Auto m a b)
+         -> Auto m (Map k (Either (c, a) a)) (Map k b)
+muxFMany f = muxFManyI (\k mc -> fmap Just (f k mc))
+
+muxFMany_ :: forall m a b k c. (Ord k, Monad m)
+          => (k -> Maybe c -> Auto m a b)
+          -> Auto m (Map k (Either (c, a) a)) (Map k b)
+muxFMany_ f = muxFManyI_ (\k mc -> fmap Just (f k mc))
+
+muxF :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+     => (k -> Maybe c -> Auto m a b)
+     -> Auto m (k, Either (c, a) a) b
+muxF f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany f)
+
+muxF_ :: forall m a b k c. (Ord k, Monad m)
+      => (k -> Maybe c -> Auto m a b)
+      -> Auto m (k, Either (c, a) a) b
+muxF_ f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany_ f)
+
+
+muxFManyI :: forall m a b c k. (Binary k, Binary c, Ord k, Monad m)
+          => (k -> Maybe c -> Auto m a (Maybe b))
+          -> Auto m (Map k (Either (c, a) a)) (Map k b)
+muxFManyI f = go mempty
+  where
+    go :: Map k (Maybe c, Auto m a (Maybe b))
+       -> Auto m (Map k (Either (c, a) a)) (Map k b)
+    go as = mkAutoM l (s as) (t as)
+    l    = do
+      kszs <- get
+      let as  = M.fromList (map (\(k, mz) -> (k, (mz, f k mz))) kszs)
+      go <$> mapM (mapM loadAuto) as
+    s as = put (zip (M.keys as) (map fst (M.elems as)))
+        *> mapM_ (saveAuto . snd) as
+    t    = _muxFManyIF f go
+
+muxFManyI_ :: forall m a b c k. (Ord k, Monad m)
+           => (k -> Maybe c -> Auto m a (Maybe b))
+           -> Auto m (Map k (Either (c, a) a)) (Map k b)
+muxFManyI_ f = go mempty
+  where
+    go :: Map k (Maybe c, Auto m a (Maybe b))
+       -> Auto m (Map k (Either (c, a) a)) (Map k b)
+    go = mkAutoM_ . _muxFManyIF f go
+
+_muxFManyIF :: forall k m a b c inAuto outAuto outOut.
+                ( Ord k
+                , Monad m
+                , inAuto  ~ (Auto m a (Maybe b))
+                , outAuto ~ (Auto m (Map k (Either (c, a) a)) (Map k b))
+                , outOut  ~ (Output m (Map k (Either (c, a) a)) (Map k b))
+                )
+            => (k -> Maybe c -> inAuto)                 -- f
+            -> (Map k (Maybe c, inAuto) -> outAuto)     -- go
+            -> Map k (Maybe c, inAuto)                  -- as
+            -> Map k (Either (c, a) a)                  -- xs
+            -> m outOut
+_muxFManyIF f go as xs = do
+    let mzxs  = fmap eitherToMaybe xs
+        newas = M.mapWithKey mapf (M.difference mzxs as)
+        allas = M.union as newas
+        steps = M.intersectionWith interf allas mzxs
+    outs <- sequence steps
+    let (outs', rems) = M.partition (isJust . outRes . snd) outs
+        as'           = M.difference as rems
+        as''          = M.union as' (fmap (second outAuto) outs')
+        ys            = fmap (fromJust . outRes . snd) outs'
+    return (Output ys (go as''))
+  where
+    mapf :: k -> (Maybe c, a) -> (Maybe c, Auto m a (Maybe b))
+    mapf k (mz, _) = (mz, f k mz)
+    interf :: (Maybe c, Auto m a (Maybe b))
+           -> (Maybe c, a)
+           -> m (Maybe c, Output m a (Maybe b))
+    interf (mc, a) (_, x) = sequence (mc, stepAuto a x)
+
+eitherToMaybe :: Either (a, b) b -> (Maybe a, b)
+eitherToMaybe (Left (x, y)) = (Just x , y)
+eitherToMaybe (Right y)     = (Nothing, y)
+
 
 -- dynMap :: forall m a b k. (Ord k, Binary k) => (k -> Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
 -- dynMap f = go mempty
