@@ -1,8 +1,11 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Control.Auto.Generate (
   -- * Generators
     fromList
   , fromList_
   , fromInfList_
+  , unfold
   , iterator
   , iteratorM
   , iterator_
@@ -27,6 +30,15 @@ fromInfList_ (x:xs) = mkAuto_ (\_ -> Output x (fromInfList_ xs))
 _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
+
+unfold :: forall m a b c. (Binary c, Monad m) => (c -> (Maybe b, c)) -> c -> Auto m a (Maybe b)
+unfold f = mkState g . Just
+  where
+    g :: a -> Maybe c -> (Maybe b, Maybe c)
+    g _ Nothing  = (Nothing, Nothing)
+    g _ (Just x) = case f x of
+                     (Just y , x') -> (Just y , Just x')
+                     (Nothing, _ ) -> (Nothing, Nothing)
 
 iterator :: (Binary b, Monad m) => (b -> b) -> b -> Auto m a b
 iterator f = a_
