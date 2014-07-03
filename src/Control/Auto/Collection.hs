@@ -14,8 +14,8 @@ module Control.Auto.Collection (
   -- ** Key-based
   , mux
   , mux_
-  -- , muxI
-  -- , muxI_
+  , muxI
+  , muxI_
   , muxMany
   , muxMany_
   , muxManyI
@@ -23,6 +23,8 @@ module Control.Auto.Collection (
   -- ** Function-based
   , muxF
   , muxF_
+  , muxFI
+  , muxFI_
   , muxFMany
   , muxFMany_
   , muxFManyI
@@ -99,6 +101,16 @@ mux_ :: forall m a b k. (Ord k, Monad m)
       -> Auto m (k, a) b
 mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 
+muxI :: forall m a b k. (Binary k, Ord k, Monad m)
+     => (k -> Auto m a (Maybe b))
+     -> Auto m (k, a) (Maybe b)
+muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
+
+muxI_ :: forall m a b k. (Ord k, Monad m)
+      => (k -> Auto m a (Maybe b))
+      -> Auto m (k, a) (Maybe b)
+muxI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI_ f)
+
 
 muxManyI :: forall m a b k. (Binary k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
@@ -160,6 +172,15 @@ muxF_ :: forall m a b k c. (Ord k, Monad m)
       -> Auto m (k, Either (c, a) a) b
 muxF_ f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany_ f)
 
+muxFI :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+      => (k -> Maybe c -> Auto m a (Maybe b))
+      -> Auto m (k, Either (c, a) a) (Maybe b)
+muxFI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFManyI f)
+
+muxFI_ :: forall m a b k c. (Ord k, Monad m)
+       => (k -> Maybe c -> Auto m a (Maybe b))
+       -> Auto m (k, Either (c, a) a) (Maybe b)
+muxFI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFManyI_ f)
 
 muxFManyI :: forall m a b c k. (Binary k, Binary c, Ord k, Monad m)
           => (k -> Maybe c -> Auto m a (Maybe b))
