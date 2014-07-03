@@ -1,3 +1,5 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Control.Auto.Time (
   -- * A counter
     count
@@ -45,7 +47,7 @@ stretch_ n = go (1, undefined)
                                     return (Output y (go (i - 1, y ) a ))
 
 stretchE :: Monad m => Int -> Auto m a b -> Auto m a (Event b)
-stretchE n = go 1
+stretchE (max 1 -> n) = go 1
   where
     go i a = mkAutoM (go <$> get <*> loadAuto a)
                      (put i *> saveAuto a)

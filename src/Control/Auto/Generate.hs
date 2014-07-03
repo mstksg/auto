@@ -2,14 +2,11 @@ module Control.Auto.Generate (
   -- * Generators
     fromList
   , fromList_
+  , fromInfList_
   , iterator
   , iteratorM
   , iterator_
   , iteratorM_
-  -- -- * Manipulating generators
-  -- , stretch
-  -- , stretch_
-  -- , stretchE
   ) where
 
 -- import Control.Auto.Event.Internal
@@ -22,6 +19,10 @@ fromList = mkState (const _uncons)
 
 fromList_ :: Monad m => [b] -> Auto m a (Maybe b)
 fromList_ = mkState_ (const _uncons)
+
+fromInfList_ :: Monad m => [b] -> Auto m a b
+fromInfList_ []     = error "fromInfList: reached end of input list."
+fromInfList_ (x:xs) = mkAuto_ (\_ -> Output x (fromInfList_ xs))
 
 _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])

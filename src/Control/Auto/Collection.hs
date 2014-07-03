@@ -12,19 +12,23 @@ module Control.Auto.Collection (
   , dynMap_
   -- * Multiplexers
   -- ** Key-based
+  -- *** Single input/output
   , mux
   , mux_
   , muxI
   , muxI_
+  -- *** Parallel input/output
   , muxMany
   , muxMany_
   , muxManyI
   , muxManyI_
   -- ** Function-based
+  -- *** Single input/output
   , muxF
   , muxF_
   , muxFI
   , muxFI_
+  -- *** Parallel input/output
   , muxFMany
   , muxFMany_
   , muxFManyI

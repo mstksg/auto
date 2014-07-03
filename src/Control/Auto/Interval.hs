@@ -35,6 +35,9 @@ import Data.Binary
 import Data.Maybe
 import Prelude hiding              ((.), id)
 
+infixl 3 <|?>
+infixl 3 <|!>
+
 inhibit :: Monad m => Auto m a (Maybe b)
 inhibit = pure Nothing
 
