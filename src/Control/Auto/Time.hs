@@ -4,6 +4,8 @@ module Control.Auto.Time (
   -- * A counter
     count
   -- * Manipulating time
+  , delay
+  , delay_
   , stretch
   , stretch_
   , stretchE
@@ -20,6 +22,13 @@ import Data.Binary
 
 count :: Monad m => Auto m a Int
 count = iterator (+1) 0
+
+delay :: (Binary a, Monad m) => a -> Auto m a a
+delay = mkState (flip (,))
+
+delay_ :: Monad m => a -> Auto m a a
+delay_ = mkState_ (flip (,))
+
 
 stretch :: (Binary b, Monad m) => Int -> Auto m a b -> Auto m a b
 stretch n = go (1, undefined)
