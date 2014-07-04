@@ -4,6 +4,7 @@ module Control.Auto.Switch (
     (-->)
   , (-?>)
   , switchF
+  , rSwitchF
   ) where
 
 import Control.Applicative
@@ -57,7 +58,8 @@ switchF f a0 = mkAutoM l s t
       case mz of
         Just z  -> switched z <$> loadAuto (f z)
         Nothing -> switchF f  <$> loadAuto a0
-    s = put (Nothing :: Maybe c) *> saveAuto a0
+    s = put (Nothing :: Maybe c)
+     *> saveAuto a0
     t x = do
       Output (y, ez) a0' <- stepAuto a0 x
       return $ case ez of
@@ -69,5 +71,22 @@ switchF f a0 = mkAutoM l s t
                                Output y a' <- stepAuto a x
                                return (Output y (switched z a'))
 
--- rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
--- rSwitchF = mkAuto 
+rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
+rSwitchF f = go Nothing
+  where
+    go mz a0 = mkAutoM (l a0) (s mz a0) (t mz a0)
+    l a0 = do
+      mz <- get
+      case mz of
+        Just z  -> go mz <$> loadAuto (f z)
+        Nothing -> go mz <$> loadAuto a0
+    s mz a0 = put mz
+           *> saveAuto a0
+    t mz a0 (x, ez) =
+      case ez of
+        NoEvent -> do
+          Output y a0' <- stepAuto a0 x
+          return (Output y (go mz a0'))
+        Event z -> do
+          Output y a1  <- stepAuto (f z) x
+          return (Output y (go (Just z) a1))
