@@ -34,6 +34,17 @@ module Control.Auto.Collection (
   , muxFManyI
   , muxFManyI_
   -- * "Gathering"/accumulating collections
+  -- ** Key-based
+  , gather
+  , gather_
+  , gather__
+  , gatherMany
+  , gatherMany_
+  , gatherMany__
+  -- ** Function-based
+  , gatherF
+  , gatherF_
+  , gatherF__
   , gatherFMany
   , gatherFMany_
   , gatherFMany__
@@ -250,6 +261,63 @@ eitherToMaybe (Right y)     = (Nothing, y)
 
 _muxgathermapF :: (k -> Maybe c -> Auto m a (Maybe b)) -> k -> (Maybe c, a) -> (Maybe c, Auto m a (Maybe b))
 _muxgathermapF f k (mz, _) = (mz, f k mz)
+
+gather :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
+       => (k -> Auto m a (Maybe b))
+       -> Auto m (k, a) (Map k b)
+gather f = lmap (uncurry M.singleton) (gatherMany f)
+
+gather_ :: forall k a m b. (Ord k, Monad m, Binary k)
+        => (k -> Auto m a (Maybe b))
+        -> Auto m (k, a) (Map k b)
+gather_ f = lmap (uncurry M.singleton) (gatherMany_ f)
+
+gather__ :: forall k a m b. (Ord k, Monad m)
+         => (k -> Auto m a (Maybe b))
+         -> Auto m (k, a) (Map k b)
+gather__ f = lmap (uncurry M.singleton) (gatherMany__ f)
+
+
+gatherMany :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
+           => (k -> Auto m a (Maybe b))
+           -> Auto m (Map k a) (Map k b)
+gatherMany f = lmap (fmap Right) (gatherFMany f')
+  where
+    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' k _ = f k
+
+gatherMany_ :: forall k a m b. (Ord k, Monad m, Binary k)
+            => (k -> Auto m a (Maybe b))
+            -> Auto m (Map k a) (Map k b)
+gatherMany_ f = lmap (fmap Right) (gatherFMany_ f')
+  where
+    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' k _ = f k
+
+gatherMany__ :: forall k a m b. (Ord k, Monad m)
+             => (k -> Auto m a (Maybe b))
+             -> Auto m (Map k a) (Map k b)
+gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
+  where
+    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' k _ = f k
+
+
+gatherF :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)
+        => (k -> Maybe c -> Auto m a (Maybe b))
+        -> Auto m (k, Either (c, a) a) (Map k b)
+gatherF f = lmap (uncurry M.singleton) (gatherFMany f)
+
+gatherF_ :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k)
+         => (k -> Maybe c -> Auto m a (Maybe b))
+         -> Auto m (k, Either (c, a) a) (Map k b)
+gatherF_ f = lmap (uncurry M.singleton) (gatherFMany_ f)
+
+gatherF__ :: forall k a m b c. (Ord k, Monad m)
+          => (k -> Maybe c -> Auto m a (Maybe b))
+          -> Auto m (k, Either (c, a) a) (Map k b)
+gatherF__ f = lmap (uncurry M.singleton) (gatherFMany__ f)
+
 
 gatherFMany :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)
             => (k -> Maybe c -> Auto m a (Maybe b))
