@@ -1,10 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Auto.Switch (
+  -- * Sequential switching
     (-->)
   , (-?>)
+  -- * Dynamic switches
+  , switch_
+  , rSwitch_
+  -- * Function-based switches
   , switchF
+  , switchF_
   , rSwitchF
+  , rSwitchF_
   ) where
 
 import Control.Applicative
@@ -40,15 +47,25 @@ a1 -?> a2 = mkAutoM l s t
                              return (Output y (switched a'))
 
 
--- um.  yeah, this is going to be a problem.
--- switch :: Monad m
---        => Auto m a (b, Event (Auto m a b))
---        -> Auto m a b
--- switch a = mkAutoM l s t
---   where
---     l = undefined
---     s = undefined
---     t = undefined
+switch_ :: Monad m
+        => Auto m a (b, Event (Auto m a b))
+        -> Auto m a b
+switch_ a0 = mkAutoM_ $ \x -> do
+                          Output (y, ea1) a0' <- stepAuto a0 x
+                          return $ case ea1 of
+                            Event a1 -> Output y a1
+                            NoEvent  -> Output y (switch_ a0')
+
+rSwitch_ :: forall m a b. Monad m
+         => Auto m a b
+         -> Auto m (a, Event (Auto m a b)) b
+rSwitch_ a0 = mkAutoM_ $ \(x, ea1) -> do
+                           let a = case ea1 of
+                                     NoEvent  -> a0
+                                     Event a1 -> a1
+                           Output y a' <- stepAuto a x
+                           return (Output y (rSwitch_ a'))
+
 
 switchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a (b, Event c) -> Auto m a b
 switchF f a0 = mkAutoM l s t
@@ -71,6 +88,13 @@ switchF f a0 = mkAutoM l s t
                                Output y a' <- stepAuto a x
                                return (Output y (switched z a'))
 
+switchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a (b, Event c) -> Auto m a b
+switchF_ f a0 = mkAutoM_ $ \x -> do
+                             Output (y, ez) a0' <- stepAuto a0 x
+                             return $ case ez of
+                               Event z -> Output y (f z)
+                               NoEvent -> Output y (switchF_ f a0')
+
 rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
 rSwitchF f = go Nothing
   where
@@ -90,3 +114,13 @@ rSwitchF f = go Nothing
         Event z -> do
           Output y a1  <- stepAuto (f z) x
           return (Output y (go (Just z) a1))
+
+rSwitchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
+rSwitchF_ f a0 = mkAutoM_ $ \(x, ez) ->
+                              case ez of
+                                NoEvent -> do
+                                  Output y a0' <- stepAuto a0 x
+                                  return (Output y (rSwitchF_ f a0'))
+                                Event z -> do
+                                  Output y a1 <- stepAuto (f z) x
+                                  return (Output y (rSwitchF_ f a1))
