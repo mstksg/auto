@@ -22,11 +22,15 @@ module Control.Auto.Event (
   , takeWhileE
   , dropE
   , dropWhileE
+  , fromEvents
+  , onJust
   -- * Scanning & Accumulating Event streams
   , accumE
   , accumE_
   , scanE
   , scanE_
+  , mscanE
+  , mscanE_
   -- * Edge events
   , onChange
   , onChange_
@@ -41,14 +45,22 @@ module Control.Auto.Event (
   , onFlip'
   -- * Composing with Events
   , perEvent
+  , perEventI
   , bindE
   ) where
 
 import Control.Applicative
 import Control.Arrow
+import Control.Auto.Interval
+import Data.Monoid
 import Control.Auto.Core
+import Data.Profunctor
 import Control.Auto.Event.Internal
+import Control.Auto.Time
+import Control.Category
 import Data.Binary
+import Prelude hiding                  ((.), id, sequence)
+import qualified Control.Auto.Generate as A
 
 infixl 5 <&
 infixl 5 &>
@@ -86,30 +98,13 @@ inE n = mkState f (n, False)
                    | otherwise = (NoEvent, (i-1, False))
 
 every :: Monad m => Int -> Auto m a (Event a)
-every n | n <= 0    = error "every: Non-positive interval"
-        | otherwise = mkState f 1
-  where
-    f x 1 = (Event x, n  )
-    f _ i = (NoEvent, i-1)
+every n = stretchE n id
 
 eachAt :: (Monad m, Binary b) => Int -> [b] -> Auto m a (Event b)
-eachAt n xs | n <= 0    = error "eachAt: Non-positive interval"
-            | otherwise = mkState (const f) (xs, 1)
-  where
-    f = _eachAtF n
+eachAt n xs = during (every n) . stretch n (A.fromList xs) <|!> never
 
 eachAt_ :: Monad m => Int -> [b] -> Auto m a (Event b)
-eachAt_ n xs | n <= 0    = error "eachAt: Non-positive interval"
-             | otherwise = mkState_ (const f) (xs, 1)
-  where
-    f = _eachAtF n
-
-_eachAtF :: Int -> ([a], Int) -> (Event a, ([a], Int))
-_eachAtF n s = case s of
-                 ([]  , _) -> (NoEvent, ([], 0  ))
-                 (y:ys, 1) -> (Event y, (ys, n  ))
-                 (_   , 0) -> (NoEvent, ([], 0  ))
-                 (ys  , i) -> (NoEvent, (ys, i-1))
+eachAt_ n xs = during (every n) . stretch_ n (A.fromList_ xs) <|!> never
 
 filterE :: Monad m => (a -> Bool) -> Auto m (Event a) (Event a)
 filterE p = arr $ \x -> case x of
@@ -181,6 +176,11 @@ scanE_ f = mkAccum_ (_scanEF f)
 _scanEF :: (b -> a -> b) -> b -> Event a -> b
 _scanEF f y0 = event y0 (f y0)
 
+mscanE :: (Monad m, Monoid a, Binary a) => Auto m (Event a) a
+mscanE = scanE (<>) mempty
+
+mscanE_ :: (Monad m, Monoid a) => Auto m (Event a) a
+mscanE_ = scanE_ (<>) mempty
 
 became :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Event a)
 became p = mkAccum (_becameF p) NoEvent
@@ -227,6 +227,12 @@ _onChangeF x Nothing               = (NoEvent , Just x)
 _onChangeF x (Just x') | x == x'   = (NoEvent , Just x')
                        | otherwise = (Event x', Just x')
 
+onJust :: Monad m => Auto m (Maybe a) (Event a)
+onJust = arr (maybe NoEvent Event)
+
+fromEvents :: Monad m => a -> Auto m (Event a) a
+fromEvents d = arr (event d id)
+
 perEvent :: Monad m => Auto m a b -> Auto m (Event a) (Event b)
 perEvent a = a_
   where
@@ -238,6 +244,11 @@ perEvent a = a_
                              return (Output (Event y) (perEvent a'))
                            NoEvent  ->
                              return (Output NoEvent   a_           )
+
+perEventI :: Monad m
+          => Auto m (Maybe a) (Maybe b)
+          -> Auto m (Event a) (Event b)
+perEventI = dimap (event Nothing Just) (maybe NoEvent Event)
 
 bindE :: Monad m => Auto m a (Event b) -> Auto m (Event a) (Event b)
 bindE a = a_

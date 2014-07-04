@@ -35,6 +35,9 @@ import Data.Binary
 import Data.Maybe
 import Prelude hiding              ((.), id)
 
+infixl 3 <|?>
+infixl 3 <|!>
+
 inhibit :: Monad m => Auto m a (Maybe b)
 inhibit = pure Nothing
 
@@ -124,20 +127,10 @@ _holdForF n = f   -- n should be >= 0
 -- that's how netwire does it so I guess it's okay.
 
 (<|?>) :: Monad m => Auto m a (Maybe b) -> Auto m a (Maybe b) -> Auto m a (Maybe b)
-a1 <|?> a2 = mkAutoM (liftA2 (<|?>) (loadAuto a1) (loadAuto a2))
-                     (saveAuto a1 *> saveAuto a2)
-                     $ \x -> do
-                         Output y1 a1' <- stepAuto a1 x
-                         Output y2 a2' <- stepAuto a2 x
-                         let next = a1' <|?> a2'
-                         return $ case (y1, y2) of
-                           (y@(Just _), _) -> Output y       next
-                           (_, y@(Just _)) -> Output y       next
-                           _               -> Output Nothing next
+(<|?>) = liftA2 (<|>)
 
 (<|!>) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
-a1 <|!> a2 = fmap fromJust (a1 <|?> fmap Just a2)
-
+(<|!>) = liftA2 (flip fromMaybe)
 
 
 during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)

@@ -1,4 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
+-- {-# LANGUAGE DeriveFoldable #-}
+-- {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -8,6 +10,8 @@ module Control.Auto.Event.Internal (
   , event
   ) where
 
+-- import Data.Foldable
+-- import Data.Traversable
 import Data.Semigroup
 import Data.Typeable
 import Data.Binary
@@ -15,7 +19,13 @@ import GHC.Generics
 
 data Event a = NoEvent
              | Event a
-             deriving (Functor, Typeable, Show, Generic)
+             deriving ( Functor
+                      -- , Foldable
+                      -- , Traversable
+                      , Show
+                      , Typeable
+                      , Generic
+                      )
 
 instance Semigroup a => Monoid (Event a) where
     mempty  = NoEvent

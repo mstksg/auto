@@ -1,7 +1,11 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Control.Auto.Time (
   -- * A counter
     count
   -- * Manipulating time
+  , delay
+  , delay_
   , stretch
   , stretch_
   , stretchE
@@ -18,6 +22,13 @@ import Data.Binary
 
 count :: Monad m => Auto m a Int
 count = iterator (+1) 0
+
+delay :: (Binary a, Monad m) => a -> Auto m a a
+delay = mkState (flip (,))
+
+delay_ :: Monad m => a -> Auto m a a
+delay_ = mkState_ (flip (,))
+
 
 stretch :: (Binary b, Monad m) => Int -> Auto m a b -> Auto m a b
 stretch n = go (1, undefined)
@@ -45,7 +56,7 @@ stretch_ n = go (1, undefined)
                                     return (Output y (go (i - 1, y ) a ))
 
 stretchE :: Monad m => Int -> Auto m a b -> Auto m a (Event b)
-stretchE n = go 1
+stretchE (max 1 -> n) = go 1
   where
     go i a = mkAutoM (go <$> get <*> loadAuto a)
                      (put i *> saveAuto a)
