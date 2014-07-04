@@ -82,7 +82,7 @@ dynZip_ :: Monad m => a -> Auto m ([a], Event [Auto m a (Maybe b)]) [b]
 dynZip_ x0 = go []
   where
     go as = mkAutoM_ $ \(xs, news) -> do
-                         let newas = as ++ concat news
+                         let newas = as ++ event [] id news
                          res <- zipWithM stepAuto newas (xs ++ repeat x0)
                          let (ys, as') = unzip [ (y, a) | (Output (Just y) a) <- res ]
                          return (Output ys (go as'))
@@ -91,7 +91,7 @@ dynMap_ :: Monad m => a -> Auto m (IntMap a, Event [Auto m a (Maybe b)]) (IntMap
 dynMap_ x0 = go 0 mempty
   where
     go i as = mkAutoM_ $ \(xs, news) -> do
-                           let newas  = zip [i..] (concat news)
+                           let newas  = zip [i..] (event [] id news)
                                newas' = IM.union as (IM.fromList newas)
                                newc   = i + length newas
                                resMap = zipIntMapWithDefaults stepAuto Nothing (Just x0) newas' xs

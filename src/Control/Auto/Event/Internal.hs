@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
+-- {-# LANGUAGE DeriveFoldable #-}
+-- {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -10,8 +10,8 @@ module Control.Auto.Event.Internal (
   , event
   ) where
 
-import Data.Foldable
-import Data.Traversable
+-- import Data.Foldable
+-- import Data.Traversable
 import Data.Semigroup
 import Data.Typeable
 import Data.Binary
@@ -20,8 +20,8 @@ import GHC.Generics
 data Event a = NoEvent
              | Event a
              deriving ( Functor
-                      , Foldable
-                      , Traversable
+                      -- , Foldable
+                      -- , Traversable
                       , Show
                       , Typeable
                       , Generic

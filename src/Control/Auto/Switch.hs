@@ -1,4 +1,10 @@
-module Control.Auto.Switch where
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module Control.Auto.Switch (
+    (-->)
+  , (-?>)
+  , switchF
+  ) where
 
 import Control.Applicative
 import Control.Auto.Core
@@ -34,13 +40,34 @@ a1 -?> a2 = mkAutoM l s t
 
 
 -- um.  yeah, this is going to be a problem.
+-- switch :: Monad m
+--        => Auto m a (b, Event (Auto m a b))
+--        -> Auto m a b
+-- switch a = mkAutoM l s t
+--   where
+--     l = undefined
+--     s = undefined
+--     t = undefined
 
-switch :: Monad m
-       => Auto m a (b, Event (Auto m a b))
-       -> Auto m a b
-switch a = mkAutoM l s t
+switchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a (b, Event c) -> Auto m a b
+switchF f a0 = mkAutoM l s t
   where
-    l = undefined
-    s = undefined
-    t = undefined
+    l = do
+      mz <- get
+      case mz of
+        Just z  -> switched z <$> loadAuto (f z)
+        Nothing -> switchF f  <$> loadAuto a0
+    s = put (Nothing :: Maybe c) *> saveAuto a0
+    t x = do
+      Output (y, ez) a0' <- stepAuto a0 x
+      return $ case ez of
+        Event z -> Output y (switched z (f z))
+        NoEvent -> Output y (switchF f a0')
+    switched z a = mkAutoM (switched z  <$> loadAuto a)
+                           (put (Just z) *> saveAuto a)
+                           $ \x -> do
+                               Output y a' <- stepAuto a x
+                               return (Output y (switched z a'))
 
+-- rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
+-- rSwitchF = mkAuto 
