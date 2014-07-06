@@ -67,32 +67,35 @@ rSwitch_ a0 = mkAutoM_ $ \(x, ea1) -> do
                            return (Output y (rSwitch_ a'))
 
 
-switchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a (b, Event c) -> Auto m a b
-switchF f a0 = mkAutoM l s t
+switchF :: forall m a b c. (Monad m, Binary c)
+        => (c -> Auto m a (b, Event c))
+        -> Auto m a (b, Event c)
+        -> Auto m a b
+switchF f = go Nothing
   where
-    l = do
+    go mz a = mkAutoM (l a) s t
+      where
+        s   = put mz
+           *> saveAuto a
+        t x = do
+          Output (y, ez) a' <- stepAuto a x
+          return $ case ez of
+            Event z -> Output y (go (Just z) (f z))
+            NoEvent -> Output y (go mz       a'   )
+    l a = do
       mz <- get
       case mz of
-        Just z  -> switched z <$> loadAuto (f z)
-        Nothing -> switchF f  <$> loadAuto a0
-    s = put (Nothing :: Maybe c)
-     *> saveAuto a0
-    t x = do
-      Output (y, ez) a0' <- stepAuto a0 x
-      return $ case ez of
-        Event z -> Output y (switched z (f z))
-        NoEvent -> Output y (switchF f a0')
-    switched z a = mkAutoM (switched z  <$> loadAuto a)
-                           (put (Just z) *> saveAuto a)
-                           $ \x -> do
-                               Output y a' <- stepAuto a x
-                               return (Output y (switched z a'))
+        Just z  -> go mz <$> loadAuto (f z)
+        Nothing -> go mz <$> loadAuto a
 
-switchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a (b, Event c) -> Auto m a b
+switchF_ :: forall m a b c. Monad m
+         => (c -> Auto m a (b, Event c))
+         -> Auto m a (b, Event c)
+         -> Auto m a b
 switchF_ f a0 = mkAutoM_ $ \x -> do
                              Output (y, ez) a0' <- stepAuto a0 x
                              return $ case ez of
-                               Event z -> Output y (f z)
+                               Event z -> Output y (switchF_ f (f z))
                                NoEvent -> Output y (switchF_ f a0')
 
 rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b

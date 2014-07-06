@@ -5,6 +5,7 @@ module Control.Auto.Effects (
     effect
   , effectE
   , exec
+  , exec'
   , execE
   , execE'
   -- One-time effects
@@ -37,8 +38,11 @@ execOnce = cache_ . liftM (const ())
 effect :: Monad m => m b -> Auto m a b
 effect = mkConstM
 
-exec :: Monad m => m b -> Auto m a ()
-exec = mkConstM . liftM (const ())
+exec :: Monad m => m b -> Auto m a a
+exec m = mkFuncM $ \x -> m >> return x
+
+exec' :: Monad m => m b -> Auto m a ()
+exec' = mkConstM . liftM (const ())
 
 arrM :: Monad m => (a -> m b) -> Auto m a b
 arrM = mkFuncM
@@ -47,8 +51,8 @@ effectE :: Monad m => m b -> Auto m (Event a) (Event b)
 effectE = perEvent . effect
 
 execE :: Monad m => m b -> Auto m (Event a) (Event a)
-execE m = perEvent . mkFuncM $ \x -> m >> return x
+execE = perEvent . exec
 
 execE' :: Monad m => m b -> Auto m (Event a) (Event ())
-execE' = perEvent . exec
+execE' = perEvent . exec'
 

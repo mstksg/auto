@@ -265,23 +265,23 @@ _muxgathermapF f k (mz, _) = (mz, f k mz)
 gather :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
        => (k -> Auto m a (Maybe b))
        -> Auto m (k, a) (Map k b)
-gather f = lmap (uncurry M.singleton) (gatherMany f)
+gather f = gatherMany f <<^ uncurry M.singleton
 
 gather_ :: forall k a m b. (Ord k, Monad m, Binary k)
         => (k -> Auto m a (Maybe b))
         -> Auto m (k, a) (Map k b)
-gather_ f = lmap (uncurry M.singleton) (gatherMany_ f)
+gather_ f = gatherMany_ f <<^ uncurry M.singleton
 
 gather__ :: forall k a m b. (Ord k, Monad m)
          => (k -> Auto m a (Maybe b))
          -> Auto m (k, a) (Map k b)
-gather__ f = lmap (uncurry M.singleton) (gatherMany__ f)
+gather__ f = gatherMany__ f <<^ uncurry M.singleton
 
 
 gatherMany :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
            => (k -> Auto m a (Maybe b))
            -> Auto m (Map k a) (Map k b)
-gatherMany f = lmap (fmap Right) (gatherFMany f')
+gatherMany f = gatherFMany f' <<^ fmap Right
   where
     f' :: k -> Maybe () -> Auto m a (Maybe b)
     f' k _ = f k
@@ -289,7 +289,7 @@ gatherMany f = lmap (fmap Right) (gatherFMany f')
 gatherMany_ :: forall k a m b. (Ord k, Monad m, Binary k)
             => (k -> Auto m a (Maybe b))
             -> Auto m (Map k a) (Map k b)
-gatherMany_ f = lmap (fmap Right) (gatherFMany_ f')
+gatherMany_ f = gatherFMany_ f' <<^ fmap Right
   where
     f' :: k -> Maybe () -> Auto m a (Maybe b)
     f' k _ = f k
@@ -297,7 +297,7 @@ gatherMany_ f = lmap (fmap Right) (gatherFMany_ f')
 gatherMany__ :: forall k a m b. (Ord k, Monad m)
              => (k -> Auto m a (Maybe b))
              -> Auto m (Map k a) (Map k b)
-gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
+gatherMany__ f = gatherFMany__ f' <<^ fmap Right
   where
     f' :: k -> Maybe () -> Auto m a (Maybe b)
     f' k _ = f k
@@ -306,17 +306,17 @@ gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
 gatherF :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)
         => (k -> Maybe c -> Auto m a (Maybe b))
         -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF f = lmap (uncurry M.singleton) (gatherFMany f)
+gatherF f = gatherFMany f <<^ uncurry M.singleton
 
 gatherF_ :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k)
          => (k -> Maybe c -> Auto m a (Maybe b))
          -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF_ f = lmap (uncurry M.singleton) (gatherFMany_ f)
+gatherF_ f = gatherFMany_ f <<^ uncurry M.singleton
 
 gatherF__ :: forall k a m b c. (Ord k, Monad m)
           => (k -> Maybe c -> Auto m a (Maybe b))
           -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF__ f = lmap (uncurry M.singleton) (gatherFMany__ f)
+gatherF__ f = gatherFMany__ f <<^ uncurry M.singleton
 
 
 gatherFMany :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)

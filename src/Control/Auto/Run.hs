@@ -9,6 +9,9 @@ module Control.Auto.Run (
   , interactIdI
   , interact'
   , interactI'
+  -- ** Helpers
+  , duringRead
+  , bindRead
   -- * Generic "self-runners"
   -- ** Outside of Monad
   , run
@@ -27,11 +30,24 @@ import Control.Auto.Core
 import Control.Monad hiding  (mapM)
 import Data.Functor.Identity
 import Data.Maybe
+import Control.Arrow
+import Control.Auto.Interval
 import Data.Traversable
 import Prelude hiding        (interact, mapM)
 
 readMaybe :: Read a => String -> Maybe a
 readMaybe = fmap fst . mfilter (null . snd) . listToMaybe . reads
+
+duringRead :: (Monad m, Read a)
+           => Auto m a b
+           -> Auto m String (Maybe b)
+duringRead a = during a <<^ readMaybe
+
+bindRead :: (Monad m, Read a)
+         => Auto m (Maybe a) (Maybe b)
+         -> Auto m String (Maybe b)
+bindRead a = bindI a <<^ readMaybe
+
 
 runM :: (Monad m, Monad m')      -- ^ The running monad and the Auto monad, respectively
      => a                        -- ^ Starting input
@@ -105,54 +121,48 @@ runForeverI :: Monad m
 runForeverI x0 f a = runI x0 (Just . f) a
                   >> error "runForeverI: reached the end of forever."
 
-interact' :: (Monad m, Read a)
+interact' :: Monad m
           => (b -> IO ())
           -> (forall c. m c -> IO c)
-          -> Auto m a b
-          -> IO (Auto m a b)
+          -> Auto m String b
+          -> IO (Auto m String b)
 interact' f nt a = do
-    x0 <- readMaybe <$> getLine
-    case x0 of
-      Just x  -> runM x f' nt a
-      Nothing -> return a
+    x <- getLine
+    runM x f' nt a
   where
-    f' x = do
-      f x
-      readMaybe <$> getLine
+    f' y = do
+      f y
+      Just <$> getLine
 
-interactI' :: (Monad m, Read a)
+interactI' :: Monad m
            => (b -> IO ())
            -> (forall c. m c -> IO c)
-           -> Auto m a (Maybe b)
-           -> IO (Auto m a (Maybe b))
+           -> Auto m String (Maybe b)
+           -> IO (Auto m String (Maybe b))
 interactI' f nt a = do
-    x0 <- readMaybe <$> getLine
-    case x0 of
-      Just x  -> runIM x f' nt a
-      Nothing -> return a
+    x <- getLine
+    runIM x f' nt a
   where
-    f' x = do
-      f x
-      readMaybe <$> getLine
+    f' y = do
+      f y
+      Just <$> getLine
 
-interact :: (Monad m, Read a, Show b)
+interact :: Monad m
          => (forall c. m c -> IO c)
-         -> Auto m a b
-         -> IO (Auto m a b)
-interact = interact' print
+         -> Auto m String String
+         -> IO (Auto m String String)
+interact = interact' putStrLn
 
-interactI :: (Monad m, Read a, Show b)
+interactI :: Monad m
           => (forall c. m c -> IO c)
-          -> Auto m a (Maybe b)
-          -> IO (Auto m a (Maybe b))
-interactI = interactI' print
+          -> Auto m String (Maybe String)
+          -> IO (Auto m String (Maybe String))
+interactI = interactI' putStrLn
 
-interactId :: (Read a, Show b)
-           => Auto Identity a b
-           -> IO (Auto Identity a b)
+interactId :: Auto Identity String String
+           -> IO (Auto Identity String String)
 interactId = interact (return . runIdentity)
 
-interactIdI :: (Read a, Show b)
-            => Auto Identity a (Maybe b)
-            -> IO (Auto Identity a (Maybe b))
+interactIdI :: Auto Identity String (Maybe String)
+            -> IO (Auto Identity String (Maybe String))
 interactIdI = interactI (return . runIdentity)
