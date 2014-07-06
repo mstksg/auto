@@ -55,7 +55,7 @@ import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Blip.Internal
 import Control.Monad hiding         (mapM, mapM_, sequence)
-import Data.Binary
+import Data.Serialize
 import Data.Foldable
 import Data.IntMap.Strict           (IntMap)
 import Data.Map.Strict              (Map)
@@ -101,7 +101,7 @@ dynMap_ x0 = go 0 mempty
                                as'  = outAuto <$> res'
                            return (Output ys (go newc as'))
 
-muxMany :: forall m a b k. (Binary k, Ord k, Monad m)
+muxMany :: forall m a b k. (Serialize k, Ord k, Monad m)
     => (k -> Auto m a b)
     -> Auto m (Map k a) (Map k b)
 muxMany f = muxManyI (fmap Just . f)
@@ -110,7 +110,7 @@ muxMany_ :: forall m a b k. (Ord k, Monad m)
      => (k -> Auto m a b) -> Auto m (Map k a) (Map k b)
 muxMany_ f = muxManyI_ (fmap Just . f)
 
-mux :: forall m a b k. (Binary k, Ord k, Monad m)
+mux :: forall m a b k. (Serialize k, Ord k, Monad m)
      => (k -> Auto m a b)
      -> Auto m (k, a) b
 mux f = dimap (uncurry M.singleton) (head . M.elems) (muxMany f)
@@ -120,7 +120,7 @@ mux_ :: forall m a b k. (Ord k, Monad m)
       -> Auto m (k, a) b
 mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 
-muxI :: forall m a b k. (Binary k, Ord k, Monad m)
+muxI :: forall m a b k. (Serialize k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
      -> Auto m (k, a) (Maybe b)
 muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
@@ -131,7 +131,7 @@ muxI_ :: forall m a b k. (Ord k, Monad m)
 muxI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI_ f)
 
 
-muxManyI :: forall m a b k. (Binary k, Ord k, Monad m)
+muxManyI :: forall m a b k. (Serialize k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
      -> Auto m (Map k a) (Map k b)
 muxManyI f = go mempty
@@ -171,7 +171,7 @@ _muxManyIF f go as xs = do
     allas = M.union as newas
     steps = M.intersectionWith stepAuto allas xs
 
-muxFMany :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+muxFMany :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
          => (k -> Maybe c -> Auto m a b)
          -> Auto m (Map k (Either (c, a) a)) (Map k b)
 muxFMany f = muxFManyI (\k mc -> fmap Just (f k mc))
@@ -181,7 +181,7 @@ muxFMany_ :: forall m a b k c. (Ord k, Monad m)
           -> Auto m (Map k (Either (c, a) a)) (Map k b)
 muxFMany_ f = muxFManyI_ (\k mc -> fmap Just (f k mc))
 
-muxF :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+muxF :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
      => (k -> Maybe c -> Auto m a b)
      -> Auto m (k, Either (c, a) a) b
 muxF f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany f)
@@ -191,7 +191,7 @@ muxF_ :: forall m a b k c. (Ord k, Monad m)
       -> Auto m (k, Either (c, a) a) b
 muxF_ f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany_ f)
 
-muxFI :: forall m a b k c. (Binary k, Binary c, Ord k, Monad m)
+muxFI :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
       => (k -> Maybe c -> Auto m a (Maybe b))
       -> Auto m (k, Either (c, a) a) (Maybe b)
 muxFI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFManyI f)
@@ -201,7 +201,7 @@ muxFI_ :: forall m a b k c. (Ord k, Monad m)
        -> Auto m (k, Either (c, a) a) (Maybe b)
 muxFI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFManyI_ f)
 
-muxFManyI :: forall m a b c k. (Binary k, Binary c, Ord k, Monad m)
+muxFManyI :: forall m a b c k. (Serialize k, Serialize c, Ord k, Monad m)
           => (k -> Maybe c -> Auto m a (Maybe b))
           -> Auto m (Map k (Either (c, a) a)) (Map k b)
 muxFManyI f = go mempty
@@ -262,12 +262,12 @@ eitherToMaybe (Right y)     = (Nothing, y)
 _muxgathermapF :: (k -> Maybe c -> Auto m a (Maybe b)) -> k -> (Maybe c, a) -> (Maybe c, Auto m a (Maybe b))
 _muxgathermapF f k (mz, _) = (mz, f k mz)
 
-gather :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
+gather :: forall k a m b. (Ord k, Monad m, Serialize k, Serialize b)
        => (k -> Auto m a (Maybe b))
        -> Auto m (k, a) (Map k b)
 gather f = gatherMany f <<^ uncurry M.singleton
 
-gather_ :: forall k a m b. (Ord k, Monad m, Binary k)
+gather_ :: forall k a m b. (Ord k, Monad m, Serialize k)
         => (k -> Auto m a (Maybe b))
         -> Auto m (k, a) (Map k b)
 gather_ f = gatherMany_ f <<^ uncurry M.singleton
@@ -278,7 +278,7 @@ gather__ :: forall k a m b. (Ord k, Monad m)
 gather__ f = gatherMany__ f <<^ uncurry M.singleton
 
 
-gatherMany :: forall k a m b. (Ord k, Monad m, Binary k, Binary b)
+gatherMany :: forall k a m b. (Ord k, Monad m, Serialize k, Serialize b)
            => (k -> Auto m a (Maybe b))
            -> Auto m (Map k a) (Map k b)
 gatherMany f = gatherFMany f' <<^ fmap Right
@@ -286,7 +286,7 @@ gatherMany f = gatherFMany f' <<^ fmap Right
     f' :: k -> Maybe () -> Auto m a (Maybe b)
     f' k _ = f k
 
-gatherMany_ :: forall k a m b. (Ord k, Monad m, Binary k)
+gatherMany_ :: forall k a m b. (Ord k, Monad m, Serialize k)
             => (k -> Auto m a (Maybe b))
             -> Auto m (Map k a) (Map k b)
 gatherMany_ f = gatherFMany_ f' <<^ fmap Right
@@ -303,12 +303,12 @@ gatherMany__ f = gatherFMany__ f' <<^ fmap Right
     f' k _ = f k
 
 
-gatherF :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)
+gatherF :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
         => (k -> Maybe c -> Auto m a (Maybe b))
         -> Auto m (k, Either (c, a) a) (Map k b)
 gatherF f = gatherFMany f <<^ uncurry M.singleton
 
-gatherF_ :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k)
+gatherF_ :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k)
          => (k -> Maybe c -> Auto m a (Maybe b))
          -> Auto m (k, Either (c, a) a) (Map k b)
 gatherF_ f = gatherFMany_ f <<^ uncurry M.singleton
@@ -319,7 +319,7 @@ gatherF__ :: forall k a m b c. (Ord k, Monad m)
 gatherF__ f = gatherFMany__ f <<^ uncurry M.singleton
 
 
-gatherFMany :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k, Binary b)
+gatherFMany :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
             => (k -> Maybe c -> Auto m a (Maybe b))
             -> Auto m (Map k (Either (c, a) a)) (Map k b)
 gatherFMany f = go mempty mempty
@@ -334,7 +334,7 @@ gatherFMany f = go mempty mempty
            *> put ys
     t    = _gatherFManyF f go
 
-gatherFMany_ :: forall k a m b c. (Ord k, Monad m, Binary c, Binary k)
+gatherFMany_ :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k)
              => (k -> Maybe c -> Auto m a (Maybe b))
              -> Auto m (Map k (Either (c, a) a)) (Map k b)
 gatherFMany_ f = go mempty mempty
@@ -348,7 +348,7 @@ gatherFMany_ f = go mempty mempty
         *> mapM_ (saveAuto . snd) as
     t    = _gatherFManyF f go
 
-_loadAs :: forall k a m b c. (Binary k, Binary c, Ord k)
+_loadAs :: forall k a m b c. (Serialize k, Serialize c, Ord k)
         => (k -> Maybe c -> Auto m a (Maybe b))
         -> Get (Map k (Maybe c, Auto m a (Maybe b)))
 _loadAs f = do
@@ -402,7 +402,7 @@ _gatherFManyF f go as ys xs = do
     interf (mc, a) (_, x) = sequence (mc, stepAuto a x)
 
 
--- dynMap :: forall m a b k. (Ord k, Binary k) => (k -> Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
+-- dynMap :: forall m a b k. (Ord k, Serialize k) => (k -> Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)
 -- dynMap f = go mempty
 --   where
 --     go :: Map k (Auto m a (Maybe b)) -> Auto m (Map k a) (Map k b)

@@ -21,19 +21,19 @@ import Control.Monad
 import Control.Auto.Core
 import Control.Auto.Blip.Internal
 import Control.Auto.Generate
-import Data.Binary
+import Data.Serialize
 
 count :: Monad m => Auto m a Int
 count = iterator (+1) 0
 
-delay :: (Binary a, Monad m) => a -> Auto m a a
+delay :: (Serialize a, Monad m) => a -> Auto m a a
 delay = mkState (flip (,))
 
 delay_ :: Monad m => a -> Auto m a a
 delay_ = mkState_ (flip (,))
 
 
-stretch :: (Binary b, Monad m) => Int -> Auto m a b -> Auto m a b
+stretch :: (Serialize b, Monad m) => Int -> Auto m a b -> Auto m a b
 stretch n = go (1, undefined)
   where
     go (i, y) a = mkAutoM (go <$> get <*> loadAuto a)

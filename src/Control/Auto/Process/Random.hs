@@ -24,7 +24,7 @@ import Control.Applicative
 import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Category
-import Data.Binary
+import Data.Serialize
 import Data.Foldable
 import Data.Map.Strict           (Map)
 import Prelude hiding            (id, (.), concat, concatMap, sum)
@@ -40,7 +40,7 @@ stdRands r g = mkState f (show g)
     f _ sg = let (res, g') = r (read sg)
              in  (res, show g')
 
-rands :: (Binary g, RandomGen g, Monad m)
+rands :: (Serialize g, RandomGen g, Monad m)
       => (g -> (b, g)) -- ^ Random function
       -> g             -- ^ Initial generator
       -> Auto m a b
@@ -62,7 +62,7 @@ stdRandsM r g = mkStateM f (show g)
       (res, g') <- r (read sg)
       return (res, show g')
 
-randsM :: (Binary g, RandomGen g, Monad m)
+randsM :: (Serialize g, RandomGen g, Monad m)
        => (g -> m (b, g))
        -> g
        -> Auto m a b
@@ -74,14 +74,14 @@ randsM_ :: (RandomGen g, Monad m)
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
 
-markov :: forall a b m g. (Binary g, Binary b, RandomGen g, Monad m, Ord b)
+markov :: forall a b m g. (Serialize g, Serialize b, RandomGen g, Monad m, Ord b)
        => Map b (Map b Double)
        -> g
        -> b
        -> Auto m a b
 markov tm g0 b0 = mkState (const (_markovF tm _rF)) (b0, g0)
 
-stdMarkov :: forall a b m. (Binary b, Monad m, Ord b)
+stdMarkov :: forall a b m. (Serialize b, Monad m, Ord b)
           => Map b (Map b Double)
           -> StdGen
           -> b
@@ -132,7 +132,7 @@ weightedRandom xs g f = er0 `seq` (x, g')
     er0 | s <= 0    = error "weightedRandom: weights sum to zero."
         | otherwise = ()
 
-bernoulli :: (Binary g, RandomGen g, Monad m) => Double -> g -> Auto m a (Blip a)
+bernoulli :: (Serialize g, RandomGen g, Monad m) => Double -> g -> Auto m a (Blip a)
 bernoulli p g = proc x -> do
     q <- rands (randomR (0, 1)) g -< ()
     b <- emitOn (<= p)            -< q

@@ -31,7 +31,7 @@ import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Blip.Internal
 import Control.Category
-import Data.Binary
+import Data.Serialize
 import Data.Maybe
 import Prelude hiding              ((.), id)
 
@@ -99,7 +99,7 @@ between = mkState f False
     f (x, _          ) True  = (Just x , True )
     f _                False = (Nothing, False)
 
-hold :: (Binary a, Monad m) => Auto m (Blip a) (Maybe a)
+hold :: (Serialize a, Monad m) => Auto m (Blip a) (Maybe a)
 hold = mkAccum f Nothing
   where
     f x = blip x Just
@@ -109,7 +109,7 @@ hold_ = mkAccum_ f Nothing
   where
     f x = blip x Just
 
-holdFor :: (Binary a, Monad m) => Int -> Auto m (Blip a) (Maybe a)
+holdFor :: (Serialize a, Monad m) => Int -> Auto m (Blip a) (Maybe a)
 holdFor n = fst <$> mkAccum (_holdForF n) (Nothing, max 0 n)
 
 holdFor_ :: Monad m => Int -> Auto m (Blip a) (Maybe a)

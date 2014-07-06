@@ -15,9 +15,9 @@ module Control.Auto.Generate (
 -- import Control.Auto.Event.Internal
 import Control.Applicative
 import Control.Auto.Core
-import Data.Binary
+import Data.Serialize
 
-fromList :: (Binary b, Monad m) => [b] -> Auto m a (Maybe b)
+fromList :: (Serialize b, Monad m) => [b] -> Auto m a (Maybe b)
 fromList = mkState (const _uncons)
 
 fromList_ :: Monad m => [b] -> Auto m a (Maybe b)
@@ -31,7 +31,7 @@ _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
 
-unfold :: forall m a b c. (Binary c, Monad m) => (c -> (Maybe b, c)) -> c -> Auto m a (Maybe b)
+unfold :: forall m a b c. (Serialize c, Monad m) => (c -> (Maybe b, c)) -> c -> Auto m a (Maybe b)
 unfold f = mkState g . Just
   where
     g :: a -> Maybe c -> (Maybe b, Maybe c)
@@ -40,7 +40,7 @@ unfold f = mkState g . Just
                      (Just y , x') -> (Just y , Just x')
                      (Nothing, _ ) -> (Nothing, Nothing)
 
-iterator :: (Binary b, Monad m) => (b -> b) -> b -> Auto m a b
+iterator :: (Serialize b, Monad m) => (b -> b) -> b -> Auto m a b
 iterator f = a_
   where
     a_ y0 = mkAuto (a_ <$> get)
@@ -48,7 +48,7 @@ iterator f = a_
                    $ \_ -> let y1 = f y0
                            in  Output y0 (a_ y1)
 
-iteratorM :: (Binary b, Monad m) => (b -> m b) -> b -> Auto m a b
+iteratorM :: (Serialize b, Monad m) => (b -> m b) -> b -> Auto m a b
 iteratorM f = a_
   where
     a_ y0 = mkAutoM (a_ <$> get)

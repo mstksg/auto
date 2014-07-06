@@ -33,7 +33,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8
-                     , binary
+                     , cereal
                      , profunctors
                      , semigroups
                      , transformers
