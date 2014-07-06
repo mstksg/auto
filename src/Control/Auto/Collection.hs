@@ -53,7 +53,7 @@ module Control.Auto.Collection (
 import Control.Applicative
 import Control.Arrow
 import Control.Auto.Core
-import Control.Auto.Event.Internal
+import Control.Auto.Blip.Internal
 import Control.Monad hiding         (mapM, mapM_, sequence)
 import Data.Binary
 import Data.Foldable
@@ -78,20 +78,20 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
 
 
 -- another problem
-dynZip_ :: Monad m => a -> Auto m ([a], Event [Auto m a (Maybe b)]) [b]
+dynZip_ :: Monad m => a -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]
 dynZip_ x0 = go []
   where
     go as = mkAutoM_ $ \(xs, news) -> do
-                         let newas = as ++ event [] id news
+                         let newas = as ++ blip [] id news
                          res <- zipWithM stepAuto newas (xs ++ repeat x0)
                          let (ys, as') = unzip [ (y, a) | (Output (Just y) a) <- res ]
                          return (Output ys (go as'))
 
-dynMap_ :: Monad m => a -> Auto m (IntMap a, Event [Auto m a (Maybe b)]) (IntMap b)
+dynMap_ :: Monad m => a -> Auto m (IntMap a, Blip [Auto m a (Maybe b)]) (IntMap b)
 dynMap_ x0 = go 0 mempty
   where
     go i as = mkAutoM_ $ \(xs, news) -> do
-                           let newas  = zip [i..] (event [] id news)
+                           let newas  = zip [i..] (blip [] id news)
                                newas' = IM.union as (IM.fromList newas)
                                newc   = i + length newas
                                resMap = zipIntMapWithDefaults stepAuto Nothing (Just x0) newas' xs

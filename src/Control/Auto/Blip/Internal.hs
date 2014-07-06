@@ -4,10 +4,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Control.Auto.Event.Internal (
-    Event(..)
+module Control.Auto.Blip.Internal (
+    Blip(..)
   , merge
-  , event
+  , blip
   ) where
 
 -- import Data.Foldable
@@ -17,8 +17,8 @@ import Data.Typeable
 import Data.Binary
 import GHC.Generics
 
-data Event a = NoEvent
-             | Event a
+data Blip a = NoBlip
+             | Blip a
              deriving ( Functor
                       -- , Foldable
                       -- , Traversable
@@ -27,21 +27,21 @@ data Event a = NoEvent
                       , Generic
                       )
 
-instance Semigroup a => Monoid (Event a) where
-    mempty  = NoEvent
+instance Semigroup a => Monoid (Blip a) where
+    mempty  = NoBlip
     mappend = merge (<>)
 
-instance Semigroup a => Semigroup (Event a) where
+instance Semigroup a => Semigroup (Blip a) where
     (<>) = merge (<>)
 
-instance Binary a => Binary (Event a)
+instance Binary a => Binary (Blip a)
 
-merge :: (a -> a -> a) -> Event a -> Event a -> Event a
-merge _ ex NoEvent          = ex
-merge _ NoEvent ey          = ey
-merge f (Event x) (Event y) = Event (f x y)
+merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
+merge _ ex NoBlip          = ex
+merge _ NoBlip ey          = ey
+merge f (Blip x) (Blip y) = Blip (f x y)
 
-event :: b -> (a -> b) -> Event a -> b
-event d _ NoEvent   = d
-event _ f (Event x) = f x
+blip :: b -> (a -> b) -> Blip a -> b
+blip d _ NoBlip   = d
+blip _ f (Blip x) = f x
 

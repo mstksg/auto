@@ -16,7 +16,7 @@ module Control.Auto.Switch (
 
 import Control.Applicative
 import Control.Auto.Core
-import Control.Auto.Event.Internal
+import Control.Auto.Blip.Internal
 import Data.Binary
 import Data.Maybe
 
@@ -48,28 +48,28 @@ a1 -?> a2 = mkAutoM l s t
 
 
 switch_ :: Monad m
-        => Auto m a (b, Event (Auto m a b))
+        => Auto m a (b, Blip (Auto m a b))
         -> Auto m a b
 switch_ a0 = mkAutoM_ $ \x -> do
                           Output (y, ea1) a0' <- stepAuto a0 x
                           return $ case ea1 of
-                            Event a1 -> Output y a1
-                            NoEvent  -> Output y (switch_ a0')
+                            Blip a1 -> Output y a1
+                            NoBlip  -> Output y (switch_ a0')
 
 rSwitch_ :: forall m a b. Monad m
          => Auto m a b
-         -> Auto m (a, Event (Auto m a b)) b
+         -> Auto m (a, Blip (Auto m a b)) b
 rSwitch_ a0 = mkAutoM_ $ \(x, ea1) -> do
                            let a = case ea1 of
-                                     NoEvent  -> a0
-                                     Event a1 -> a1
+                                     NoBlip  -> a0
+                                     Blip a1 -> a1
                            Output y a' <- stepAuto a x
                            return (Output y (rSwitch_ a'))
 
 
 switchF :: forall m a b c. (Monad m, Binary c)
-        => (c -> Auto m a (b, Event c))
-        -> Auto m a (b, Event c)
+        => (c -> Auto m a (b, Blip c))
+        -> Auto m a (b, Blip c)
         -> Auto m a b
 switchF f = go Nothing
   where
@@ -80,8 +80,8 @@ switchF f = go Nothing
         t x = do
           Output (y, ez) a' <- stepAuto a x
           return $ case ez of
-            Event z -> Output y (go (Just z) (f z))
-            NoEvent -> Output y (go mz       a'   )
+            Blip z -> Output y (go (Just z) (f z))
+            NoBlip -> Output y (go mz       a'   )
     l a = do
       mz <- get
       case mz of
@@ -89,16 +89,16 @@ switchF f = go Nothing
         Nothing -> go mz <$> loadAuto a
 
 switchF_ :: forall m a b c. Monad m
-         => (c -> Auto m a (b, Event c))
-         -> Auto m a (b, Event c)
+         => (c -> Auto m a (b, Blip c))
+         -> Auto m a (b, Blip c)
          -> Auto m a b
 switchF_ f a0 = mkAutoM_ $ \x -> do
                              Output (y, ez) a0' <- stepAuto a0 x
                              return $ case ez of
-                               Event z -> Output y (switchF_ f (f z))
-                               NoEvent -> Output y (switchF_ f a0')
+                               Blip z -> Output y (switchF_ f (f z))
+                               NoBlip -> Output y (switchF_ f a0')
 
-rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
+rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
 rSwitchF f = go Nothing
   where
     go mz a0 = mkAutoM (l a0) (s mz a0) (t mz a0)
@@ -111,19 +111,19 @@ rSwitchF f = go Nothing
            *> saveAuto a0
     t mz a0 (x, ez) =
       case ez of
-        NoEvent -> do
+        NoBlip -> do
           Output y a0' <- stepAuto a0 x
           return (Output y (go mz a0'))
-        Event z -> do
+        Blip z -> do
           Output y a1  <- stepAuto (f z) x
           return (Output y (go (Just z) a1))
 
-rSwitchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Event c) b
+rSwitchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
 rSwitchF_ f a0 = mkAutoM_ $ \(x, ez) ->
                               case ez of
-                                NoEvent -> do
+                                NoBlip -> do
                                   Output y a0' <- stepAuto a0 x
                                   return (Output y (rSwitchF_ f a0'))
-                                Event z -> do
+                                Blip z -> do
                                   Output y a1 <- stepAuto (f z) x
                                   return (Output y (rSwitchF_ f a1))
