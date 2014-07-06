@@ -13,7 +13,7 @@ module Control.Auto.Process.Random (
   , bernoulli
   , stdBernoulli
   , bernoulli_
-  -- * Follow markov chains
+  -- * Follow Markov chains
   , markov
   , stdMarkov
   , markov_
@@ -21,15 +21,15 @@ module Control.Auto.Process.Random (
   ) where
 
 import Control.Applicative
-import Control.Auto.Core
 import Control.Auto.Blip
+import Control.Auto.Core
 import Control.Category
 import Data.Binary
 import Data.Foldable
-import Data.Map.Strict             (Map)
-import Prelude hiding              (id, (.), concat, concatMap, sum)
+import Data.Map.Strict           (Map)
+import Prelude hiding            (id, (.), concat, concatMap, sum)
 import System.Random
-import qualified Data.Map.Strict   as M
+import qualified Data.Map.Strict as M
 
 stdRands :: Monad m
          => (StdGen -> (b, StdGen)) -- ^ Random function

@@ -40,6 +40,7 @@ library
                      , bytestring
                      , containers
                      , random
+                     , monad-loops
                      -- , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
