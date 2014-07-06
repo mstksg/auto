@@ -28,6 +28,7 @@ library
                      , Control.Auto.Interval
                      , Control.Auto.Process.Random
                      , Control.Auto.Run
+                     , Control.Auto.Serialize
                      , Control.Auto.Switch
                      , Control.Auto.Time
   -- other-modules:       
