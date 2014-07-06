@@ -5,8 +5,8 @@ module Control.Auto.Blip (
   , merge
   , mergeL
   , mergeR
-  , emit
-  , emitMaybes
+  , emitOn
+  , emitOnMaybes
   -- * Step/"time" based Blip streams
   , never
   , now
@@ -100,11 +100,11 @@ inB n = mkState f (n, False)
     f x (i, False) | i <= 0    = (Blip x, (0  , True ))
                    | otherwise = (NoBlip, (i-1, False))
 
-emit :: Monad m => (a -> Bool) -> Auto m a (Blip a)
-emit p = filterB p . every 1
+emitOn :: Monad m => (a -> Bool) -> Auto m a (Blip a)
+emitOn p = filterB p . every 1
 
-emitMaybes :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
-emitMaybes p = onJust <<^ p
+emitOnMaybes :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
+emitOnMaybes p = onJust <<^ p
 
 every :: Monad m => Int -> Auto m a (Blip a)
 every n = stretchB n id
