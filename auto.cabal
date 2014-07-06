@@ -19,17 +19,17 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Control.Auto
+                     , Control.Auto.Blip
+                     , Control.Auto.Blip.Internal
                      , Control.Auto.Collection
                      , Control.Auto.Core
                      , Control.Auto.Effects
-                     , Control.Auto.Event
-                     , Control.Auto.Event.Internal
                      , Control.Auto.Generate
                      , Control.Auto.Interval
+                     , Control.Auto.Process.Random
                      , Control.Auto.Run
                      , Control.Auto.Switch
                      , Control.Auto.Time
-                     , Control.Auto.Process.Random
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8

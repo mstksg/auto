@@ -13,7 +13,7 @@ module Control.Auto.Interval (
   -- * Choice
   , (<|?>)
   , (<|!>)
-  -- * Event-based intervals
+  -- * Blip-based intervals
   , after
   , before
   , between
@@ -29,7 +29,7 @@ module Control.Auto.Interval (
 import Control.Applicative
 import Control.Arrow
 import Control.Auto.Core
-import Control.Auto.Event.Internal
+import Control.Auto.Blip.Internal
 import Control.Category
 import Data.Binary
 import Data.Maybe
@@ -77,50 +77,50 @@ unless p = arr f
     f x | p x       = Nothing
         | otherwise = Just x
 
-after :: Monad m => Auto m (a, Event b) (Maybe a)
+after :: Monad m => Auto m (a, Blip b) (Maybe a)
 after = mkState f False
   where
-    f (x, _      ) True  = (Just x , True )
-    f (x, Event _) False = (Just x , True )
-    f _            False = (Nothing, False)
+    f (x, _     ) True  = (Just x , True )
+    f (x, Blip _) False = (Just x , True )
+    f _           False = (Nothing, False)
 
-before :: Monad m => Auto m (a, Event b) (Maybe a)
+before :: Monad m => Auto m (a, Blip b) (Maybe a)
 before = mkState f False
   where
-    f _            True  = (Nothing, True )
-    f (_, Event _) False = (Nothing, True )
-    f (x, _      ) False = (Just x , False)
+    f _           True  = (Nothing, True )
+    f (_, Blip _) False = (Nothing, True )
+    f (x, _     ) False = (Just x , False)
 
-between :: Monad m => Auto m (a, (Event b, Event c)) (Maybe a)
+between :: Monad m => Auto m (a, (Blip b, Blip c)) (Maybe a)
 between = mkState f False
   where
-    f (_, (_, Event _)) _     = (Nothing, False)
-    f (x, (Event _, _)) _     = (Just x , True )
-    f (x, _           ) True  = (Just x , True )
-    f _                 False = (Nothing, False)
+    f (_, (_, Blip _)) _     = (Nothing, False)
+    f (x, (Blip _, _)) _     = (Just x , True )
+    f (x, _          ) True  = (Just x , True )
+    f _                False = (Nothing, False)
 
-hold :: (Binary a, Monad m) => Auto m (Event a) (Maybe a)
+hold :: (Binary a, Monad m) => Auto m (Blip a) (Maybe a)
 hold = mkAccum f Nothing
   where
-    f x = event x Just
+    f x = blip x Just
 
-hold_ :: Monad m => Auto m (Event a) (Maybe a)
+hold_ :: Monad m => Auto m (Blip a) (Maybe a)
 hold_ = mkAccum_ f Nothing
   where
-    f x = event x Just
+    f x = blip x Just
 
-holdFor :: (Binary a, Monad m) => Int -> Auto m (Event a) (Maybe a)
+holdFor :: (Binary a, Monad m) => Int -> Auto m (Blip a) (Maybe a)
 holdFor n = fst <$> mkAccum (_holdForF n) (Nothing, max 0 n)
 
-holdFor_ :: Monad m => Int -> Auto m (Event a) (Maybe a)
+holdFor_ :: Monad m => Int -> Auto m (Blip a) (Maybe a)
 holdFor_ n = fst <$> mkAccum_ (_holdForF n) (Nothing, max 0 n)
 
-_holdForF :: Int -> (Maybe a, Int) -> Event a -> (Maybe a, Int)
+_holdForF :: Int -> (Maybe a, Int) -> Blip a -> (Maybe a, Int)
 _holdForF n = f   -- n should be >= 0
   where
-    f _      (Event x) = (Just x , n    )
-    f (_, 0) _         = (Nothing, 0    )
-    f (x, i) _         = (x      , i - 1)
+    f _      (Blip x) = (Just x , n    )
+    f (_, 0) _        = (Nothing, 0    )
+    f (x, i) _        = (x      , i - 1)
 
 
 -- It feels weird that both wires are stepped (even the second one), but

@@ -8,7 +8,7 @@ module Control.Auto.Time (
   , delay_
   , stretch
   , stretch_
-  , stretchE
+  , stretchB
   , accelerate
   , maccelerate
   ) where
@@ -16,7 +16,7 @@ module Control.Auto.Time (
 import Control.Applicative
 import Data.Monoid
 import Control.Auto.Core
-import Control.Auto.Event.Internal
+import Control.Auto.Blip.Internal
 import Control.Auto.Generate
 import Data.Binary
 
@@ -55,8 +55,8 @@ stretch_ n = go (1, undefined)
                                   else
                                     return (Output y (go (i - 1, y ) a ))
 
-stretchE :: Monad m => Int -> Auto m a b -> Auto m a (Event b)
-stretchE (max 1 -> n) = go 1
+stretchB :: Monad m => Int -> Auto m a b -> Auto m a (Blip b)
+stretchB (max 1 -> n) = go 1
   where
     go i a = mkAutoM (go <$> get <*> loadAuto a)
                      (put i *> saveAuto a)
@@ -64,9 +64,9 @@ stretchE (max 1 -> n) = go 1
                          if i <= 1
                            then do
                              Output y a' <- stepAuto a x
-                             return (Output (Event y) (go n       a'))
+                             return (Output (Blip y) (go n       a'))
                            else
-                             return (Output NoEvent   (go (i - 1) a ))
+                             return (Output NoBlip   (go (i - 1) a ))
 
 accelerate :: Monad m => Int -> Auto m a b -> Auto m a [b]
 accelerate n = go

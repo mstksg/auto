@@ -3,11 +3,11 @@
 module Control.Auto.Effects (
   -- Running effects
     effect
-  , effectE
+  , effectB
   , exec
   , exec'
-  , execE
-  , execE'
+  , execB
+  , execB'
   -- One-time effects
   , cache
   , cache_
@@ -16,7 +16,7 @@ module Control.Auto.Effects (
   ) where
 
 import Control.Auto.Core
-import Control.Auto.Event
+import Control.Auto.Blip
 import Data.Binary
 import Control.Monad
 import Control.Applicative
@@ -47,12 +47,12 @@ exec' = mkConstM . liftM (const ())
 arrM :: Monad m => (a -> m b) -> Auto m a b
 arrM = mkFuncM
 
-effectE :: Monad m => m b -> Auto m (Event a) (Event b)
-effectE = perEvent . effect
+effectB :: Monad m => m b -> Auto m (Blip a) (Blip b)
+effectB = perBlip . effect
 
-execE :: Monad m => m b -> Auto m (Event a) (Event a)
-execE = perEvent . exec
+execB :: Monad m => m b -> Auto m (Blip a) (Blip a)
+execB = perBlip . exec
 
-execE' :: Monad m => m b -> Auto m (Event a) (Event ())
-execE' = perEvent . exec'
+execB' :: Monad m => m b -> Auto m (Blip a) (Blip ())
+execB' = perBlip . exec'
 
