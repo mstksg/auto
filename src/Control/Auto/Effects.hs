@@ -17,12 +17,12 @@ module Control.Auto.Effects (
 
 import Control.Auto.Core
 import Control.Auto.Blip
-import Data.Binary
+import Data.Serialize
 import Control.Monad
 import Control.Applicative
 import Control.Auto.Generate
 
-cache :: (Binary b, Monad m) => m b -> Auto m a b
+cache :: (Serialize b, Monad m) => m b -> Auto m a b
 cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
 
 cache_ :: Monad m => m b -> Auto m a b

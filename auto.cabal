@@ -28,18 +28,20 @@ library
                      , Control.Auto.Interval
                      , Control.Auto.Process.Random
                      , Control.Auto.Run
+                     , Control.Auto.Serialize
                      , Control.Auto.Switch
                      , Control.Auto.Time
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8
-                     , binary
+                     , cereal
                      , profunctors
                      , semigroups
                      , transformers
                      , bytestring
                      , containers
                      , random
+                     , monad-loops
                      -- , vector
   hs-source-dirs:      src
   default-language:    Haskell2010

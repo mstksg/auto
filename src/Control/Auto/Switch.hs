@@ -17,7 +17,7 @@ module Control.Auto.Switch (
 import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Blip.Internal
-import Data.Binary
+import Data.Serialize
 import Data.Maybe
 
 (-->) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
@@ -67,7 +67,7 @@ rSwitch_ a0 = mkAutoM_ $ \(x, ea1) -> do
                            return (Output y (rSwitch_ a'))
 
 
-switchF :: forall m a b c. (Monad m, Binary c)
+switchF :: forall m a b c. (Monad m, Serialize c)
         => (c -> Auto m a (b, Blip c))
         -> Auto m a (b, Blip c)
         -> Auto m a b
@@ -98,7 +98,7 @@ switchF_ f a0 = mkAutoM_ $ \x -> do
                                Blip z -> Output y (switchF_ f (f z))
                                NoBlip -> Output y (switchF_ f a0')
 
-rSwitchF :: forall m a b c. (Monad m, Binary c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
+rSwitchF :: forall m a b c. (Monad m, Serialize c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
 rSwitchF f = go Nothing
   where
     go mz a0 = mkAutoM (l a0) (s mz a0) (t mz a0)

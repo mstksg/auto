@@ -14,7 +14,7 @@ module Control.Auto.Blip.Internal (
 -- import Data.Traversable
 import Data.Semigroup
 import Data.Typeable
-import Data.Binary
+import Data.Serialize
 import GHC.Generics
 
 data Blip a = NoBlip
@@ -34,7 +34,7 @@ instance Semigroup a => Monoid (Blip a) where
 instance Semigroup a => Semigroup (Blip a) where
     (<>) = merge (<>)
 
-instance Binary a => Binary (Blip a)
+instance Serialize a => Serialize (Blip a)
 
 merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
 merge _ ex NoBlip          = ex

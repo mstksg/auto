@@ -11,26 +11,29 @@ module Control.Auto.Time (
   , stretchB
   , accelerate
   , maccelerate
+  , accelOverList
   ) where
 
 import Control.Applicative
 import Data.Monoid
+import Control.Monad.Loops
+import Control.Monad
 import Control.Auto.Core
 import Control.Auto.Blip.Internal
 import Control.Auto.Generate
-import Data.Binary
+import Data.Serialize
 
 count :: Monad m => Auto m a Int
 count = iterator (+1) 0
 
-delay :: (Binary a, Monad m) => a -> Auto m a a
+delay :: (Serialize a, Monad m) => a -> Auto m a a
 delay = mkState (flip (,))
 
 delay_ :: Monad m => a -> Auto m a a
 delay_ = mkState_ (flip (,))
 
 
-stretch :: (Binary b, Monad m) => Int -> Auto m a b -> Auto m a b
+stretch :: (Serialize b, Monad m) => Int -> Auto m a b -> Auto m a b
 stretch n = go (1, undefined)
   where
     go (i, y) a = mkAutoM (go <$> get <*> loadAuto a)
@@ -51,9 +54,9 @@ stretch_ n = go (1, undefined)
                                if i <= 1
                                   then do
                                     Output y' a' <- stepAuto a x
-                                    return (Output y (go (n    , y') a'))
+                                    return $ Output y (go (n    , y') a')
                                   else
-                                    return (Output y (go (i - 1, y ) a ))
+                                    return $ Output y (go (i - 1, y ) a )
 
 stretchB :: Monad m => Int -> Auto m a b -> Auto m a (Blip b)
 stretchB (max 1 -> n) = go 1
@@ -64,9 +67,28 @@ stretchB (max 1 -> n) = go 1
                          if i <= 1
                            then do
                              Output y a' <- stepAuto a x
-                             return (Output (Blip y) (go n       a'))
+                             return $ Output (Blip y) (go n       a')
                            else
-                             return (Output NoBlip   (go (i - 1) a ))
+                             return $ Output NoBlip   (go (i - 1) a )
+
+accelOverList :: Monad m => Auto m a b -> Auto m [a] [b]
+accelOverList = go
+  where
+    go a0 = mkAutoM (go <$> loadAuto a0)
+                    (saveAuto a0)
+                    $ \xs -> do
+                        res <- liftM reverse (unfoldrM f (a0, xs))
+                        case res of
+                          []          ->
+                            return $ Output [] (go a0)
+                          ((_, a'):_) ->
+                            return $ Output (map fst res) (go a')
+
+    f (_, [])   = return Nothing
+    f (a, x:xs) = do
+      Output y a' <- stepAuto a x
+      return $ Just ((y, a'), (a', xs))
+
 
 accelerate :: Monad m => Int -> Auto m a b -> Auto m a [b]
 accelerate n = go

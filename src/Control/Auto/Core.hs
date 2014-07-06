@@ -39,10 +39,8 @@ import Control.Arrow
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
-import Data.Binary
-import Data.Binary.Put
-import Data.Binary.Get
-import Data.ByteString.Lazy
+import Data.Serialize
+import Data.ByteString
 import Data.Monoid
 import Data.Profunctor
 import Prelude hiding       ((.), id)
@@ -68,7 +66,7 @@ data Auto m a b = Auto { loadAuto :: !(Get (Auto m a b))
 encodeAuto :: Auto m a b -> ByteString
 encodeAuto = runPut . saveAuto
 
-decodeAuto :: Auto m a b -> ByteString -> Auto m a b
+decodeAuto :: Auto m a b -> ByteString -> Either String (Auto m a b)
 decodeAuto a = runGet (loadAuto a)
 
 mkAuto :: Monad m
@@ -119,7 +117,7 @@ mkFuncM f = a
                       y <- f x
                       return (Output y a)
 
-mkState :: (Binary s, Monad m)
+mkState :: (Serialize s, Monad m)
         => (a -> s -> (b, s))
         -> s
         -> Auto m a b
@@ -130,7 +128,7 @@ mkState f = a_
                    $ \x -> let (y, s1) = f x s0
                            in  Output y (a_ s1)
 
-mkStateM :: (Binary s, Monad m)
+mkStateM :: (Serialize s, Monad m)
          => (a -> s -> m (b, s))
          -> s
          -> Auto m a b
@@ -161,7 +159,7 @@ mkStateM_ f = a_
                          (y, s1) <- f x s0
                          return (Output y (a_ s1))
 
-mkAccum :: (Binary b, Monad m)
+mkAccum :: (Serialize b, Monad m)
         => (b -> a -> b)
         -> b
         -> Auto m a b
@@ -172,7 +170,7 @@ mkAccum f = a_
                    $ \x -> let y1 = f y0 x
                            in  Output y1 (a_ y1)
 
-mkAccumM :: (Binary b, Monad m)
+mkAccumM :: (Serialize b, Monad m)
          => (b -> a -> m b)
          -> b
          -> Auto m a b

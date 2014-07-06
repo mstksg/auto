@@ -5,8 +5,8 @@ module Control.Auto.Blip (
   , merge
   , mergeL
   , mergeR
-  , blips
-  , blipsMaybe
+  , emitOn
+  , emitOnMaybes
   -- * Step/"time" based Blip streams
   , never
   , now
@@ -61,7 +61,7 @@ import Data.Profunctor
 import Control.Auto.Blip.Internal
 import Control.Auto.Time
 import Control.Category
-import Data.Binary
+import Data.Serialize
 import Prelude hiding                  ((.), id, sequence)
 import qualified Control.Auto.Generate as A
 
@@ -100,16 +100,16 @@ inB n = mkState f (n, False)
     f x (i, False) | i <= 0    = (Blip x, (0  , True ))
                    | otherwise = (NoBlip, (i-1, False))
 
-blips :: Monad m => (a -> Bool) -> Auto m a (Blip a)
-blips p = filterB p . every 1
+emitOn :: Monad m => (a -> Bool) -> Auto m a (Blip a)
+emitOn p = filterB p . every 1
 
-blipsMaybe :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
-blipsMaybe p = onJust <<^ p
+emitOnMaybes :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
+emitOnMaybes p = onJust <<^ p
 
 every :: Monad m => Int -> Auto m a (Blip a)
 every n = stretchB n id
 
-eachAt :: (Monad m, Binary b) => Int -> [b] -> Auto m a (Blip b)
+eachAt :: (Monad m, Serialize b) => Int -> [b] -> Auto m a (Blip b)
 eachAt n xs = during (every n) . stretch n (A.fromList xs) <|!> never
 
 eachAt_ :: Monad m => Int -> [b] -> Auto m a (Blip b)
@@ -164,7 +164,7 @@ dropWhileB p = mkState f False
                        | otherwise = (e      , True )
     f _          False             = (NoBlip, False)
 
-accumB :: (Monad m, Binary b) => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
+accumB :: (Monad m, Serialize b) => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
 accumB f = mkState (_accumBF f)
 
 accumB_ :: Monad m => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
@@ -176,7 +176,7 @@ _accumBF f e y0 = case e of
                               in  (Blip y1, y1)
                     NoBlip ->     (NoBlip , y0)
 
-scanB :: (Monad m, Binary b) => (b -> a -> b) -> b -> Auto m (Blip a) b
+scanB :: (Monad m, Serialize b) => (b -> a -> b) -> b -> Auto m (Blip a) b
 scanB f = mkAccum (_scanBF f)
 
 scanB_ :: Monad m => (b -> a -> b) -> b -> Auto m (Blip a) b
@@ -185,7 +185,7 @@ scanB_ f = mkAccum_ (_scanBF f)
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
 
-mscanB :: (Monad m, Monoid a, Binary a) => Auto m (Blip a) a
+mscanB :: (Monad m, Monoid a, Serialize a) => Auto m (Blip a) a
 mscanB = scanB (<>) mempty
 
 mscanB_ :: (Monad m, Monoid a) => Auto m (Blip a) a
@@ -194,13 +194,13 @@ mscanB_ = scanB_ (<>) mempty
 countB :: Monad m => Auto m (Blip a) Int
 countB = scanB (+) 0 <<^ (1 <$)
 
-became :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
+became :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
 became p = mkAccum (_becameF p) NoBlip
 
-noLonger :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
+noLonger :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
 noLonger p = became (not . p)
 
-onFlip :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
+onFlip :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
 onFlip p = became p &> noLonger p
 
 became_ :: Monad m => (a -> Bool) -> Auto m a (Blip a)
@@ -228,7 +228,7 @@ noLonger' p = became' (not . p)
 onFlip' :: Monad m => (a -> Bool) -> Auto m a (Blip Bool)
 onFlip' p = fmap (True <$) (became' p) &> fmap (False <$) (noLonger' p)
 
-onChange :: (Binary a, Eq a, Monad m) => Auto m a (Blip a)
+onChange :: (Serialize a, Eq a, Monad m) => Auto m a (Blip a)
 onChange = mkState _onChangeF Nothing
 
 onChange_ :: (Eq a, Monad m) => Auto m a (Blip a)
