@@ -6,6 +6,7 @@ module Control.Auto.Event (
   , mergeL
   , mergeR
   , blips
+  , blipsMaybe
   -- * Step/"time" based Event streams
   , never
   , now
@@ -101,6 +102,9 @@ inE n = mkState f (n, False)
 
 blips :: Monad m => (a -> Bool) -> Auto m a (Event a)
 blips p = filterE p . every 1
+
+blipsMaybe :: Monad m => (a -> Maybe b) -> Auto m a (Event b)
+blipsMaybe p = onJust <<^ p
 
 every :: Monad m => Int -> Auto m a (Event a)
 every n = stretchE n id
