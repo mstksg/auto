@@ -5,6 +5,7 @@ module Control.Auto.Event (
   , merge
   , mergeL
   , mergeR
+  , blips
   -- * Step/"time" based Event streams
   , never
   , now
@@ -31,6 +32,7 @@ module Control.Auto.Event (
   , scanE_
   , mscanE
   , mscanE_
+  , countE
   -- * Edge events
   , onChange
   , onChange_
@@ -96,6 +98,9 @@ inE n = mkState f (n, False)
     f _ (_, True )             = (NoEvent, (0  , True ))
     f x (i, False) | i <= 0    = (Event x, (0  , True ))
                    | otherwise = (NoEvent, (i-1, False))
+
+blips :: Monad m => (a -> Bool) -> Auto m a (Event a)
+blips p = filterE p . every 1
 
 every :: Monad m => Int -> Auto m a (Event a)
 every n = stretchE n id
@@ -181,6 +186,9 @@ mscanE = scanE (<>) mempty
 
 mscanE_ :: (Monad m, Monoid a) => Auto m (Event a) a
 mscanE_ = scanE_ (<>) mempty
+
+countE :: Monad m => Auto m (Event a) Int
+countE = scanE (+) 0 <<^ (1 <$)
 
 became :: (Binary a, Monad m) => (a -> Bool) -> Auto m a (Event a)
 became p = mkAccum (_becameF p) NoEvent
