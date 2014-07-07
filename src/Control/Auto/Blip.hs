@@ -25,7 +25,7 @@ module Control.Auto.Blip (
   , dropB
   , dropWhileB
   , fromBlips
-  , onJust
+  , onJusts
   -- * Scanning & Accumulating Blip streams
   , accumB
   , accumB_
@@ -104,7 +104,7 @@ emitOn :: Monad m => (a -> Bool) -> Auto m a (Blip a)
 emitOn p = filterB p . every 1
 
 emitJusts :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
-emitJusts p = onJust <<^ p
+emitJusts p = onJusts <<^ p
 
 every :: Monad m => Int -> Auto m a (Blip a)
 every n = stretchB n id
@@ -239,8 +239,8 @@ _onChangeF x Nothing               = (NoBlip , Just x)
 _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
                        | otherwise = (Blip x', Just x')
 
-onJust :: Monad m => Auto m (Maybe a) (Blip a)
-onJust = arr (maybe NoBlip Blip)
+onJusts :: Monad m => Auto m (Maybe a) (Blip a)
+onJusts = arr (maybe NoBlip Blip)
 
 fromBlips :: Monad m => a -> Auto m (Blip a) a
 fromBlips d = arr (blip d id)
