@@ -84,16 +84,16 @@ mergeR = merge (flip const)
 
 
 
-never :: Monad m => Auto m a (Blip b)
-never = pure NoBlip
+never :: Auto m a (Blip b)
+never = mkConst NoBlip
 
-now :: Monad m => Auto m a (Blip a)
+now :: Auto m a (Blip a)
 now = mkState f False
   where
     f _ True  = (NoBlip, True)
     f x False = (Blip x, True)
 
-inB :: Monad m => Int -> Auto m a (Blip a)
+inB :: Int -> Auto m a (Blip a)
 inB n = mkState f (n, False)
   where
     f _ (_, True )             = (NoBlip, (0  , True ))
@@ -106,6 +106,8 @@ emitOn p = filterB p . every 1
 emitOnMaybes :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
 emitOnMaybes p = onJust <<^ p
 
+-- TODO: Can be made not monad if made back to the original mkState
+-- implementation
 every :: Monad m => Int -> Auto m a (Blip a)
 every n = stretchB n id
 
@@ -115,19 +117,19 @@ eachAt n xs = during (every n) . stretch n (A.fromList xs) <|!> never
 eachAt_ :: Monad m => Int -> [b] -> Auto m a (Blip b)
 eachAt_ n xs = during (every n) . stretch_ n (A.fromList_ xs) <|!> never
 
-filterB :: Monad m => (a -> Bool) -> Auto m (Blip a) (Blip a)
-filterB p = arr $ \x -> case x of
-                          Blip x' | p x' -> x
-                          _               -> NoBlip
+filterB :: (a -> Bool) -> Auto m (Blip a) (Blip a)
+filterB p = mkFunc $ \x -> case x of
+                             Blip x' | p x' -> x
+                             _               -> NoBlip
 
-once :: Monad m => Auto m (Blip a) (Blip a)
+once :: Auto m (Blip a) (Blip a)
 once = mkState f False
   where
     f _          True  = (NoBlip, True )
     f e@(Blip _) False = (e,       True )
     f _          False = (NoBlip, False)
 
-notYet :: Monad m => Auto m (Blip a) (Blip a)
+notYet :: Auto m (Blip a) (Blip a)
 notYet = mkState f False
   where
     f e        True  = (e      , True )
@@ -135,28 +137,28 @@ notYet = mkState f False
     f _        False = (NoBlip, False)
 
 
-takeB :: Monad m => Int -> Auto m (Blip a) (Blip a)
+takeB :: Int -> Auto m (Blip a) (Blip a)
 takeB = mkState f . max 0
   where
     f _ 0          = (NoBlip, 0  )
     f e@(Blip _) i = (e      , i-1)
     f _          i = (NoBlip, i  )
 
-takeWhileB :: Monad m => (a -> Bool) -> Auto m (Blip a) (Blip a)
+takeWhileB :: (a -> Bool) -> Auto m (Blip a) (Blip a)
 takeWhileB p = mkState f False
   where
     f _          True        = (NoBlip, True )
     f e@(Blip x) False | p x = (e      , False)
     f _          False       = (NoBlip, True )
 
-dropB :: Monad m => Int -> Auto m (Blip a) (Blip a)
+dropB :: Int -> Auto m (Blip a) (Blip a)
 dropB = mkState f . max 0
   where
     f x        0 = (x      , 0  )
     f (Blip _) i = (NoBlip, i-1)
     f _        i = (NoBlip, i  )
 
-dropWhileB :: Monad m => (a -> Bool) -> Auto m (Blip a) (Blip a)
+dropWhileB :: (a -> Bool) -> Auto m (Blip a) (Blip a)
 dropWhileB p = mkState f False
   where
     f e          True              = (e      , True )
@@ -164,10 +166,10 @@ dropWhileB p = mkState f False
                        | otherwise = (e      , True )
     f _          False             = (NoBlip, False)
 
-accumB :: (Monad m, Serialize b) => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
+accumB :: Serialize b => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
 accumB f = mkState (_accumBF f)
 
-accumB_ :: Monad m => (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
+accumB_ :: (b -> a -> b) -> b -> Auto m (Blip a) (Blip b)
 accumB_ f = mkState_ (_accumBF f)
 
 _accumBF :: (b -> a -> b) -> Blip a -> b -> (Blip b, b)
@@ -176,28 +178,28 @@ _accumBF f e y0 = case e of
                               in  (Blip y1, y1)
                     NoBlip ->     (NoBlip , y0)
 
-scanB :: (Monad m, Serialize b) => (b -> a -> b) -> b -> Auto m (Blip a) b
+scanB :: Serialize b => (b -> a -> b) -> b -> Auto m (Blip a) b
 scanB f = mkAccum (_scanBF f)
 
-scanB_ :: Monad m => (b -> a -> b) -> b -> Auto m (Blip a) b
+scanB_ :: (b -> a -> b) -> b -> Auto m (Blip a) b
 scanB_ f = mkAccum_ (_scanBF f)
 
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
 
-mscanB :: (Monad m, Monoid a, Serialize a) => Auto m (Blip a) a
+mscanB :: (Monoid a, Serialize a) => Auto m (Blip a) a
 mscanB = scanB (<>) mempty
 
-mscanB_ :: (Monad m, Monoid a) => Auto m (Blip a) a
+mscanB_ :: Monoid a => Auto m (Blip a) a
 mscanB_ = scanB_ (<>) mempty
 
-countB :: Monad m => Auto m (Blip a) Int
-countB = scanB (+) 0 <<^ (1 <$)
+countB :: Auto m (Blip a) Int
+countB = scanB (\x _ -> x + 1) 0
 
-became :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
+became :: Serialize a => (a -> Bool) -> Auto m a (Blip a)
 became p = mkAccum (_becameF p) NoBlip
 
-noLonger :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
+noLonger :: Serialize a => (a -> Bool) -> Auto m a (Blip a)
 noLonger p = became (not . p)
 
 onFlip :: (Serialize a, Monad m) => (a -> Bool) -> Auto m a (Blip a)
@@ -239,8 +241,8 @@ _onChangeF x Nothing               = (NoBlip , Just x)
 _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
                        | otherwise = (Blip x', Just x')
 
-onJust :: Monad m => Auto m (Maybe a) (Blip a)
-onJust = arr (maybe NoBlip Blip)
+onJust :: Auto m (Maybe a) (Blip a)
+onJust = mkFunc (maybe NoBlip Blip)
 
 fromBlips :: Monad m => a -> Auto m (Blip a) a
 fromBlips d = arr (blip d id)
