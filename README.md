@@ -60,7 +60,14 @@ automations.
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
-Examples and further descriptions will appear here as development continues.
+You can find examples and demonstrations in the [auto-examples][] repo on
+github; they are constantly being kept up-to-date with the currently super
+unstable API.
+
+[auto-examples]: https://github.com/mstksg/auto-examples
+
+More examples and further descriptions will appear here as development
+continues.
 
 Relation to FRP
 ---------------
