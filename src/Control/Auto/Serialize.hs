@@ -7,7 +7,7 @@ module Control.Auto.Serialize (
   , writeAuto
   , saving
   , loading'
-  , serializing'
+  , serializing
   , saveFromB
   , loadFromB'
   , saveOnB
@@ -79,12 +79,8 @@ loading' fp a0 = mkAutoM (loading' fp <$> loadAuto a0)
 --                            Output y a' <- stepAuto a x
 --                            return (Output y (loaded a'))
 
-serializing' :: MonadIO m => FilePath -> Auto m a b -> Auto m a b
-serializing' fp a = loading' fp (saving fp a)
-
--- serializing :: MonadIO m => FilePath -> Auto m a b -> Auto m a (Either String b)
--- serializing fp a = loading fp (saving fp a)
-
+serializing :: MonadIO m => FilePath -> Auto m a b -> Auto m a b
+serializing fp a = loading' fp (saving fp a)
 
 saveFromB :: MonadIO m => Auto m a (b, Blip FilePath) -> Auto m a b
 saveFromB a = mkAutoM (saveFromB <$> loadAuto a)
