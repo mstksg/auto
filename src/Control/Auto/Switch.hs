@@ -5,20 +5,26 @@ module Control.Auto.Switch (
     (-->)
   , (-?>)
   -- * Dynamic switches
-  , switch_
-  , rSwitch_
+  , switchFrom_
+  , switchOn_
   -- * Function-based switches
-  , switchF
-  , switchF_
-  , rSwitchF
-  , rSwitchF_
+  , switchFromF
+  , switchFromF_
+  , resetFrom
+  , switchOnF
+  , switchOnF_
+  , resetOn
   ) where
 
 import Control.Applicative
-import Control.Auto.Core
+import Control.Arrow
+import Control.Auto.Blip
 import Control.Auto.Blip.Internal
-import Data.Serialize
+import Control.Auto.Core
+import Control.Category
 import Data.Maybe
+import Data.Serialize
+import Prelude hiding             ((.), id)
 
 (-->) :: Monad m => Auto m a (Maybe b) -> Auto m a b -> Auto m a b
 a1 --> a2 = fmap fromJust (a1 -?> fmap Just a2)
@@ -47,31 +53,31 @@ a1 -?> a2 = mkAutoM l s t
                              return (Output y (switched a'))
 
 
-switch_ :: Monad m
-        => Auto m a (b, Blip (Auto m a b))
-        -> Auto m a b
-switch_ a0 = mkAutoM_ $ \x -> do
-                          Output (y, ea1) a0' <- stepAuto a0 x
-                          return $ case ea1 of
-                            Blip a1 -> Output y a1
-                            NoBlip  -> Output y (switch_ a0')
+switchFrom_ :: Monad m
+            => Auto m a (b, Blip (Auto m a b))
+            -> Auto m a b
+switchFrom_ a0 = mkAutoM_ $ \x -> do
+                              Output (y, ea1) a0' <- stepAuto a0 x
+                              return $ case ea1 of
+                                Blip a1 -> Output y a1
+                                NoBlip  -> Output y (switchFrom_ a0')
 
-rSwitch_ :: forall m a b. Monad m
-         => Auto m a b
-         -> Auto m (a, Blip (Auto m a b)) b
-rSwitch_ a0 = mkAutoM_ $ \(x, ea1) -> do
-                           let a = case ea1 of
-                                     NoBlip  -> a0
-                                     Blip a1 -> a1
-                           Output y a' <- stepAuto a x
-                           return (Output y (rSwitch_ a'))
+switchOn_ :: forall m a b. Monad m
+          => Auto m a b
+          -> Auto m (a, Blip (Auto m a b)) b
+switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
+                            let a = case ea1 of
+                                      NoBlip  -> a0
+                                      Blip a1 -> a1
+                            Output y a' <- stepAuto a x
+                            return (Output y (switchOn_ a'))
 
 
-switchF :: forall m a b c. (Monad m, Serialize c)
-        => (c -> Auto m a (b, Blip c))
-        -> Auto m a (b, Blip c)
-        -> Auto m a b
-switchF f = go Nothing
+switchFromF :: forall m a b c. (Monad m, Serialize c)
+            => (c -> Auto m a (b, Blip c))
+            -> Auto m a (b, Blip c)
+            -> Auto m a b
+switchFromF f = go Nothing
   where
     go mz a = mkAutoM (l a) s t
       where
@@ -88,18 +94,30 @@ switchF f = go Nothing
         Just z  -> go mz <$> loadAuto (f z)
         Nothing -> go mz <$> loadAuto a
 
-switchF_ :: forall m a b c. Monad m
-         => (c -> Auto m a (b, Blip c))
-         -> Auto m a (b, Blip c)
-         -> Auto m a b
-switchF_ f a0 = mkAutoM_ $ \x -> do
-                             Output (y, ez) a0' <- stepAuto a0 x
-                             return $ case ez of
-                               Blip z -> Output y (switchF_ f (f z))
-                               NoBlip -> Output y (switchF_ f a0')
+switchFromF_ :: forall m a b c. Monad m
+             => (c -> Auto m a (b, Blip c))
+             -> Auto m a (b, Blip c)
+             -> Auto m a b
+switchFromF_ f a0 = mkAutoM_ $ \x -> do
+                                 Output (y, ez) a0' <- stepAuto a0 x
+                                 return $ case ez of
+                                   Blip z -> Output y (switchFromF_ f (f z))
+                                   NoBlip -> Output y (switchFromF_ f a0')
 
-rSwitchF :: forall m a b c. (Monad m, Serialize c) => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
-rSwitchF f = go Nothing
+{-# ANN resetFrom "HLint: ignore Use const" #-}
+resetFrom :: Monad m
+          => Auto m a (b, Blip c)
+          -> Auto m a b
+resetFrom a = switchFromF (\_ -> a') a'
+  where
+    a' = second (tagBlips ()) . a
+
+
+switchOnF :: forall m a b c. (Monad m, Serialize c)
+          => (c -> Auto m a b)
+          -> Auto m a b
+          -> Auto m (a, Blip c) b
+switchOnF f = go Nothing
   where
     go mz a0 = mkAutoM (l a0) (s mz a0) (t mz a0)
     l a0 = do
@@ -118,12 +136,19 @@ rSwitchF f = go Nothing
           Output y a1  <- stepAuto (f z) x
           return (Output y (go (Just z) a1))
 
-rSwitchF_ :: forall m a b c. Monad m => (c -> Auto m a b) -> Auto m a b -> Auto m (a, Blip c) b
-rSwitchF_ f a0 = mkAutoM_ $ \(x, ez) ->
+switchOnF_ :: forall m a b c. Monad m
+           => (c -> Auto m a b)
+           -> Auto m a b
+           -> Auto m (a, Blip c) b
+switchOnF_ f a0 = mkAutoM_ $ \(x, ez) ->
                               case ez of
                                 NoBlip -> do
                                   Output y a0' <- stepAuto a0 x
-                                  return (Output y (rSwitchF_ f a0'))
+                                  return (Output y (switchOnF_ f a0'))
                                 Blip z -> do
                                   Output y a1 <- stepAuto (f z) x
-                                  return (Output y (rSwitchF_ f a1))
+                                  return (Output y (switchOnF_ f a1))
+
+{-# ANN resetOn "HLint: ignore Use const" #-}
+resetOn :: Monad m => Auto m a b -> Auto m (a, Blip c) b
+resetOn a = switchOnF (\_ -> a) a . second (tagBlips ())
