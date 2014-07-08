@@ -7,6 +7,8 @@
 module Control.Auto.Collection (
   -- * Static collections
     zipAuto
+  , dZipAuto
+  , dZipAuto_
   -- * Dynamic collections
   , dynZip_
   , dynMap_
@@ -51,19 +53,21 @@ module Control.Auto.Collection (
   ) where
 
 import Control.Applicative
+import Control.Category
 import Control.Arrow
-import Control.Auto.Core
 import Control.Auto.Blip.Internal
+import Control.Auto.Core
+import Control.Auto.Time
 import Control.Monad hiding         (mapM, mapM_, sequence)
-import Data.Serialize
 import Data.Foldable
 import Data.IntMap.Strict           (IntMap)
 import Data.Map.Strict              (Map)
 import Data.Maybe
 import Data.Monoid
 import Data.Profunctor
+import Data.Serialize
 import Data.Traversable
-import Prelude hiding               (mapM, mapM_, concat, sequence)
+import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict    as M
 
@@ -76,6 +80,11 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                                 as' = map outAuto res
                             return (Output ys (zipAuto x0 as'))
 
+dZipAuto :: (Serialize a, Monad m) => a -> [Auto m a b] -> Auto m [a] [b]
+dZipAuto x0 as = zipAuto x0 as . delay []
+
+dZipAuto_ :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
+dZipAuto_ x0 as = zipAuto x0 as . delay_ []
 
 -- another problem
 dynZip_ :: Monad m => a -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]

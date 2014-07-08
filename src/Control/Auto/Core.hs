@@ -49,7 +49,7 @@ import Data.Monoid
 import Data.Profunctor
 import Prelude hiding       ((.), id)
 
-data Output m a b = Output { outRes  :: !b
+data Output m a b = Output { outRes  :: b
                            , outAuto :: !(Auto m a b)
                            } deriving ( Functor
                                       , Typeable
@@ -271,9 +271,24 @@ instance Monad m => ArrowChoice (Auto m) where
 instance MonadFix m => ArrowLoop (Auto m) where
     loop (Auto l s t) = mkAutoM (loop <$> l)
                                 s
-                                $ \x -> liftM (onOutput fst loop)
+                                $ \x ->
+                                    -- Output (y, _) a' <- mfix (\(Output (_, d) _) -> t (x, d))
+                                    -- return (Output y (loop a'))
+                                  liftM (onOutput fst loop)
                                       . mfix
-                                      $ \(Output (_, d) _) -> t (x, d)
+                                      $ \ ~(Output (_, d) _) -> t (x, d)
+    -- loop (Auto l s t) = mkAutoM (loop <$> l)
+    --                             s
+    --                             $ \x -> liftM (onOutput fst loop)
+
+-- instance (MonadFix m) => ArrowLoop (Wire s e m) where
+--     loop w' =
+--         WGen $ \ds mx' ->
+--             liftM (fmap fst ***! loop) .
+--             mfix $ \ ~(mx, _) ->
+--                 let d | Right (_, d) <- mx = d
+--                       | otherwise = error "Feedback broken by inhibition"
+--                 in stepWire w' ds (fmap (, d) mx')
 
 -- Utility instances
 

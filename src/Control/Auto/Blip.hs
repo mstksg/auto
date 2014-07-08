@@ -7,6 +7,7 @@ module Control.Auto.Blip (
   , mergeR
   , emitOn
   , emitJusts
+  , onJusts
   -- * Step/"time" based Blip streams
   , never
   , now
@@ -25,7 +26,7 @@ module Control.Auto.Blip (
   , dropB
   , dropWhileB
   , fromBlips
-  , onJusts
+  , tagBlips
   -- * Scanning & Accumulating Blip streams
   , accumB
   , accumB_
@@ -244,6 +245,9 @@ onJusts = arr (maybe NoBlip Blip)
 
 fromBlips :: Monad m => a -> Auto m (Blip a) a
 fromBlips d = arr (blip d id)
+
+tagBlips :: Monad m => b -> Auto m (Blip a) (Blip b)
+tagBlips y = arr (y <$)
 
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)
 perBlip a = a_
