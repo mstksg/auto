@@ -6,7 +6,8 @@ module Control.Auto.Blip (
   , mergeL
   , mergeR
   , emitOn
-  , emitOnMaybes
+  , emitJusts
+  , onJusts
   -- * Step/"time" based Blip streams
   , never
   , now
@@ -25,7 +26,7 @@ module Control.Auto.Blip (
   , dropB
   , dropWhileB
   , fromBlips
-  , onJust
+  , tagBlips
   -- * Scanning & Accumulating Blip streams
   , accumB
   , accumB_
@@ -103,8 +104,8 @@ inB n = mkState f (n, False)
 emitOn :: Monad m => (a -> Bool) -> Auto m a (Blip a)
 emitOn p = filterB p . every 1
 
-emitOnMaybes :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
-emitOnMaybes p = onJust <<^ p
+emitJusts :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
+emitJusts p = onJusts <<^ p
 
 every :: Monad m => Int -> Auto m a (Blip a)
 every n = stretchB n id
@@ -239,11 +240,14 @@ _onChangeF x Nothing               = (NoBlip , Just x)
 _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
                        | otherwise = (Blip x', Just x')
 
-onJust :: Monad m => Auto m (Maybe a) (Blip a)
-onJust = arr (maybe NoBlip Blip)
+onJusts :: Monad m => Auto m (Maybe a) (Blip a)
+onJusts = arr (maybe NoBlip Blip)
 
 fromBlips :: Monad m => a -> Auto m (Blip a) a
 fromBlips d = arr (blip d id)
+
+tagBlips :: Monad m => b -> Auto m (Blip a) (Blip b)
+tagBlips y = arr (y <$)
 
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)
 perBlip a = a_

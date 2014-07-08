@@ -27,10 +27,10 @@ count :: Monad m => Auto m a Int
 count = iterator (+1) 0
 
 delay :: (Serialize a, Monad m) => a -> Auto m a a
-delay = mkState (flip (,))
+delay = mkState $ \x s -> (s, x)
 
 delay_ :: Monad m => a -> Auto m a a
-delay_ = mkState_ (flip (,))
+delay_ = mkState_ $ \x s -> (s, x)
 
 
 stretch :: (Serialize b, Monad m) => Int -> Auto m a b -> Auto m a b

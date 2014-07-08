@@ -1,4 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Control.Auto.Core (
   -- * Auto output
@@ -34,8 +36,10 @@ module Control.Auto.Core (
   , mkAutoM_
   ) where
 
+import GHC.Generics
 import Control.Applicative
 import Control.Arrow
+import Data.Typeable
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
@@ -45,9 +49,12 @@ import Data.Monoid
 import Data.Profunctor
 import Prelude hiding       ((.), id)
 
-data Output m a b = Output { outRes  :: !b
+data Output m a b = Output { outRes  :: b
                            , outAuto :: !(Auto m a b)
-                           } deriving Functor
+                           } deriving ( Functor
+                                      , Typeable
+                                      , Generic
+                                      )
 
 instance Monad m => Applicative (Output m a) where
     pure x                      = Output x (pure x)
@@ -61,7 +68,9 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 data Auto m a b = Auto { loadAuto :: !(Get (Auto m a b))
                        , saveAuto :: !Put
                        , stepAuto :: !(a -> m (Output m a b))
-                       }
+                       } deriving ( Typeable
+                                  , Generic
+                                  )
 
 encodeAuto :: Auto m a b -> ByteString
 encodeAuto = runPut . saveAuto
@@ -262,9 +271,24 @@ instance Monad m => ArrowChoice (Auto m) where
 instance MonadFix m => ArrowLoop (Auto m) where
     loop (Auto l s t) = mkAutoM (loop <$> l)
                                 s
-                                $ \x -> liftM (onOutput fst loop)
+                                $ \x ->
+                                    -- Output (y, _) a' <- mfix (\(Output (_, d) _) -> t (x, d))
+                                    -- return (Output y (loop a'))
+                                  liftM (onOutput fst loop)
                                       . mfix
-                                      $ \(Output (_, d) _) -> t (x, d)
+                                      $ \ ~(Output (_, d) _) -> t (x, d)
+    -- loop (Auto l s t) = mkAutoM (loop <$> l)
+    --                             s
+    --                             $ \x -> liftM (onOutput fst loop)
+
+-- instance (MonadFix m) => ArrowLoop (Wire s e m) where
+--     loop w' =
+--         WGen $ \ds mx' ->
+--             liftM (fmap fst ***! loop) .
+--             mfix $ \ ~(mx, _) ->
+--                 let d | Right (_, d) <- mx = d
+--                       | otherwise = error "Feedback broken by inhibition"
+--                 in stepWire w' ds (fmap (, d) mx')
 
 -- Utility instances
 
