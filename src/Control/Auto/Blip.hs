@@ -10,7 +10,7 @@ module Control.Auto.Blip (
   , onJusts
   -- * Step/"time" based Blip streams
   , never
-  , now
+  , immediately
   , inB
   , every
   , eachAt
@@ -88,8 +88,8 @@ mergeR = merge (flip const)
 never :: Monad m => Auto m a (Blip b)
 never = pure NoBlip
 
-now :: Monad m => Auto m a (Blip a)
-now = mkState f False
+immediately :: Monad m => Auto m a (Blip a)
+immediately = mkState f False
   where
     f _ True  = (NoBlip, True)
     f x False = (Blip x, True)
