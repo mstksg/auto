@@ -3,9 +3,9 @@ Auto
 
 (Working name)
 
-**Auto** is a Haskell DSL/library providing denonational, composable semantics
-for discrete-step, locally stateful, interactive programs, games, and
-automations.
+**Auto** is a Haskell DSL/library providing denonational, compositional
+semantics for discrete-step, locally stateful, interactive programs, games,
+and automations.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -28,7 +28,7 @@ automations.
     entities and processes and interactions.  And this declaration process is
     high-level and pure.
 
-*   **Composable**: You build your eventually complex program/game out of
+*   **Compositional**: You build your eventually complex program/game out of
     small, simple components.  These simple components compose with eachother;
     and compositions of components compose as well with other components.
     Every "layer" of composition is seamless.  It's the [scalable program
