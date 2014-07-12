@@ -10,6 +10,15 @@ automations.
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
 
+    Why Haskell?  Well, Haskell is one of the only languages that has a type
+    system expressive enough to allow type-safe compositions without getting
+    in your way.  Every composition and component is checked at compile-time
+    to make sure they even make sense, so you can work with an assurance that
+    everything fits together in the end --- and also in the correct way.  The
+    type system can also guide you in your development as well.  In all
+    honesty, it cuts the headache of large projects down --- and what you need
+    to keep in your head as you develop and maintain --- by at least 90%.
+
 *   **Denotational**: It's not imperative.  That is, unlike in other
     languages, you don't program your program by saying "this happens, then
     this happens...and then in case A, this happens; in case B, something else
