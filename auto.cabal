@@ -3,7 +3,7 @@
 
 name:                auto
 version:             0.1.0.0
-synopsis:            DSL providing denotational, composable semantics for
+synopsis:            DSL providing denotational, compositional semantics for
                      discrete-step, locally stateful, interactive programs,
                      games & automations.
 -- description:         
