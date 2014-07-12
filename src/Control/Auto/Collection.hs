@@ -9,6 +9,9 @@ module Control.Auto.Collection (
     zipAuto
   , dZipAuto
   , dZipAuto_
+  -- , zipAutoB
+  -- , dZipAutoB
+  -- , dZipAutoB_
   -- * Dynamic collections
   , dynZip_
   , dynMap_
@@ -85,6 +88,16 @@ dZipAuto x0 as = zipAuto x0 as . delay []
 
 dZipAuto_ :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto_ x0 as = zipAuto x0 as . delay_ []
+
+-- zipAutoB :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- zipAutoB = zipAuto NoBlip
+
+-- dZipAutoB :: (Serialize a, Monad m) => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- dZipAutoB = dZipAuto NoBlip
+
+-- dZipAutoB_ :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- dZipAutoB_ = dZipAuto_ NoBlip
+
 
 -- another problem
 dynZip_ :: Monad m => a -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]
@@ -172,7 +185,7 @@ _muxManyIF f go as xs = do
     outs <- sequence steps
     let (outs', rems) = M.partition (isJust . outRes) outs
         as'           = M.difference as rems
-        as''          = M.union as' (fmap outAuto outs')
+        as''          = M.union (fmap outAuto outs') as'
         ys            = fmap (fromJust . outRes) outs'
     return (Output ys (go as''))
   where
@@ -392,18 +405,20 @@ _gatherFManyF :: forall k m a b c inAuto outAuto outOut.
               -> Map k (Either (c, a) a)                  -- xs
               -> m outOut
 _gatherFManyF f go as ys xs = do
-    outs <- sequence steps
-    let (outs', rems) = M.partition (isJust . outRes . snd) outs
+    outs <- sequence steps :: m (Map k (Maybe c, Output m a (Maybe b)))
+    let outs', rems   :: Map k (Maybe c, Output m a (Maybe b))
+        (outs', rems) = M.partition (isJust . outRes . snd) outs
         as'           = M.difference as rems
         ys'           = M.difference ys rems
-        as''          = M.union as' (fmap (second outAuto) outs')
+        as''          = M.union (fmap (second outAuto) outs') as'
         newys         = fmap (fromJust . outRes . snd) outs'
         ys''          = M.union newys ys'
-    return (Output ys'' (go as'' undefined))
+    return (Output ys'' (go as'' ys''))
   where
     _mzxs = fmap eitherToMaybe xs
     newas = M.mapWithKey (_muxgathermapF f) (M.difference _mzxs as)
     allas = M.union as newas
+    steps :: Map k (m (Maybe c, Output m a (Maybe b)))
     steps = M.intersectionWith interf allas _mzxs
     interf :: (Maybe c, Auto m a (Maybe b))
            -> (Maybe c, a)

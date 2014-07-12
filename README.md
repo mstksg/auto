@@ -15,7 +15,8 @@ and automations.
     in your way.  Every composition and component is checked at compile-time
     to make sure they even make sense, so you can work with an assurance that
     everything fits together in the end --- and also in the correct way.  The
-    type system can also guide you in your development as well.  In all
+    type system can also guide you in your development as well.  All this
+    without the productivity overhead of explicit type annotations.  In all
     honesty, it cuts the headache of large projects down --- and what you need
     to keep in your head as you develop and maintain --- by at least 90%.
 
