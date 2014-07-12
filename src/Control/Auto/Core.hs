@@ -214,81 +214,66 @@ instance Monad m => Functor (Auto m a) where
     fmap = rmap
 
 instance Monad m => Applicative (Auto m a) where
-    pure                         = mkConst
-    Auto fl fs ft <*> Auto l s t = mkAutoM ((<*>) <$> fl <*> l)
-                                           (fs *> s)
-                                           $ \x -> liftM2 (<*>) (ft x) (t x)
+    pure      = mkConst
+    af <*> ax = mkAutoM ((<*>) <$> loadAuto af <*> loadAuto ax)
+                        (saveAuto af *> saveAuto ax)
+                        $ \x -> liftM2 (<*>) (stepAuto af x) (stepAuto ax x)
 
 instance Monad m => Category (Auto m) where
-    id = mkFunc id
-    Auto gl gs gt . Auto fl fs ft = mkAutoM ((.) <$> gl <*> fl)
-                                            (gs *> fs)
-                                            $ \x -> do
-                                                Output y fa' <- ft x
-                                                Output z ga' <- gt y
-                                                return (Output z (ga' . fa'))
+    id      = mkFunc id
+    ag . af = mkAutoM ((.) <$> loadAuto ag <*> loadAuto af)
+                      (saveAuto ag *> saveAuto af)
+                      $ \x -> do
+                          Output y af' <- stepAuto af x
+                          Output z ag' <- stepAuto ag y
+                          return (Output z (ag' . af'))
 
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
       where
-        a_ (Auto l s t) = mkAutoM (a_ <$> l)
-                                  s
-                                  $ \x -> do
-                                      Output y a' <- t (f x)
-                                      return (Output y (a_ a'))
+        a_ a = mkAutoM (a_ <$> loadAuto a)
+                       (saveAuto a)
+                       $ \x -> do
+                           Output y a' <- stepAuto a (f x)
+                           return (Output y (a_ a'))
     rmap g = a_
       where
-        a_ (Auto l s t) = mkAutoM (a_ <$> l)
-                                  s
-                                  $ \x -> do
-                                      Output y a' <- t x
-                                      return (Output (g y) (a_ a'))
+        a_ a = mkAutoM (a_ <$> loadAuto a)
+                       (saveAuto a)
+                       $ \x -> do
+                           Output y a' <- stepAuto a x
+                           return (Output (g y) (a_ a'))
     dimap f g = a_
       where
-        a_ (Auto l s t) = mkAutoM (a_ <$> l)
-                                  s
-                                  $ \x -> do
-                                      Output y a' <- t (f x)
-                                      return (Output (g y) (a_ a'))
+        a_ a = mkAutoM (a_ <$> loadAuto a)
+                       (saveAuto a)
+                       $ \x -> do
+                           Output y a' <- stepAuto a (f x)
+                           return (Output (g y) (a_ a'))
 
 instance Monad m => Arrow (Auto m) where
-    arr                = mkFunc
-    first (Auto l s t) = mkAutoM (first <$> l)
-                                 s
-                                 $ \(x, y) -> do
-                                     Output x' a' <- t x
-                                     return (Output (x', y) (first a'))
+    arr     = mkFunc
+    first a = mkAutoM (first <$> loadAuto a)
+                      (saveAuto a)
+                      $ \(x, y) -> do
+                          Output x' a' <- stepAuto a x
+                          return (Output (x', y) (first a'))
 
 instance Monad m => ArrowChoice (Auto m) where
-    left (Auto l s t) = a
+    left a0 = a
       where
-        a = mkAutoM (left <$> l)
-                    s
+        a = mkAutoM (left <$> loadAuto a0)
+                    (saveAuto a0)
                     $ \x -> case x of
-                        Left y  -> liftM (onOutput Left left) (t y)
+                        Left y  -> liftM (onOutput Left left) (stepAuto a0 y)
                         Right y -> return (Output (Right y) a)
 
 instance MonadFix m => ArrowLoop (Auto m) where
-    loop (Auto l s t) = mkAutoM (loop <$> l)
-                                s
-                                $ \x ->
-                                    -- Output (y, _) a' <- mfix (\(Output (_, d) _) -> t (x, d))
-                                    -- return (Output y (loop a'))
-                                  liftM (onOutput fst loop)
-                                      . mfix
-                                      $ \ ~(Output (_, d) _) -> t (x, d)
-    -- loop (Auto l s t) = mkAutoM (loop <$> l)
-    --                             s
-    --                             $ \x -> liftM (onOutput fst loop)
-
--- instance (MonadFix m) => ArrowLoop (Wire s e m) where
---     loop w' =
---         WGen $ \ds mx' ->
---             liftM (fmap fst ***! loop) .
---             mfix $ \ ~(mx, _) ->
---                 let d | Right (_, d) <- mx = d
---                       | otherwise = error "Feedback broken by inhibition"
---                 in stepWire w' ds (fmap (, d) mx')
+    loop a = mkAutoM (loop <$> loadAuto a)
+                     (saveAuto a)
+                     $ \x -> liftM (onOutput fst loop)
+                             . mfix
+                             $ \ ~(Output (_, d) _) -> stepAuto a (x, d)
 
 -- Utility instances
 
