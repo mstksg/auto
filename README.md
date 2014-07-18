@@ -5,7 +5,7 @@ Auto
 
 **Auto** is a Haskell DSL/library providing denonational, compositional
 semantics for discrete-step, locally stateful, interactive programs, games,
-and automations.
+and automations, with implicitly derived serialization.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -68,6 +68,11 @@ and automations.
     encapsulates some sort of internal state, especially if it's interactive,
     this is for you!! :D
 
+*   **Implicitly derived serialization**: All components and their
+    compositions by construction are automatically "freezable" and
+    serializable, and re-loaded and resumed with all internal state restored.
+    it has been called by ertes, it's "save states for free".
+
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
 You can find examples and demonstrations in the [auto-examples][] repo on
@@ -78,6 +83,90 @@ unstable API.
 
 More examples and further descriptions will appear here as development
 continues.
+
+Why Auto?
+---------
+
+Auto is distinct from a "state transformer" (state monad, or explicit state
+passing) in that it gives you the ability to implicitly *compose and isolate*
+state transformers and state.
+
+That is, imagine you have two different state monads with different states,
+and you can compose them together into one giant loop, and:
+
+1.  You don't have to make a new "composite type"; you can add a new component
+    dealing with its own state without changing the total state type.
+
+2.  You can't write anything cross-talking.  You can't write anything that
+    can interfere with the internal state of any components; each one is
+    isolated.
+
+So --- Auto is useful over a state monad/state transformer approach in cases
+where you like to build your problem out of multiple individual components,
+and compose them all together at once.
+
+Examples include a multiple-module stateful chat bot, where every module of
+the chat bot consists of its own internal state.
+
+If you used a state monad approach, every time you added a new module with its
+own state, you'd have to "add it into" your total state type.
+
+This simply does *not* scale.
+
+Imagine a large architecture, where every composition adds more and more
+complexity.
+
+Now, imagine you can just throw in another module with its own state without
+any other component even "caring".  Or be able to limit access implicitly,
+without explicit "limiting through lifting" with `zoom` from lens, etc.
+(Without that, you basically have "global state" --- the very thing that we
+went to Functional Programming/Haskell to avoid in the first place!  And the
+thing that languages have been trying to prevent in the last twenty years of
+language development.  Why go "backwards"?)
+
+In addition to all of these practical reasons, State imposes a large
+*imperative* shift in your design.
+
+State forces you to begin modeling your problem as "this happens, then this
+happens, then this happens".  When you choose to use a State monad or State
+passing approach, you immediately begin to frame your entire program from an
+imperative approach.
+
+Auto lets you structure your program *denotatively* and declaratively.  It
+gives you that awesome style that functional programming promised in the first
+place.
+
+Instead of saying "do this then that", you say "this is how things...just
+*are*.  This is the structure of my program, and this is the nature of the
+relationship between each component".
+
+If you're already using Haskell...I shouldn't have to explain to you the
+benefits of a high-level declarative style over an imperative one :)
+
+Why not Auto?
+-------------
+
+That being said, there are cases where Auto is either the wrong tool or not
+very helpful.
+
+*   Cases involving inherently continuous time.  Auto is meant for situations
+    where time progresses in discrete ticks --- integers, not reals.  Auto is
+    not quite suitable even to "simulate" continuous time with discrete
+    sampling.  See the later section on FRP.
+
+*   Cases where you really don't have interactions/compositions between
+    different stateful components.  If all your program is just one `foldr` or
+    `scanl` or `iterate`, and you don't have multiple interacting parts of
+    your state, Auto really can't offer much.  If, however, you have multiple
+    folds or states that you want run together and compose, then this might be
+    useful!
+
+*   Intense IO stuff and resource handling.  Auto is not *pipes* or *conduit*.
+    All IO is done "outside" of the Auto components; Auto can be useful for
+    file processing and stream modification, but only if you separately handle
+    the IO portions.  You can think of Auto as being able to behave like
+    pipes/conduits, but with "only pipes" (no producers or consumers).  Except
+    with much more flexible composition.
 
 Relation to FRP
 ---------------
