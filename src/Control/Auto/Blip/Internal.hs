@@ -12,13 +12,14 @@ module Control.Auto.Blip.Internal (
 
 -- import Data.Foldable
 -- import Data.Traversable
+import Control.DeepSeq
 import Data.Semigroup
-import Data.Typeable
 import Data.Serialize
+import Data.Typeable
 import GHC.Generics
 
-data Blip a = NoBlip
-             | Blip a
+data Blip a =  NoBlip
+             | Blip !a
              deriving ( Functor
                       -- , Foldable
                       -- , Traversable
@@ -35,6 +36,7 @@ instance Semigroup a => Semigroup (Blip a) where
     (<>) = merge (<>)
 
 instance Serialize a => Serialize (Blip a)
+instance NFData a => NFData (Blip a)
 
 merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
 merge _ ex NoBlip          = ex

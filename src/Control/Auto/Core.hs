@@ -36,21 +36,21 @@ module Control.Auto.Core (
   , mkAutoM_
   ) where
 
-import GHC.Generics
 import Control.Applicative
 import Control.Arrow
-import Data.Typeable
 import Control.Category
 import Control.Monad
 import Control.Monad.Fix
-import Data.Serialize
 import Data.ByteString
 import Data.Monoid
 import Data.Profunctor
-import Prelude hiding       ((.), id)
+import Data.Serialize
+import Data.Typeable
+import GHC.Generics
+import Prelude hiding         ((.), id)
 
 data Output m a b = Output { outRes  :: b
-                           , outAuto :: !(Auto m a b)
+                           , outAuto :: Auto m a b
                            } deriving ( Functor
                                       , Typeable
                                       , Generic

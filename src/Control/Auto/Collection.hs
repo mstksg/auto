@@ -9,6 +9,9 @@ module Control.Auto.Collection (
     zipAuto
   , dZipAuto
   , dZipAuto_
+  -- , zipAutoB
+  -- , dZipAutoB
+  -- , dZipAutoB_
   -- * Dynamic collections
   , dynZip_
   , dynMap_
@@ -58,7 +61,7 @@ import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Auto.Time
-import Control.Monad hiding         (mapM, mapM_, sequence)
+import Control.Monad hiding         (mapM, mapM_, sequence, sequence_)
 import Data.Foldable
 import Data.IntMap.Strict           (IntMap)
 import Data.Map.Strict              (Map)
@@ -67,7 +70,7 @@ import Data.Monoid
 import Data.Profunctor
 import Data.Serialize
 import Data.Traversable
-import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id)
+import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id, sequence_)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict    as M
 
@@ -80,11 +83,22 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                                 as' = map outAuto res
                             return (Output ys (zipAuto x0 as'))
 
+-- delay with nop
 dZipAuto :: (Serialize a, Monad m) => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto x0 as = zipAuto x0 as . delay []
 
 dZipAuto_ :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto_ x0 as = zipAuto x0 as . delay_ []
+
+-- zipAutoB :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- zipAutoB = zipAuto NoBlip
+
+-- dZipAutoB :: (Serialize a, Monad m) => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- dZipAutoB = dZipAuto NoBlip
+
+-- dZipAutoB_ :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+-- dZipAutoB_ = dZipAuto_ NoBlip
+
 
 -- another problem
 dynZip_ :: Monad m => a -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]
@@ -163,21 +177,31 @@ muxManyI_ f = go mempty
     go = mkAutoM_ . _muxManyIF f go
 
 _muxManyIF :: forall k m a b inMap.  (Ord k, Monad m, inMap ~ (Auto m a (Maybe b)))
-       => (k -> inMap)
-       -> (Map k inMap -> Auto m (Map k a) (Map k b))
-       -> Map k inMap
-       -> Map k a
-       -> m (Output m (Map k a) (Map k b))
+       => (k -> inMap)                                -- ^ f : make new Autos
+       -> (Map k inMap -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
+       -> Map k inMap                                 -- ^ as: all current Autos
+       -> Map k a                                     -- ^ xs: Inputs
+       -> m (Output m (Map k a) (Map k b))            -- ^ Outputs, and next Auto.
 _muxManyIF f go as xs = do
-    outs <- sequence steps
-    let (outs', rems) = M.partition (isJust . outRes) outs
-        as'           = M.difference as rems
-        as''          = M.union as' (fmap outAuto outs')
+    -- all the outputs of the autos with the present inputs; autos without
+    --   inputs are ignored.
+    outs <- sequence steps :: m (Map k (Output m a (Maybe b)))
+    let -- the successful outputs and the unsuccesful outputs.
+        (outs', rems) = M.partition (isJust . outRes) outs
+        -- strip the unsuccesful outputs from allas
+        allas'        = M.difference allas rems
+        -- replace items in allas' with the new changes
+        allas''       = M.union (fmap outAuto outs') allas'
+        -- all remaining outputs.
         ys            = fmap (fromJust . outRes) outs'
-    return (Output ys (go as''))
+    return (Output ys (go allas''))
   where
+    -- new Autos, from the function.  Only on new ones not found in `as`.
     newas = M.mapWithKey (\k _ -> f k) (M.difference xs as)
+    -- all Autos, new and old.  Prefer the old ones.
     allas = M.union as newas
+    -- Step all the autos with all the inputs.  Lose the Autos that have no
+    --   corresponding input.
     steps = M.intersectionWith stepAuto allas xs
 
 muxFMany :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
@@ -392,18 +416,20 @@ _gatherFManyF :: forall k m a b c inAuto outAuto outOut.
               -> Map k (Either (c, a) a)                  -- xs
               -> m outOut
 _gatherFManyF f go as ys xs = do
-    outs <- sequence steps
-    let (outs', rems) = M.partition (isJust . outRes . snd) outs
-        as'           = M.difference as rems
+    outs <- sequence steps :: m (Map k (Maybe c, Output m a (Maybe b)))
+    let outs', rems   :: Map k (Maybe c, Output m a (Maybe b))
+        (outs', rems) = M.partition (isJust . outRes . snd) outs
+        as'           = M.difference allas rems
         ys'           = M.difference ys rems
-        as''          = M.union as' (fmap (second outAuto) outs')
+        as''          = M.union (fmap (second outAuto) outs') as'
         newys         = fmap (fromJust . outRes . snd) outs'
         ys''          = M.union newys ys'
-    return (Output ys'' (go as'' undefined))
+    return (Output ys'' (go as'' ys''))
   where
     _mzxs = fmap eitherToMaybe xs
     newas = M.mapWithKey (_muxgathermapF f) (M.difference _mzxs as)
     allas = M.union as newas
+    steps :: Map k (m (Maybe c, Output m a (Maybe b)))
     steps = M.intersectionWith interf allas _mzxs
     interf :: (Maybe c, Auto m a (Maybe b))
            -> (Maybe c, a)

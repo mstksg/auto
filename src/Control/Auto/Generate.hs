@@ -45,8 +45,7 @@ iterator f = a_
   where
     a_ y0 = mkAuto (a_ <$> get)
                    (put y0)
-                   $ \_ -> let y1 = f y0
-                           in  Output y0 (a_ y1)
+                   $ \_ -> Output y0 (a_ (f y0))
 
 iteratorM :: (Serialize b, Monad m) => (b -> m b) -> b -> Auto m a b
 iteratorM f = a_
@@ -60,8 +59,7 @@ iteratorM f = a_
 iterator_ :: Monad m => (b -> b) -> b -> Auto m a b
 iterator_ f = a_
   where
-    a_ y0 = mkAuto_ $ \_ -> let y1 = f y0
-                            in  Output y0 (a_ y1)
+    a_ y0 = mkAuto_ $ \_ -> Output y0 (a_ (f y0))
 
 iteratorM_ :: Monad m => (b -> m b) -> b -> Auto m a b
 iteratorM_ f = a_
