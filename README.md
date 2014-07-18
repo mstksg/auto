@@ -168,6 +168,11 @@ very helpful.
     pipes/conduits, but with "only pipes" (no producers or consumers).  Except
     with much more flexible composition.
 
+    So, this doesn't mean that Auto isn't useful for intense IO/stream
+    processing --- you just have to handle the actual "IO part" on your own.
+    In fact, Auto and pipes/conduit would probably work pretty well together
+    :)
+
 Relation to FRP
 ---------------
 
