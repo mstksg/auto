@@ -41,6 +41,7 @@ library
                      , bytestring
                      , containers
                      , random
+                     , deepseq
                      , monad-loops
                      -- , vector
   hs-source-dirs:      src

@@ -1,4 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Auto.Time (
   -- * A counter
@@ -12,6 +13,7 @@ module Control.Auto.Time (
   , accelerate
   , maccelerate
   , accelOverList
+  , skipTo
   ) where
 
 import Control.Applicative
@@ -121,6 +123,27 @@ maccelerate n | n <= 1    = fmap (:[])
                         let ys = y0 : map fst yas
                             a' = snd (last yas)
                         return (Output ys (go a'))
+
+skipTo :: forall m a b c. Monad m => Auto m (Maybe a) (b, Blip c) -> Auto m a ([b], c)
+skipTo = go
+  where
+    go :: Auto m (Maybe a) (b, Blip c)
+       -> Auto m a ([b], c)
+    go a0 = mkAutoM (go <$> loadAuto a0)
+                    (saveAuto a0)
+                    $ \x0 -> do
+                      ((ys, z), a1) <- skipOut a0 (Just x0) []
+                      return (Output (reverse ys, z) (go a1))
+    skipOut :: Auto m (Maybe a) (b, Blip c)
+            -> Maybe a
+            -> [b]
+            -> m (([b], c), Auto m (Maybe a) (b, Blip c))
+    skipOut a0 x0 ys = do
+      Output (y, bz) a1 <- stepAuto a0 x0
+      let ys' = y:ys
+      case bz of
+        Blip z -> return ((ys', z), a1)
+        NoBlip -> skipOut a1 Nothing ys'
 
 iterateM :: Monad m => Int -> (a -> m a) -> a -> m [a]
 iterateM n f = go (max n 0)

@@ -1,10 +1,41 @@
 module Control.Auto (
-    module Control.Auto.Core
+  -- * Types
+    Output(..)
+  , Auto
+  , Blip
+  -- * Accessors and type manipulators
+  , onOutput
+  , loadAuto
+  , saveAuto
+  , stepAuto
+  , encodeAuto
+  , decodeAuto
+  -- * Auto constructors
+  -- ** Lifting values and functions
+  , mkConst
+  , mkConstM
+  , mkFunc
+  , mkFuncM
+  -- ** from State transformers
+  , mkState
+  , mkStateM
+  , mkState_
+  , mkStateM_
+  -- ** from Accumulators
+  , mkAccum
+  , mkAccumM
+  , mkAccum_
+  , mkAccumM_
+  -- ** Arbitrary Autos
+  , mkAuto
+  , mkAutoM
+  , mkAuto_
+  , mkAutoM_
+  -- * Re-exports
   , module Control.Category
   , module Control.Applicative
   , module Control.Arrow
   , module Data.Semigroup
-  , Blip
   ) where
 
 import Control.Applicative

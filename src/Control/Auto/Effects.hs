@@ -15,12 +15,15 @@ module Control.Auto.Effects (
   , arrM
   ) where
 
-import Control.Auto.Core
-import Control.Auto.Blip
-import Data.Serialize
-import Control.Monad
 import Control.Applicative
+import Control.Auto.Blip
+import Control.Auto.Core
 import Control.Auto.Generate
+import Control.Category
+import Control.Monad
+import Data.Functor.Identity
+import Data.Serialize
+import Prelude hiding        ((.), id)
 
 cache :: (Serialize b, Monad m) => m b -> Auto m a b
 cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
@@ -55,4 +58,19 @@ execB = perBlip . exec
 
 execB' :: Monad m => m b -> Auto m (Blip a) (Blip ())
 execB' = perBlip . exec'
+
+-- runStateA
+-- runReaderA
+-- runListA
+
+-- runListA :: Auto [] a b -> Auto Identity [a] [b]
+-- runListA = go . (:[])
+--   where
+--     go as = mkAutoM (runListA <$> sequence (loadAuto as))
+--                     (mapM saveAuto as)
+--                     $ \xs -> do
+--                       let outputs = concatMap (\a -> stepAuto (a . mkConstM xs) ()) as
+--                       return undefined
+--                       -- return (Output res (runListA a'))
+
 
