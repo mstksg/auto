@@ -151,8 +151,9 @@ very helpful.
 
 *   Cases involving inherently continuous time.  Auto is meant for situations
     where time progresses in discrete ticks --- integers, not reals.  Auto is
-    not quite suitable even to "simulate" continuous time with discrete
-    sampling.  See the later section on FRP.
+    not suggested even to "simulate" continuous time with discrete sampling.
+    You can do it...but FRP is a much, much better abstraction/system for
+    handling this than Auto is.  See the later section on FRP.
 
 *   Cases where you really don't have interactions/compositions between
     different stateful components.  If all your program is just one `foldr` or
