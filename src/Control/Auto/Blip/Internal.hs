@@ -28,12 +28,12 @@ data Blip a =  NoBlip
                       , Generic
                       )
 
+instance Semigroup a => Semigroup (Blip a) where
+    (<>) = merge (<>)
+
 instance Semigroup a => Monoid (Blip a) where
     mempty  = NoBlip
     mappend = merge (<>)
-
-instance Semigroup a => Semigroup (Blip a) where
-    (<>) = merge (<>)
 
 instance Serialize a => Serialize (Blip a)
 instance NFData a => NFData (Blip a)

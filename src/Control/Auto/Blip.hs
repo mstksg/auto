@@ -55,13 +55,13 @@ module Control.Auto.Blip (
 
 import Control.Applicative
 import Control.Arrow
-import Control.Auto.Interval
-import Data.Monoid
-import Control.Auto.Core
-import Data.Profunctor
 import Control.Auto.Blip.Internal
+import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Auto.Time
 import Control.Category
+import Data.Monoid
+import Data.Profunctor
 import Data.Serialize
 import Prelude hiding                  ((.), id, sequence)
 import qualified Control.Auto.Generate as A

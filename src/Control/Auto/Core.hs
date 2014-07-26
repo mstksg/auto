@@ -54,8 +54,8 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.ByteString
 import Data.Functor.Identity
-import Data.Monoid
 import Data.Profunctor
+import Data.Semigroup
 import Data.Serialize
 import Data.Typeable
 import GHC.Generics
@@ -576,6 +576,9 @@ instance MonadFix m => ArrowLoop (Auto m) where
 
 -- Utility instances
 
+instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
+    (<>) = liftA2 (<>)
+
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
@@ -614,7 +617,11 @@ instance (Monad m, Floating b) => Floating (Auto m a b) where
     atanh   = liftA atanh
     acosh   = liftA acosh
 
--- Monoid, Num, Fractional, and Floating instances for Output because why not.
+-- Semigroup, Monoid, Num, Fractional, and Floating instances for Output
+-- because why not.
+
+instance (Monad m, Semigroup b) => Semigroup (Output m a b) where
+    (<>) = liftA2 (<>)
 
 instance (Monad m, Monoid b) => Monoid (Output m a b) where
     mempty  = pure mempty
