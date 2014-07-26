@@ -27,6 +27,13 @@ import GHC.Generics
 -- you think of an @'Auto' m a ('Blip' b)@ as a "'Blip' stream", then there
 -- are various combinators and functions that are specifically designed to
 -- manipulate "'Blip' streams".
+--
+-- For the purposes of the semantics of what 'Blip' is supposed to
+-- represent, its constructors are hidden.  (Almost) all of the various
+-- 'Blip' combinators (and its very useful 'Functor' instance) "preserve
+-- 'Blip'ness" --- one-at-a-time occurrences remain one-at-a-time under all
+-- of these combinators, and you should have enough so that direct access
+-- to the constructor is not needed.
 data Blip a =  NoBlip
              | Blip !a
              deriving ( Functor
