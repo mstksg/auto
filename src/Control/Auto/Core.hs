@@ -247,9 +247,9 @@ seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
 mkAuto :: Monad m
-       => Get (Auto m a b)
-       -> Put
-       -> (a -> Output m a b)
+       => Get (Auto m a b)      -- ^ resuming/loading 'Get'
+       -> Put                   -- ^ saving 'Put'
+       -> (a -> Output m a b)   -- ^ step function
        -> Auto m a b
 mkAuto l s f = mkAutoM l s (return . f)
 
@@ -260,9 +260,9 @@ mkAuto l s f = mkAutoM l s (return . f)
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
-mkAutoM :: Get (Auto m a b)
-        -> Put
-        -> (a -> m (Output m a b))
+mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
+        -> Put                      -- ^ saving 'Put'
+        -> (a -> m (Output m a b))  -- ^ (monadic) step function
         -> Auto m a b
 mkAutoM = Auto
 {-# INLINE mkAutoM #-}
@@ -277,7 +277,7 @@ mkAutoM = Auto
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be lost.
 mkAuto_ :: Monad m
-        => (a -> Output m a b)
+        => (a -> Output m a b)      -- ^ step function
         -> Auto m a b
 mkAuto_ f = mkAutoM_ (return . f)
 
@@ -291,7 +291,7 @@ mkAuto_ f = mkAutoM_ (return . f)
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be reset.
 mkAutoM_ :: Monad m
-         => (a -> m (Output m a b))
+         => (a -> m (Output m a b))   -- ^ (monadic) step function
          -> Auto m a b
 mkAutoM_ f = a
   where
@@ -302,7 +302,9 @@ mkAutoM_ f = a
 --
 -- You really shouldn't ever need this; you should be using 'pure' from the
 -- 'Applicative' instance, from the "Control.Applicative" module.
-mkConst :: Monad m => b -> Auto m a b
+mkConst :: Monad m
+        => b            -- ^ constant value to be outputted
+        -> Auto m a b
 mkConst = mkFunc . const
 
 -- | Construct the 'Auto' that alyways "executs" the given monadic value at
@@ -311,7 +313,9 @@ mkConst = mkFunc . const
 -- Only really provided here for consistency with the rest of this module's
 -- API.  You should really be using 'effect' from the
 -- "Control.Auto.Effects" module.
-mkConstM :: Monad m => m b -> Auto m a b
+mkConstM :: Monad m
+         => m b           -- ^ monadic action to be executed at every step
+         -> Auto m a b
 mkConstM = mkFuncM . const
 
 -- | Construct a stateless 'Auto' that simply applies the given (pure)
@@ -320,7 +324,7 @@ mkConstM = mkFuncM . const
 -- This is rarely needed; you should be using 'arr' from the 'Arrow'
 -- instance, from "Control.Arrow".
 mkFunc :: Monad m
-       => (a -> b)
+       => (a -> b)        -- ^ pure function
        -> Auto m a b
 mkFunc f = a
   where
@@ -332,7 +336,7 @@ mkFunc f = a
 -- It's recommended that you use 'arrM' from "Control.Auto.Effects".  This
 -- is only really provided for consistency.
 mkFuncM :: Monad m
-        => (a -> m b)
+        => (a -> m b)     -- ^ "monadic" function
         -> Auto m a b
 mkFuncM f = a
   where
@@ -358,8 +362,8 @@ mkFuncM f = a
 -- either write a meaningful one, or throw away serializability and use
 -- 'mkState_'.
 mkState :: (Serialize s, Monad m)
-        => (a -> s -> (b, s))
-        -> s
+        => (a -> s -> (b, s))       -- ^ state transformer
+        -> s                        -- ^ intial state
         -> Auto m a b
 mkState f = a_
   where
@@ -386,8 +390,8 @@ mkState f = a_
 -- either write a meaningful one, or throw away serializability and use
 -- 'mkStateM_'.
 mkStateM :: (Serialize s, Monad m)
-         => (a -> s -> m (b, s))
-         -> s
+         => (a -> s -> m (b, s))      -- ^ (monadic) state transformer
+         -> s                         -- ^ initial state
          -> Auto m a b
 mkStateM f = a_
   where
@@ -402,8 +406,8 @@ mkStateM f = a_
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkState_ :: Monad m
-         => (a -> s -> (b, s))
-         -> s
+         => (a -> s -> (b, s))    -- ^ state transformer
+         -> s                     -- ^ initial state
          -> Auto m a b
 mkState_ f = a_
   where
@@ -415,8 +419,8 @@ mkState_ f = a_
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkStateM_ :: Monad m
-          => (a -> s -> m (b, s))
-          -> s
+          => (a -> s -> m (b, s))   -- ^ (monadic) state transformer
+          -> s                      -- ^ initial state
           -> Auto m a b
 mkStateM_ f = a_
   where
@@ -443,8 +447,8 @@ mkStateM_ f = a_
 -- should either write a meaningful one, or throw away serializability and
 -- use 'mkAccum_'.
 mkAccum :: (Serialize b, Monad m)
-        => (b -> a -> b)
-        -> b
+        => (b -> a -> b)      -- ^ accumulating function
+        -> b                  -- ^ initial accumulator
         -> Auto m a b
 mkAccum f = a_
   where
@@ -463,8 +467,8 @@ mkAccum f = a_
 -- should either write a meaningful one, or throw away serializability and
 -- use 'mkAccumM_'.
 mkAccumM :: (Serialize b, Monad m)
-         => (b -> a -> m b)
-         -> b
+         => (b -> a -> m b)       -- ^ (monadic) accumulating function
+         -> b                     -- ^ initial accumulator
          -> Auto m a b
 mkAccumM f = a_
   where
@@ -481,8 +485,8 @@ mkAccumM f = a_
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
 mkAccum_ :: Monad m
-         => (b -> a -> b)
-         -> b
+         => (b -> a -> b)   -- ^ accumulating function
+         -> b               -- ^ intial accumulator
          -> Auto m a b
 mkAccum_ f = a_
   where
@@ -496,8 +500,8 @@ mkAccum_ f = a_
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
 mkAccumM_ :: Monad m
-          => (b -> a -> m b)
-          -> b
+          => (b -> a -> m b)    -- ^ (monadic) accumulating function
+          -> b                  -- ^ initial accumulator
           -> Auto m a b
 mkAccumM_ f = a_
   where
