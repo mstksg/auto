@@ -38,6 +38,8 @@ instance Semigroup a => Semigroup (Blip a) where
 instance Serialize a => Serialize (Blip a)
 instance NFData a => NFData (Blip a)
 
+-- TODO: I don't think i can instance NFData like that?
+
 merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
 merge _ ex NoBlip          = ex
 merge _ NoBlip ey          = ey

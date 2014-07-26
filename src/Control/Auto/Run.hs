@@ -2,8 +2,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Auto.Run (
+  -- * Special 'stepAuto' versions.
+    overList
+  , stepAutoN
   -- * Running "interactively"
-    interact
+  , interact
   , interactId
   , interact'
   -- ** Helpers
@@ -35,6 +38,22 @@ bindRead :: (Monad m, Read a)
          => Auto m (Maybe a) (Maybe b)
          -> Auto m String (Maybe b)
 bindRead a = bindI a <<^ readMaybe
+
+overList :: Monad m => Auto m a b -> [a] -> m ([b], Auto m a b)
+overList a []     = return ([], a)
+overList a (x:xs) = do
+    Output y a' <- stepAuto a  x
+    (ys, a'')   <- overList a' xs
+    return (y:ys, a'')
+
+stepAutoN :: Monad m => Int -> Auto m a b -> a -> m ([b], Auto m a b)
+stepAutoN n a0 x = go (max n 0) a0
+  where
+    go 0 a = return ([], a)
+    go i a = do
+      Output y a' <- stepAuto a x
+      (ys, a'')   <- go (i - 1)  a'
+      return (y:ys, a'')
 
 
 runM :: (Monad m, Monad m')
