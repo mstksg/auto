@@ -219,12 +219,35 @@ saveAuto :: Auto m a b -> Put
 saveAuto = _saveAuto
 
 
-stepAuto :: Auto m a b -> a -> m (Output m a b)
+-- | "Runs" the 'Auto' through one step.
+--
+-- Remember that at every step for an @'Auto' m a b@, you provide an @a@
+-- input and receive a @b@ output with an "updated"/"next" 'Auto'.
+--
+-- >>> let a = mkAccum (+) 0 :: Auto Identity Int Int
+--             -- an Auto that sums all of its input.
+-- >>> let Identity (Output y a') = stepAuto a 3
+-- >>> y      -- the result
+-- 3
+-- :: Int
+-- >> :t a'   -- the updated 'Auto'
+-- a' :: Auto Identity Int Int
+--
+-- ('Identity', from "Data.Functor.Identity", is the "dumb Functor": @data
+-- 'Identity' a = 'Identity' a@)
+--
+-- If you think of an @'Auto' m a b@ as a "stateful function" of type @a ->
+-- m b@, then 'stepAuto' lets you "run" it.
+stepAuto :: Auto m a b        -- ^ the 'Auto' to step
+         -> a                 -- ^ the input
+         -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
 stepAuto = _stepAuto
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
 -- 'Identity'.
-stepAuto' :: Auto' a b -> a -> Output' a b
+stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
+          -> a                -- ^ the input
+          -> Output' a b      -- ^ the output, and the updated 'Auto''
 stepAuto' a = runIdentity . stepAuto a
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as

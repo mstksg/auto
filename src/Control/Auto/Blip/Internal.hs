@@ -18,6 +18,15 @@ import Data.Serialize
 import Data.Typeable
 import GHC.Generics
 
+-- | A type representing a "discrete" sort of event-like thing.  It's
+-- represents something that happens alone, and one at a time, as opposed
+-- to things that are "on" or "off" for large intervals at a time.
+--
+-- It's here mainly because it's a pretty useful abstraction in the context
+-- of the many combinators found in various modules of this library.  If
+-- you think of an @'Auto' m a ('Blip' b)@ as a "'Blip' stream", then there
+-- are various combinators and functions that are specifically designed to
+-- manipulate "'Blip' streams".
 data Blip a =  NoBlip
              | Blip !a
              deriving ( Functor
