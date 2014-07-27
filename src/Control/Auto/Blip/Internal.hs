@@ -56,11 +56,26 @@ instance NFData a => NFData (Blip a)
 
 -- TODO: I don't think i can instance NFData like that?
 
-merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
+-- | Merge two 'Blip's with a merging function.  Is only a occuring 'Blip'
+-- if *both* 'Blip's are simultaneously occuring.
+merge :: (a -> a -> a)      -- ^ merging function
+      -> Blip a
+      -> Blip a
+      -> Blip a
 merge _ ex NoBlip          = ex
 merge _ NoBlip ey          = ey
 merge f (Blip x) (Blip y) = Blip (f x y)
 
+-- | Destruct a 'Blip' by giving a default result if the 'Blip' is
+-- non-occuring and a function to apply on the contents, if the 'Blip' is
+-- occuring.
+--
+-- Try not to use if possible, unless you are a framework developer.  If
+-- you're just making an application, try to use the other various
+-- combinators in this library.  It'll help you preserve the semantics of
+-- what it means to be 'Blip'py.
+--
+-- Analogous to 'maybe' from "Prelude".
 blip :: b -> (a -> b) -> Blip a -> b
 blip d _ NoBlip   = d
 blip _ f (Blip x) = f x

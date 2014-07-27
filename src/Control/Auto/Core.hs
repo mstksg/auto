@@ -156,10 +156,10 @@ type Output' = Output Identity
 --
 -- >>> let bs            = encodeAuto a''
 --
--- To /resume//"load" it, I can use 'decodeAuto' to /resume/ the original
--- __@a@__.  Remember, 'a' was our original 'Auto', the summer 'Auto' with
--- a starting accumulator of 0.  We use 'decodeAuto' to "resume" it, with
--- and resume it with its internal accumulator at 13.
+-- To "resume" / "load" it, I can use 'decodeAuto' to "resume" the
+-- /original/ @a@.  Remember, 'a' was our original 'Auto', the summer
+-- 'Auto' with a starting accumulator of 0.  We use 'decodeAuto' to
+-- "resume" it, with and resume it with its internal accumulator at 13.
 --
 -- >>> let Right resumed = decodeAuto a bs
 -- >>> let Output y _    = stepAuto' resumed 0
@@ -171,12 +171,16 @@ type Output' = Output Identity
 -- >>> let Right resumed = decodeAuto a'' bs
 -- >>> let Right resumed = decodeAuto (mkAccum (+) 0) bs
 --
--- One way you can think about it is that 'loadAuto'/'decodeAuto' takes an
--- 'Auto' and creates a "blueprint" from that 'Auto', on how to "load it";
--- the blueprint contains what the form of the internal state is, and their
--- offets in the 'ByteString'.  So in the above, 'a', 'a'', 'a''', and
--- 'mkAccum (+) 0' all have the same "blueprint" --- their internal states
--- are of the same structure.
+-- I mean, after all, if 'decodeAuto' "fast forwards" an 'Auto' to the
+-- state it was at when it was frozen...then all of these should really be
+-- resumed to the same point, right?
+--
+-- One way you can think about it is that 'loadAuto' / 'decodeAuto' takes
+-- an 'Auto' and creates a "blueprint" from that 'Auto', on how to "load
+-- it"; the blueprint contains what the form of the internal state is, and
+-- their offets in the 'ByteString'.  So in the above, 'a', 'a'', 'a''',
+-- and 'mkAccum (+) 0' all have the same "blueprint" --- their internal
+-- states are of the same structure.
 --
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
 -- have internal state, yet ignore it when saving/loading.  So, saving it
