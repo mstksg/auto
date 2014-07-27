@@ -4,7 +4,9 @@
 module Control.Auto.Run (
   -- * Special 'stepAuto' versions.
     overList
+  , overList'
   , stepAutoN
+  , stepAutoN'
   -- * Running "interactively"
   , interact
   , interactId
@@ -46,6 +48,9 @@ overList a (x:xs) = do
     (ys, a'')   <- overList a' xs
     return (y:ys, a'')
 
+overList' :: Auto' a b -> [a] -> ([b], Auto' a b)
+overList' a xs = runIdentity (overList a xs)
+
 stepAutoN :: Monad m => Int -> Auto m a b -> a -> m ([b], Auto m a b)
 stepAutoN n a0 x = go (max n 0) a0
   where
@@ -55,6 +60,8 @@ stepAutoN n a0 x = go (max n 0) a0
       (ys, a'')   <- go (i - 1)  a'
       return (y:ys, a'')
 
+stepAutoN' :: Int -> Auto' a b -> a -> ([b], Auto' a b)
+stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
 
 runM :: (Monad m, Monad m')
      => a                        -- ^ Starting input

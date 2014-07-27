@@ -14,7 +14,6 @@ module Control.Auto.Generate (
   , iteratorM_
   ) where
 
--- import Control.Auto.Event.Internal
 import Control.Applicative
 import Control.Auto.Core
 import Control.Category
@@ -34,7 +33,9 @@ import Prelude hiding                 ((.), id)
 --   * Loading: O(1) time in the number of times the 'Auto' has been
 --   stepped + O(n) time in the length of the remaining list.
 --
-fromList :: (Serialize b, Monad m) => [b] -> Auto m a (Maybe b)
+fromList :: (Serialize b, Monad m)
+         => [b]                 -- ^ list to output element-by-element
+         -> Auto m a (Maybe b)
 fromList = mkState (const _uncons)
 
 -- | A version of 'fromList' that is safe for long or infinite lists, or
@@ -48,7 +49,9 @@ fromList = mkState (const _uncons)
 --   * Storing: O(1) time and space on the length of the remaining list
 --   * Loading: O(n) time on the number of times the 'Auto' has been
 --   stepped, maxing out at O(n) on the length of the entire input list.
-fromLongList :: Monad m => [b] -> Auto m a (Maybe b)
+fromLongList :: Monad m
+             => [b]                 -- ^ list to output element-by-element
+             -> Auto m a (Maybe b)
 fromLongList xs = go 0 xs
   where
     loader = do
@@ -69,7 +72,9 @@ fromLongList xs = go 0 xs
 
 -- | Like 'fromList', but doesn't attempt to serialize its current position
 -- in the list.
-fromList_ :: Monad m => [b] -> Auto m a (Maybe b)
+fromList_ :: Monad m
+          => [b]                -- ^ list to output element-by-element
+          -> Auto m a (Maybe b)
 fromList_ = mkState_ (const _uncons)
 
 -- -- | Creates an Auto from an infinite
@@ -87,23 +92,49 @@ _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
 
-unfold :: forall m a b c. (Serialize c, Monad m) => (c -> (Maybe b, c)) -> c -> Auto m a (Maybe b)
+-- | Analogous to 'unfoldr' from "Prelude".  "unfold" out the outputs of an
+-- 'Auto'; maintains an accumulator of type @c@, and at every step, applies
+-- the unfolding function to the accumulator.  If the result is 'Nothing',
+-- then the rest of the Auto will be 'Nothing' forever.  If the result is
+-- @'Just' (y, acc)@, outputs @y@ and stores @acc@ as the new accumulator.
+--
+-- Given an initial accumulator.
+unfold :: forall m a b c. (Serialize c, Monad m)
+       => (c -> Maybe (b, c))     -- ^ unfolding function
+       -> c                       -- ^ initial accumulator
+       -> Auto m a (Maybe b)
 unfold f = mkState g . Just
   where
     g :: a -> Maybe c -> (Maybe b, Maybe c)
     g _ Nothing  = (Nothing, Nothing)
     g _ (Just x) = case f x of
-                     (Just y , x') -> (Just y , Just x')
-                     (Nothing, _ ) -> (Nothing, Nothing)
+                     Just (y, x') -> (Just y , Just x')
+                     Nothing      -> (Nothing, Nothing)
 
-iterator :: (Serialize b, Monad m) => (b -> b) -> b -> Auto m a b
+-- | Analogous to 'iterate' from "Prelude".  Keeps accumulator value and
+-- continually applies the function to the value at every step, outputting
+-- the result.
+--
+-- The first result is the initial accumulator value.
+--
+-- >>> let (y, _) = stepAutoN' 10 (iterator (*2) 1) ()
+-- >>> y
+-- [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+iterator :: (Serialize b, Monad m)
+         => (b -> b)        -- ^ iterating function
+         -> b               -- ^ starting value and initial output
+         -> Auto m a b
 iterator f = a_
   where
     a_ y0 = mkAuto (a_ <$> get)
                    (put y0)
                    $ \_ -> Output y0 (a_ (f y0))
 
-iteratorM :: (Serialize b, Monad m) => (b -> m b) -> b -> Auto m a b
+-- | Like 'iterator', but with a monadic function.
+iteratorM :: (Serialize b, Monad m)
+          => (b -> m b)     -- ^ (monadic) iterating function
+          -> b              -- ^ starting value and initial output
+          -> Auto m a b
 iteratorM f = a_
   where
     a_ y0 = mkAutoM (a_ <$> get)
@@ -112,12 +143,18 @@ iteratorM f = a_
                         y1 <- f y0
                         return (Output y0 (a_ y1))
 
-iterator_ :: Monad m => (b -> b) -> b -> Auto m a b
+iterator_ :: Monad m
+          => (b -> b)        -- ^ iterating function
+          -> b               -- ^ starting value and initial output
+          -> Auto m a b
 iterator_ f = a_
   where
     a_ y0 = mkAuto_ $ \_ -> Output y0 (a_ (f y0))
 
-iteratorM_ :: Monad m => (b -> m b) -> b -> Auto m a b
+iteratorM_ :: Monad m
+           => (b -> m b)     -- ^ (monadic) iterating function
+           -> b              -- ^ starting value and initial output
+           -> Auto m a b
 iteratorM_ f = a_
   where
     a_ y0 = mkAutoM_ $ \_ -> do
