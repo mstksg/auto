@@ -203,17 +203,20 @@ type Output' = Output Identity
 -- | Encode an 'Auto' and its internal state into a 'ByteString'.
 encodeAuto :: Auto m a b -> ByteString
 encodeAuto = runPut . saveAuto
+{-# INLINE encodeAuto #-}
 
 -- | "Resume" an 'Auto' from its 'ByteString' serialization, giving
 -- a 'Left' if the deserialization is not possible.
 decodeAuto :: Auto m a b -> ByteString -> Either String (Auto m a b)
 decodeAuto = runGet . loadAuto
+{-# INLINE decodeAuto #-}
 
 -- | Returns a 'Get' from an 'Auto' ---  instructions (from
 -- "Data.Serialize") on taking a ByteString and "restoring" the originally
 -- saved 'Auto', in the originally saved state.
 loadAuto :: Auto m a b -> Get (Auto m a b)
 loadAuto = _loadAuto
+{-# INLINE loadAuto #-}
 
 -- | Returns a 'Put' --- instructions (from "Data.Serialize") on how to
 -- "freeze" the 'Auto', with its internal state, and save it to a binary
@@ -221,6 +224,7 @@ loadAuto = _loadAuto
 -- 'loadAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto = _saveAuto
+{-# INLINE saveAuto #-}
 
 
 -- | "Runs" the 'Auto' through one step.
@@ -246,6 +250,7 @@ stepAuto :: Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
          -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
 stepAuto = _stepAuto
+{-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
 -- 'Identity'.
@@ -253,6 +258,7 @@ stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
           -> Output' a b      -- ^ the output, and the updated 'Auto''
 stepAuto' a = runIdentity . stepAuto a
+{-# INLINE stepAuto' #-}
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
@@ -279,6 +285,7 @@ mkAuto :: Monad m
        -> (a -> Output m a b)   -- ^ step function
        -> Auto m a b
 mkAuto l s f = mkAutoM l s (return . f)
+{-# INLINE mkAuto #-}
 
 -- | Construct an 'Auto' by explicitly giving its serializiation,
 -- deserialization, and the (monadic) function from @a@ to @b@ and the
@@ -307,6 +314,7 @@ mkAuto_ :: Monad m
         => (a -> Output m a b)      -- ^ step function
         -> Auto m a b
 mkAuto_ f = mkAutoM_ (return . f)
+{-# INLINE mkAuto_ #-}
 
 -- | Like 'mkAutoM', but without any way of meaningful serializing or
 -- deserializing.
@@ -332,7 +340,9 @@ mkAutoM_ f = a
 mkConst :: Monad m
         => b            -- ^ constant value to be outputted
         -> Auto m a b
-mkConst = mkFunc . const
+mkConst y = a
+  where
+    a = mkAuto_ $ \_ -> Output y a
 
 -- | Construct the 'Auto' that alyways "executs" the given monadic value at
 -- every step, yielding the result and ignoring its input.
@@ -343,7 +353,11 @@ mkConst = mkFunc . const
 mkConstM :: Monad m
          => m b           -- ^ monadic action to be executed at every step
          -> Auto m a b
-mkConstM = mkFuncM . const
+mkConstM my = a
+  where
+    a = mkAutoM_ $ \_ -> do
+                     y <- my
+                     return (Output y a)
 
 -- | Construct a stateless 'Auto' that simply applies the given (pure)
 -- function to every input, yielding the output.

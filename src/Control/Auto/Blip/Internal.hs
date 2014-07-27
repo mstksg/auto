@@ -1,6 +1,4 @@
 {-# LANGUAGE DeriveFunctor #-}
--- {-# LANGUAGE DeriveFoldable #-}
--- {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -10,8 +8,6 @@ module Control.Auto.Blip.Internal (
   , blip
   ) where
 
--- import Data.Foldable
--- import Data.Traversable
 import Control.DeepSeq
 import Data.Semigroup
 import Data.Serialize
@@ -37,8 +33,6 @@ import GHC.Generics
 data Blip a =  NoBlip
              | Blip !a
              deriving ( Functor
-                      -- , Foldable
-                      -- , Traversable
                       , Show
                       , Typeable
                       , Generic
