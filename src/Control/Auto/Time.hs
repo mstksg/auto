@@ -175,7 +175,9 @@ fastForward x0 = go
         Just y  -> return (Output y (go a1))
 
 fastForwardEither :: forall m a b c. Monad m
-             => a -> Auto m a (Either c b) -> Auto m a (b, [c])
+                  => a
+                  -> Auto m a (Either c b)
+                  -> Auto m a (b, [c])
 fastForwardEither x0 = fmap (second reverse) . go
   where
     go :: Auto m a (Either c b)
