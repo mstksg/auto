@@ -1,20 +1,56 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- |
+-- Module      : Control.Auto.Time
+-- Description : 'Auto's and 'Auto' transformers for observing and
+--               manipulating the flow of time.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module contains various 'Auto' transformers for manipulating the
+-- flow of time/stepping rate of an 'Auto'.
+--
+-- Many of these are 'Auto' "transformers", meaning that they take in an
+-- 'Auto' and return a transformed 'Auto', with new stepping behavior.
+--
+-- For example, there is 'accelerate':
+--
+-- @
+-- 'accelerate' :: 'Monad' m => 'Int' -> 'Auto' m a b -> 'Auto' m a [b]
+-- @
+--
+-- @'accelerate' n@ turns an 'Auto' into an 'Auto' that "steps itself" @n@
+-- times for every single input/step.  The result is a list of the
+-- results of each single step.
+--
+-- There are also various 'Auto's for observing the passage of time
+-- ('count') and actiong as a "delay" or a way to access the previously
+-- stepped values of an 'Auto'.
+--
+
 module Control.Auto.Time (
   -- * A counter
     count
+  , count_
   -- * Manipulating time
+  -- ** Delaying
   , lastVal
   , lastVal_
   , delay
   , delay_
+  -- ** Stretching
   , stretch
   , stretch_
   , stretchB
+  -- ** Accelerating
   , accelerate
   , accelerateWith
   , accelOverList
+  -- ** Skipping
   , skipTo
   , fastForward
   , fastForwardEither
@@ -29,8 +65,11 @@ import Control.Monad
 import Control.Monad.Loops
 import Data.Serialize
 
-count :: Monad m => Auto m a Int
+count :: (Serialize b, Num b, Monad m) => Auto m a b
 count = iterator (+1) 0
+
+count_ :: (Num b, Monad m) => Auto m a b
+count_ = iterator_ (+1) 0
 
 lastVal :: (Serialize a, Monad m) => a -> Auto m a a
 lastVal = mkState $ \x s -> (s, x)

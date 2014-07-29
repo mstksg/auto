@@ -21,7 +21,6 @@ import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
 import Control.Monad
-import Data.Functor.Identity
 import Data.Serialize
 import Prelude hiding        ((.), id)
 

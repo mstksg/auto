@@ -1,17 +1,55 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- |
+-- Module      : Control.Auto.Generate
+-- Description : 'Auto's that act as generators or "producers", ignoring input.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module contains various 'Auto's that act as "producers", ignoring
+-- their input and producing output through some source or a pure/monadic
+-- function.
+--
+-- === Constant producers
+--
+-- Are you looking for "constant producers"?  'Auto's that constantly
+-- output the same thing, or repeatedly execute the same monadic action and
+-- return the result?  To keep things clean, they aren't re-exported here.
+-- But you'll find the "constant 'Auto'" as pure from the 'Applicative'
+-- interface:
+--
+-- @
+-- 'pure' :: 'Monad' m => b -> 'Auto' m a b
+-- @
+--
+-- And also the "repeatedly execute and return" 'Auto' as 'effect' from
+-- "Control.Auto.Effects":
+--
+-- @
+-- 'effect' :: 'Monad' m => m b -> 'Auto' m a b
+-- @
+--
+
 module Control.Auto.Generate (
-  -- * Generators
+  -- * From lists
     fromList
   , fromLongList
   , fromList_
-  -- , fromInfList
-  -- , fromInfList_
-  , unfold
+  -- * From functions
+  -- ** Iterating
   , iterator
   , iteratorM
   , iterator_
   , iteratorM_
+  -- ** Unfolding
+  -- | "Iterating with state".
+  , unfold
+  , unfoldM
+  , unfold_
+  , unfoldM_
   ) where
 
 import Control.Applicative
@@ -70,23 +108,11 @@ fromLongList xs = go 0 xs
                                 (y':ys') -> Output (Just y') (go (i + 1) ys')
                                 []       -> Output Nothing finished
 
--- | Like 'fromList', but doesn't attempt to serialize its current position
--- in the list.
+-- | The non-resuming/non-serializing version of 'fromList'.
 fromList_ :: Monad m
           => [b]                -- ^ list to output element-by-element
           -> Auto m a (Maybe b)
 fromList_ = mkState_ (const _uncons)
-
--- -- | Creates an Auto from an infinite
--- fromInfList :: Monad m => [b] -> Auto m a b
--- fromInfList xs = f <$> fromLongList xs
---   where
---     f (Just x) = x
---     f Nothing  = error "fromInfList: reached end of input list."
-
--- fromInfList_ :: Monad m => [b] -> Auto m a b
--- fromInfList_ []     = error "fromInfList_: reached end of input list."
--- fromInfList_ (x:xs) = mkAuto_ (\_ -> Output x (fromInfList_ xs))
 
 _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
@@ -103,13 +129,53 @@ unfold :: forall m a b c. (Serialize c, Monad m)
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
        -> Auto m a (Maybe b)
-unfold f = mkState g . Just
-  where
-    g :: a -> Maybe c -> (Maybe b, Maybe c)
-    g _ Nothing  = (Nothing, Nothing)
-    g _ (Just x) = case f x of
-                     Just (y, x') -> (Just y , Just x')
-                     Nothing      -> (Nothing, Nothing)
+unfold f = mkState (_unfoldF f) . Just
+
+-- | Like 'unfold', but the unfolding function is monadic.
+unfoldM :: forall m a b c. (Serialize c, Monad m)
+        => (c -> m (Maybe (b, c)))     -- ^ unfolding function
+        -> c                           -- ^ initial accumulator
+        -> Auto m a (Maybe b)
+unfoldM f = mkStateM (_unfoldMF f) . Just
+
+-- | The non-resuming & non-serializing version of 'unfold'.
+unfold_ :: forall m a b c. Monad m
+        => (c -> Maybe (b, c))     -- ^ unfolding function
+        -> c                       -- ^ initial accumulator
+        -> Auto m a (Maybe b)
+unfold_ f = mkState_ (_unfoldF f) . Just
+
+-- | The non-resuming & non-serializing version of 'unfoldM'.
+unfoldM_ :: forall m a b c. Monad m
+         => (c -> m (Maybe (b, c)))     -- ^ unfolding function
+         -> c                           -- ^ initial accumulator
+         -> Auto m a (Maybe b)
+unfoldM_ f = mkStateM_ (_unfoldMF f) . Just
+
+_unfoldF :: (c -> Maybe (b, c))
+         -> a
+         -> Maybe c
+         -> (Maybe b, Maybe c)
+_unfoldF _ _ Nothing  = (Nothing, Nothing)
+_unfoldF f _ (Just x) = case f x of
+                          Just (y, x') -> (Just y, Just x')
+                          Nothing      -> (Nothing, Nothing)
+
+_unfoldMF :: Monad m
+          => (c -> m (Maybe (b, c)))
+          -> a
+          -> Maybe c
+          -> m (Maybe b, Maybe c)
+_unfoldMF _ _ Nothing  = return (Nothing, Nothing)
+_unfoldMF f _ (Just x) = do
+    res <- f x
+    return $ case res of
+               Just (y, x') -> (Just y, Just x')
+               Nothing      -> (Nothing, Nothing)
+
+
+
+
 
 -- | Analogous to 'iterate' from "Prelude".  Keeps accumulator value and
 -- continually applies the function to the value at every step, outputting
@@ -143,6 +209,7 @@ iteratorM f = a_
                         y1 <- f y0
                         return (Output y0 (a_ y1))
 
+-- | The non-resuming/non-serializing version of 'iterator'.
 iterator_ :: Monad m
           => (b -> b)        -- ^ iterating function
           -> b               -- ^ starting value and initial output
@@ -151,6 +218,7 @@ iterator_ f = a_
   where
     a_ y0 = mkAuto_ $ \_ -> Output y0 (a_ (f y0))
 
+-- | The non-resuming/non-serializing version of 'iteratorM'.
 iteratorM_ :: Monad m
            => (b -> m b)     -- ^ (monadic) iterating function
            -> b              -- ^ starting value and initial output

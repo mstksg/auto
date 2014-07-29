@@ -35,44 +35,57 @@ stdRands :: Monad m
          => (StdGen -> (b, StdGen)) -- ^ Random function
          -> StdGen                  -- ^ Initial generator
          -> Auto m a b
-stdRands r g = mkState f (show g)
+stdRands r = go
   where
-    f _ sg = let (res, g') = r (read sg)
-             in  (res, show g')
+    go g = mkAuto (go . read <$> get)
+                  (put (show g))
+                  $ \_ -> let (y, g') = r g
+                          in  Output y (go g')
+-- stdRands r g = mkState f (show g)
+--   where
+--     f _ sg = let (res, g') = r (read sg)
+--              in  (res, show g')
+-- {-# INLINE stdRands #-}
 
 rands :: (Serialize g, RandomGen g, Monad m)
       => (g -> (b, g)) -- ^ Random function
       -> g             -- ^ Initial generator
       -> Auto m a b
 rands r = mkState (\_ g -> r g)
+{-# INLINE rands #-}
 
 rands_ :: (RandomGen g, Monad m)
        => (g -> (b, g))   -- ^ Random function
        -> g               -- ^ Initial generator
        -> Auto m a b
 rands_ r = mkState_ (\_ g -> r g)
+{-# INLINE rands_ #-}
 
 stdRandsM :: Monad m
           => (StdGen -> m (b, StdGen))
           -> StdGen
           -> Auto m a b
-stdRandsM r g = mkStateM f (show g)
+stdRandsM r = go
   where
-    f _ sg = do
-      (res, g') <- r (read sg)
-      return (res, show g')
+    go g = mkAutoM (go . read <$> get)
+                   (put (show g))
+                   $ \_ -> do
+                       (y, g') <- r g
+                       return (Output y (go g'))
 
 randsM :: (Serialize g, RandomGen g, Monad m)
        => (g -> m (b, g))
        -> g
        -> Auto m a b
 randsM r = mkStateM (\_ g -> r g)
+{-# INLINE randsM #-}
 
 randsM_ :: (RandomGen g, Monad m)
         => (g -> m (b, g))
         -> g
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
+{-# INLINE randsM_ #-}
 
 markov :: forall a b m g. (Serialize g, Serialize b, RandomGen g, Monad m, Ord b)
        => Map b (Map b Double)
@@ -137,16 +150,19 @@ bernoulli p g = proc x -> do
     q <- rands (randomR (0, 1)) g -< ()
     b <- emitOn (<= p)            -< q
     id -< x <$ b
+{-# INLINE bernoulli #-}
 
 bernoulli_ :: (RandomGen g, Monad m) => Double -> g -> Auto m a (Blip a)
 bernoulli_ p g = proc x -> do
     q <- rands_ (randomR (0, 1)) g -< ()
     b <- emitOn (<= p)            -< q
     id -< x <$ b
+{-# INLINE bernoulli_ #-}
 
 stdBernoulli :: Monad m => Double -> StdGen -> Auto m a (Blip a)
 stdBernoulli p g = proc x -> do
     q <- stdRands (randomR (0, 1)) g -< ()
     b <- emitOn (<= p)               -< q
     id -< x <$ b
+{-# INLINE stdBernoulli #-}
 

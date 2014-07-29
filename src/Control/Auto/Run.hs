@@ -24,12 +24,10 @@ import Control.Auto.Core
 import Control.Monad hiding  (mapM)
 import Data.Functor.Identity
 import Data.Maybe
+import Text.Read
 import Control.Arrow
 import Control.Auto.Interval
 import Prelude hiding        (interact, mapM)
-
-readMaybe :: Read a => String -> Maybe a
-readMaybe = fmap fst . mfilter (null . snd) . listToMaybe . reads
 
 -- | Turn an 'Auto' that takes a "readable" @a@ and outputs a @b@ into an
 -- 'Auto' that takes a 'String' and outputs a @'Maybe' b@.  When the

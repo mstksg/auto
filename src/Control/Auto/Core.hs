@@ -2,6 +2,30 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
+-- |
+-- Module      : Control.Auto.Core
+-- Description : Core types, constructors, and utilities.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module defines and provides the core types, (smart) constructors,
+-- and general utilities used by the 'Auto' library.
+--
+-- A lot of low-level functionality is provided here which is most likely
+-- unnecessary for most applications; many are mostly for internal usage or
+-- advanced/fine-grained usage; it also isn't really enough to do many
+-- things with, either.  It's recommended that you import "Control.Auto"
+-- instead, which re-organizes the more useful parts of this module in
+-- addition with useful parts of others to provide a nice packaged entry
+-- point.
+--
+-- For information on how to actually use these types, see
+-- "Control.Auto.Tutorial".
+--
+
 module Control.Auto.Core (
   -- * Auto
   -- ** Type
@@ -41,7 +65,8 @@ module Control.Auto.Core (
   , mkAutoM
   , mkAuto_
   , mkAutoM_
-  -- * Special Autos
+  -- * Strictness
+  , forceSerial
   , forcer
   , seqer
   ) where
@@ -112,8 +137,8 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 -- The 'Auto' also contains information on its own serialization, so you
 -- can serialize and re-load the internal state without actually accessing
 -- it.
-data Auto m a b = Auto { _loadAuto :: !(Get (Auto m a b))
-                       , _saveAuto :: !Put
+data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
+                       , _saveAuto :: Put
                        , _stepAuto :: !(a -> m (Output m a b))
                        } deriving ( Typeable
                                   , Generic
@@ -125,6 +150,10 @@ type Auto'   = Auto Identity
 -- | Special case of 'Output' where the underlying 'Monad' of 'outAuto' is
 -- 'Identity'.
 type Output' = Output Identity
+
+-- | Force the serializing components of an 'Auto'.
+forceSerial :: Auto m a b -> Auto m a b
+forceSerial a@(Auto l s _) = l `seq` s `seq` a
 
 -- $serializing
 -- The 'Auto' type offers an interface in which you can serialize
@@ -216,6 +245,7 @@ decodeAuto = runGet . loadAuto
 -- saved 'Auto', in the originally saved state.
 loadAuto :: Auto m a b -> Get (Auto m a b)
 loadAuto = _loadAuto
+-- loadAuto = return
 {-# INLINE loadAuto #-}
 
 -- | Returns a 'Put' --- instructions (from "Data.Serialize") on how to
@@ -224,6 +254,7 @@ loadAuto = _loadAuto
 -- 'loadAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto = _saveAuto
+-- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
 
@@ -271,6 +302,13 @@ forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
 -- when composed with other 'Auto's.
 seqer :: Monad m => Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
+
+-- doesn't work like you'd think lol.
+-- serialForcer :: Monad m => Auto m a a
+-- serialForcer = a
+--   where
+--     a = mkAuto_ $ \x -> let outp = Output x a
+--                         in  forceSerial a `seq` outp
 
 -- | Construct an 'Auto' by explicity giving its serialization,
 -- deserialization, and the (pure) function from @a@ to @b@ and the "next
@@ -335,8 +373,9 @@ mkAutoM_ f = a
 -- | Construct the 'Auto' that always yields the given value, ignoring its
 -- input.
 --
--- You really shouldn't ever need this; you should be using 'pure' from the
--- 'Applicative' instance, from the "Control.Applicative" module.
+-- Provided for API constency, but you should really be using 'pure' from
+-- the 'Applicative' instance, from "Control.Applicative", which does the
+-- same thing.
 mkConst :: Monad m
         => b            -- ^ constant value to be outputted
         -> Auto m a b
@@ -344,12 +383,11 @@ mkConst y = a
   where
     a = mkAuto_ $ \_ -> Output y a
 
--- | Construct the 'Auto' that alyways "executs" the given monadic value at
+-- | Construct the 'Auto' that always "executes" the given monadic value at
 -- every step, yielding the result and ignoring its input.
 --
--- Only really provided here for consistency with the rest of this module's
--- API.  You should really be using 'effect' from the
--- "Control.Auto.Effects" module.
+-- Provided for API consistency, but you shold really be using 'effect'
+-- from "Control.Auto.Effects", which does the same thing.
 mkConstM :: Monad m
          => m b           -- ^ monadic action to be executed at every step
          -> Auto m a b

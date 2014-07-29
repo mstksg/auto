@@ -31,6 +31,7 @@ library
                      , Control.Auto.Serialize
                      , Control.Auto.Switch
                      , Control.Auto.Time
+                     , Control.Auto.Tutorial
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.6 && <4.8
