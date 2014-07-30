@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 -- |
 -- Module      : Control.Auto.Core
@@ -137,12 +138,21 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 -- The 'Auto' also contains information on its own serialization, so you
 -- can serialize and re-load the internal state without actually accessing
 -- it.
-data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
-                       , _saveAuto :: Put
-                       , _stepAuto :: !(a -> m (Output m a b))
-                       } deriving ( Typeable
-                                  , Generic
-                                  )
+data Auto m a b =           AutoFunc    !(a -> b)
+                |           AutoFuncM   !(a -> m b)
+                | forall s. AutoState   !(a -> s -> (b, s))   !s
+                | forall s. AutoStateM  !(a -> s -> m (b, s)) !s
+                | forall s. Serialize s => AutoStateS  !(a -> s -> (b, s))   !s
+                | forall s. Serialize s => AutoStateMS !(a -> s -> m (b, s)) !s
+                |           AutoArb     !(a -> Output m a b)     (Get (Auto m a b)) Put
+                |           AutoArbM    !(a -> m (Output m a b)) (Get (Auto m a b)) Put
+
+-- data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
+--                        , _saveAuto :: Put
+--                        , _stepAuto :: !(a -> m (Output m a b))
+--                        } deriving ( Typeable
+--                                   , Generic
+--                                   )
 
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
 type Auto'   = Auto Identity
@@ -153,7 +163,10 @@ type Output' = Output Identity
 
 -- | Force the serializing components of an 'Auto'.
 forceSerial :: Auto m a b -> Auto m a b
-forceSerial a@(Auto l s _) = l `seq` s `seq` a
+forceSerial a = case a of
+                  AutoArb _ l s  -> l `seq` s `seq` a
+                  AutoArbM _ l s -> l `seq` s `seq` a
+                  _              -> a
 
 -- $serializing
 -- The 'Auto' type offers an interface in which you can serialize
@@ -244,7 +257,12 @@ decodeAuto = runGet . loadAuto
 -- "Data.Serialize") on taking a ByteString and "restoring" the originally
 -- saved 'Auto', in the originally saved state.
 loadAuto :: Auto m a b -> Get (Auto m a b)
-loadAuto = _loadAuto
+loadAuto a = case a of
+               AutoStateS f _  -> AutoStateS f <$> get
+               AutoStateMS f _ -> AutoStateMS f <$> get
+               AutoArb _ l _   -> l
+               AutoArbM _ l _  -> l
+               _               -> return a
 -- loadAuto = return
 {-# INLINE loadAuto #-}
 
@@ -253,7 +271,12 @@ loadAuto = _loadAuto
 -- encoding.  It can later be reloaded and "resumed" by
 -- 'loadAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
-saveAuto = _saveAuto
+saveAuto a = case a of
+               AutoStateS _ s  -> put s
+               AutoStateMS _ s -> put s
+               AutoArb _ _ s   -> s
+               AutoArbM _ _ s  -> s
+               _               -> return ()
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
@@ -277,10 +300,32 @@ saveAuto = _saveAuto
 --
 -- If you think of an @'Auto' m a b@ as a "stateful function" of type @a ->
 -- m b@, then 'stepAuto' lets you "run" it.
-stepAuto :: Auto m a b        -- ^ the 'Auto' to step
+stepAuto :: Monad m
+         => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
          -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
-stepAuto = _stepAuto
+-- stepAuto = _autoStep
+stepAuto a x = case a of
+                 AutoFunc f     -> return (Output (f x) a)
+                 AutoFuncM f    -> do
+                     y <- f x
+                     return (Output y a)
+                 AutoState f s  -> let (y, s') = f x s
+                                       a'      = AutoState f s'
+                                   in  return (Output y a')
+                 AutoStateM f s -> do
+                     (y, s') <- f x s
+                     let a' = AutoStateM f s'
+                     return (Output y a')
+                 AutoStateS f s -> let (y, s') = f x s
+                                       a'      = AutoStateS f s'
+                                   in  return (Output y a')
+                 AutoStateMS f s -> do
+                     (y, s') <- f x s
+                     let a' = AutoStateMS f s'
+                     return (Output y a')
+                 AutoArb f  _ _ -> return (f x)
+                 AutoArbM f _ _ -> f x
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
@@ -322,7 +367,7 @@ mkAuto :: Monad m
        -> Put                   -- ^ saving 'Put'
        -> (a -> Output m a b)   -- ^ step function
        -> Auto m a b
-mkAuto l s f = mkAutoM l s (return . f)
+mkAuto l s f = AutoArb f l s
 {-# INLINE mkAuto #-}
 
 -- | Construct an 'Auto' by explicitly giving its serializiation,
@@ -336,7 +381,8 @@ mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
         -> Put                      -- ^ saving 'Put'
         -> (a -> m (Output m a b))  -- ^ (monadic) step function
         -> Auto m a b
-mkAutoM = Auto
+-- mkAutoM = Auto
+mkAutoM l s f = AutoArbM f l s
 {-# INLINE mkAutoM #-}
 
 -- | Like 'mkAuto', but without any way of meaningful serializing or
@@ -351,8 +397,9 @@ mkAutoM = Auto
 mkAuto_ :: Monad m
         => (a -> Output m a b)      -- ^ step function
         -> Auto m a b
-mkAuto_ f = mkAutoM_ (return . f)
-{-# INLINE mkAuto_ #-}
+mkAuto_ f = a
+  where
+    a = mkAuto (pure a) (return ()) f
 
 -- | Like 'mkAutoM', but without any way of meaningful serializing or
 -- deserializing.
@@ -368,7 +415,7 @@ mkAutoM_ :: Monad m
          -> Auto m a b
 mkAutoM_ f = a
   where
-    a = mkAutoM (pure a) (put ()) f
+    a = mkAutoM (pure a) (return ()) f
 
 -- | Construct the 'Auto' that always yields the given value, ignoring its
 -- input.
