@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LAnGUAGE TupleSections #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 -- |
@@ -45,6 +46,8 @@ module Control.Auto.Core (
   , Output(..)
   , Output'
   , onOutput
+  , onOutRes
+  , onOutAuto
   -- * Auto constructors
   -- ** Lifting values and functions
   , mkConst
@@ -109,10 +112,32 @@ instance Monad m => Applicative (Output m a) where
 --
 -- If you want to map an @a -> b@ onto both fields (the result and the
 -- result of the next Auto), you can use the 'Functor' instance instead.
-onOutput :: (b -> b')
-         -> (Auto m a b -> Auto m a' b')
-         -> Output m a b -> Output m a' b'
+onOutput :: (b -> b')                     -- ^ function over the result
+         -> (Auto m a b -> Auto m a' b')  -- ^ function over the resulting 'Auto'
+         -> Output m a b
+         -> Output m a' b'
 onOutput fx fa (Output x a) = Output (fx x) (fa a)
+{-# INLINE onOutput #-}
+
+-- | Map a function onto the 'outAuto of an 'Output', the resulting
+-- 'Auto'.  See note on 'onOutRes'.
+onOutAuto :: (Auto m a b -> Auto m a' b)  -- ^ function over the resulting 'Auto'
+          -> Output m a b
+          -> Output m a' b
+onOutAuto fa (Output x a) = Output x (fa a)
+{-# INLINE onOutAuto #-}
+
+-- | Map a function onto the 'outRes' of an 'Output': the "result" of
+-- a 'stepAuto'.
+--
+-- Useful for completely pointless and probably obfuscating point free code :D
+onOutRes :: (b -> b)      -- ^ function over the result
+         -> Output m a b
+         -> Output m a b
+onOutRes fx (Output x a) = Output (fx x) a
+{-# INLINE onOutRes #-}
+
+
 
 -- | The Auto type.  Basically represents a function containing its own
 -- localized internal state.  If you have an @'Auto' a b@, you can "step"
@@ -140,12 +165,10 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 -- it.
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
-                | forall s. AutoState_   !(a -> s -> (b, s))   !s
-                | forall s. AutoStateM_  !(a -> s -> m (b, s)) !s
-                | forall s. Serialize s => AutoState  !(a -> s -> (b, s))   !s
-                | forall s. Serialize s => AutoStateM !(a -> s -> m (b, s)) !s
-                |           AutoArb     !(a -> Output m a b)     (Get (Auto m a b)) Put
-                |           AutoArbM    !(a -> m (Output m a b)) (Get (Auto m a b)) Put
+                | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
+                | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
+                |           AutoArb     (Get (Auto m a b)) Put !(a -> Output m a b)
+                |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
 
 -- data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
 --                        , _saveAuto :: Put
@@ -258,10 +281,10 @@ decodeAuto = runGet . loadAuto
 -- saved 'Auto', in the originally saved state.
 loadAuto :: Auto m a b -> Get (Auto m a b)
 loadAuto a = case a of
-               AutoState f _  -> AutoState f <$> get
-               AutoStateM f _ -> AutoStateM f <$> get
-               AutoArb _ l _  -> l
-               AutoArbM _ l _ -> l
+               AutoState gp f _  -> (\s' -> AutoState gp f s') <$> fst gp
+               AutoStateM gp f _ -> (\s' -> AutoStateM gp f s') <$> fst gp
+               AutoArb g _ _  -> g
+               AutoArbM g _ _ -> g
                _              -> return a
 -- loadAuto = return
 {-# INLINE loadAuto #-}
@@ -272,11 +295,11 @@ loadAuto a = case a of
 -- 'loadAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto a = case a of
-               AutoState _ s  -> put s
-               AutoStateM _ s -> put s
-               AutoArb _ _ s  -> s
-               AutoArbM _ _ s -> s
-               _              -> return ()
+               AutoState (_, p) _ s  -> p s
+               AutoStateM (_, p) _ s -> p s
+               AutoArb _ p _      -> p
+               AutoArbM _ p _     -> p
+               _                  -> return ()
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
@@ -310,22 +333,15 @@ stepAuto a x = case a of
                  AutoFuncM f    -> do
                      y <- f x
                      return (Output y a)
-                 AutoState f s  -> let (y, s') = f x s
-                                       a'      = AutoState f s'
-                                   in  return (Output y a')
-                 AutoStateM f s -> do
+                 AutoState gp f s  -> let (y, s') = f x s
+                                          a'      = AutoState gp f s'
+                                      in  return (Output y a')
+                 AutoStateM gp f s -> do
                      (y, s') <- f x s
-                     let a' = AutoStateM f s'
+                     let a' = AutoStateM gp f s'
                      return (Output y a')
-                 AutoState_ f s -> let (y, s') = f x s
-                                       a'      = AutoState_ f s'
-                                   in  return (Output y a')
-                 AutoStateM_ f s -> do
-                     (y, s') <- f x s
-                     let a' = AutoStateM_ f s'
-                     return (Output y a')
-                 AutoArb f  _ _  -> return (f x)
-                 AutoArbM f _ _  -> f x
+                 AutoArb _ _ f  -> return (f x)
+                 AutoArbM _ _ f  -> f x
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
@@ -366,7 +382,7 @@ mkAuto :: Get (Auto m a b)      -- ^ resuming/loading 'Get'
        -> Put                   -- ^ saving 'Put'
        -> (a -> Output m a b)   -- ^ step function
        -> Auto m a b
-mkAuto l s f = AutoArb f l s
+mkAuto = AutoArb
 {-# INLINE mkAuto #-}
 
 -- | Construct an 'Auto' by explicitly giving its serializiation,
@@ -380,7 +396,7 @@ mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
         -> Put                      -- ^ saving 'Put'
         -> (a -> m (Output m a b))  -- ^ (monadic) step function
         -> Auto m a b
-mkAutoM l s f = AutoArbM f l s
+mkAutoM = AutoArbM
 {-# INLINE mkAutoM #-}
 
 -- | Like 'mkAuto', but without any way of meaningful serializing or
@@ -475,7 +491,7 @@ mkState :: Serialize s
         => (a -> s -> (b, s))       -- ^ state transformer
         -> s                        -- ^ intial state
         -> Auto m a b
-mkState = AutoState
+mkState = AutoState (get, put)
 {-# INLINE mkState #-}
 
 -- | Construct an 'Auto' from a "monadic" state transformer: @a -> s ->
@@ -499,7 +515,7 @@ mkStateM :: Serialize s
          => (a -> s -> m (b, s))      -- ^ (monadic) state transformer
          -> s                         -- ^ initial state
          -> Auto m a b
-mkStateM = AutoStateM
+mkStateM = AutoStateM (get, put)
 {-# INLINE mkStateM #-}
 
 -- | A version of 'mkState', where the internal state isn't serialized.  It
@@ -509,7 +525,7 @@ mkStateM = AutoStateM
 mkState_ :: (a -> s -> (b, s))    -- ^ state transformer
          -> s                     -- ^ initial state
          -> Auto m a b
-mkState_ = AutoState_
+mkState_ f s0 = AutoState (return s0, \_ -> return ()) f s0
 {-# INLINE mkState_ #-}
 
 -- | A version of 'mkStateM', where the internal state isn't serialized.
@@ -519,7 +535,7 @@ mkState_ = AutoState_
 mkStateM_ :: (a -> s -> m (b, s))   -- ^ (monadic) state transformer
           -> s                      -- ^ initial state
           -> Auto m a b
-mkStateM_ = AutoStateM_
+mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 {-# INLINE mkStateM_ #-}
 
 -- | Construct an 'Auto' from a "folding" function: @b -> a -> b@ yields an
@@ -600,12 +616,143 @@ instance Monad m => Applicative (Auto m a) where
 
 instance Monad m => Category (Auto m) where
     id      = mkFunc id
-    ag . af = mkAutoM ((.) <$> loadAuto ag <*> loadAuto af)
-                      (saveAuto ag *> saveAuto af)
-                      $ \x -> do
-                          Output y af' <- stepAuto af x
-                          Output z ag' <- stepAuto ag y
-                          return (Output z (ag' . af'))
+    ag . af = case (ag, af) of
+                (AutoFunc g, AutoFunc f )        -> AutoFunc   (g . f)
+                (AutoFunc g, AutoFuncM f)        -> AutoFuncM  (return . g <=< f)
+                (AutoFunc g, AutoState gpf f s) -> AutoState gpf (\x s' -> first g (f x s')) s
+                (AutoFunc g, AutoStateM gpf f s) -> AutoStateM gpf (\x s' -> liftM (first g) (f x s')) s
+                (AutoFunc g, AutoArb l s f)      -> AutoArb (fmap (ag .) l) s $ \x -> fmap g (f x)
+                (AutoFunc g, AutoArbM l s f)     -> AutoArbM (fmap (ag .) l) s $ \x -> liftM (fmap g) (f x)
+                (AutoFuncM g, AutoFunc f)        -> AutoFuncM (g <=< return . f)
+                (AutoFuncM g, AutoFuncM f)       -> AutoFuncM (g <=< f)
+                (AutoFuncM g, AutoState gpf f s)  -> AutoStateM gpf (\x s' -> firstM g (f x s')) s
+                (AutoFuncM g, AutoStateM gpf f s)   -> AutoStateM gpf (\x s' -> firstM g =<< f x s') s
+                (AutoFuncM g, AutoArb l s f)     -> AutoArbM (fmap (ag .) l) s $ \x -> do
+                                                        let Output y af' = f x
+                                                        y' <- g y
+                                                        return (Output y' (ag . af'))
+                (AutoFuncM g, AutoArbM l s f)    -> AutoArbM (fmap (ag .) l) s $ \x -> do
+                                                        Output y af' <- f x
+                                                        y' <- g y
+                                                        return (Output y' (ag . af'))
+                (AutoState gpg g sg, AutoFunc f)     -> AutoState gpg (g . f) sg
+                (AutoState gpg g sg, AutoFuncM f)    -> AutoStateM gpg (\x sg' -> liftM (flip g sg') (f x)) sg
+                (AutoState gpg g sg, AutoState gpf f sf) -> AutoState (mergeStSt gpg gpf)
+                                                                      (\x (sg', sf') -> let (y, sf'') = f x sf'
+                                                                                            (z, sg'') = g y sg'
+                                                                                        in  (z, (sg'', sf''))
+                                                                      ) (sg, sf)
+                (AutoState gpg g sg, AutoStateM gpf f sf) -> AutoStateM (mergeStSt gpg gpf)
+                                                                        (\x (sg', sf') -> do
+                                                                             (y, sf'') <- f x sf'
+                                                                             let (z, sg'') = g y sg'
+                                                                             return (z, (sg'', sf''))
+                                                                        ) (sg, sf)
+                (AutoState gpg@(gg,pg) g sg, AutoArb l s f) -> AutoArb (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
+                                                                   (pg sg *> s)
+                                                                   $ \x -> let Output y af' = f x
+                                                                               (z, sg')     = g y sg
+                                                                               ag'          = AutoState gpg g sg'
+                                                                           in  Output z (ag' . af')
+                (AutoState gpg@(gg,pg) g sg, AutoArbM l s f) -> AutoArbM (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
+                                                                     (pg sg *> s)
+                                                                     $ \x -> do
+                                                                         Output y af' <- f x
+                                                                         let (z, sg') = g y sg
+                                                                             ag'      = AutoState gpg g sg'
+                                                                         return (Output z (ag' . af'))
+                (AutoStateM gpg g sg, AutoFunc f)       -> AutoStateM gpg (g <=< return . f) sg
+                (AutoStateM gpg g sg, AutoFuncM f)      -> AutoStateM gpg (\x sg' -> flip g sg' =<< f x) sg
+                (AutoStateM gpg g sg, AutoState gpf f sf) -> AutoStateM (mergeStSt gpg gpf)
+                                                                        (\x (sg', sf') -> do
+                                                                             let (y, sf'') = f x sf'
+                                                                             (z, sg'') <- g y sg'
+                                                                             return (z, (sg'', sf''))
+                                                                        ) (sg, sf)
+                (AutoStateM gpg g sg, AutoStateM gpf f sf) -> AutoStateM (mergeStSt gpg gpf)
+                                                                         (\x (sg', sf') -> do
+                                                                              (y, sf'') <- f x sf'
+                                                                              (z, sg'') <- g y sg'
+                                                                              return (z, (sg'', sf''))
+                                                                         ) (sg, sf)
+                (AutoStateM gpg@(gg,pg) g sg, AutoArb l s f) -> AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
+                                                                         (pg sg *> s)
+                                                                         $ \x -> do
+                                                                               let Output y af' = f x
+                                                                               (z, sg') <- g y sg
+                                                                               let ag' = AutoStateM gpg g sg'
+                                                                               return (Output z (ag' . af'))
+                (AutoStateM gpg@(gg,pg) g sg, AutoArbM l s f) -> AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
+                                                                          (pg sg *> s)
+                                                                          $ \x -> do
+                                                                                Output y af' <- f x
+                                                                                (z, sg') <- g y sg
+                                                                                let ag' = AutoStateM gpg g sg'
+                                                                                return (Output z (ag' . af'))
+                (AutoArb l s g, AutoFunc f) -> AutoArb (fmap (. af) l) s (onOutAuto (. af) . g . f)
+                (AutoArb l s g, AutoFuncM f) -> AutoArbM (fmap (. af) l) s (return . (onOutAuto (. af)) . g <=< f)
+                (AutoArb l s g, AutoState gpf@(gf,pf) f sf) -> AutoArb (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
+                                                                       (s *> pf sf)
+                                                                       $ \x -> let (y, sf')     = f x sf
+                                                                                   af'          = AutoState gpf f sf'
+                                                                                   Output z ag' = g y
+                                                                               in  Output z (ag' . af')
+                (AutoArb l s g, AutoStateM gpf@(gf,pf) f sf) -> AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
+                                                                         (s *> pf sf)
+                                                                         $ \x -> do
+                                                                               (y, sf') <- f x sf
+                                                                               let af'          = AutoStateM gpf f sf'
+                                                                                   Output z ag' = g y
+                                                                               return (Output z (ag' . af'))
+                (AutoArb lg sg g, AutoArb lf sf f) -> AutoArb (liftA2 (.) lg lf)
+                                                              (sg *> sf)
+                                                              $ \x -> let Output y af' = f x
+                                                                          Output z ag' = g y
+                                                                      in  Output z (ag' . af')
+                (AutoArb lg sg g, AutoArbM lf sf f) -> AutoArbM (liftA2 (.) lg lf)
+                                                                (sg *> sf)
+                                                                $ \x -> do
+                                                                    Output y af' <- f x
+                                                                    let Output z ag' = g y
+                                                                    return (Output z (ag' . af'))
+                (AutoArbM l s g, AutoFunc f) -> AutoArbM (fmap (. af) l) s (liftM (onOutAuto (. af)) . g . f)
+                (AutoArbM l s g, AutoFuncM f) ->AutoArbM (fmap (. af) l) s (liftM (onOutAuto (. af)) . g <=< f)
+                (AutoArbM l s g, AutoState gpf@(gf,pf) f sf) -> AutoArbM (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
+                                                                         (s *> pf sf)
+                                                                         $ \x -> do
+                                                                             let (y, sf') = f x sf
+                                                                                 af'      = AutoState gpf f sf'
+                                                                             Output z ag' <- g y
+                                                                             return (Output z (ag' . af'))
+                (AutoArbM l s g, AutoStateM gpf@(gf,pf) f sf) -> AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
+                                                                          (s *> pf sf)
+                                                                          $ \x -> do
+                                                                              (y, sf') <- f x sf
+                                                                              let af' = AutoStateM gpf f sf'
+                                                                              Output z ag' <- g y
+                                                                              return (Output z (ag' . af'))
+                (AutoArbM lg sg g, AutoArb lf sf f) -> AutoArbM (liftA2 (.) lg lf)
+                                                                (sg *> sf)
+                                                                $ \x -> do
+                                                                    let Output y af' = f x
+                                                                    Output z ag' <- g y
+                                                                    return (Output z (ag' . af'))
+                (AutoArbM lg sg g, AutoArbM lf sf f) -> AutoArbM (liftA2 (.) lg lf)
+                                                                 (sg *> sf)
+                                                                 $ \x -> do
+                                                                     Output y af' <- f x
+                                                                     Output z ag' <- g y
+                                                                     return (Output z (ag' . af'))
+      where
+        mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
+        firstM f (x, y) = liftM (, y) (f x)
+
+    -- ag . af = mkAutoM ((.) <$> loadAuto ag <*> loadAuto af)
+    --                   (saveAuto ag *> saveAuto af)
+    --                   $ \x -> do
+    --                       Output y af' <- stepAuto af x
+    --                       Output z ag' <- stepAuto ag y
+    --                       return (Output z (ag' . af'))
 
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
