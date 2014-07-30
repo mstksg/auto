@@ -33,6 +33,7 @@ module Control.Auto.Core (
   -- ** Type
     Auto
   , Auto'
+  , toArb
   -- ** Running
   , stepAuto
   , stepAuto'
@@ -184,6 +185,27 @@ type Auto'   = Auto Identity
 -- 'Identity'.
 type Output' = Output Identity
 
+-- | Re-structure 'Auto' internals to use the 'Arb' ("arbitrary")
+-- constructors, as recursion-based mealy machines.  Almost always a bad
+-- idea in every conceivable situation.  Why is it even here?
+toArb :: Monad m => Auto m a b -> Auto m a b
+toArb a = a_
+  where
+    a_ = case a of
+           AutoFunc f              -> AutoArb (pure a) (return ()) $ \x -> Output (f x) a_
+           AutoFuncM f             -> AutoArbM (pure a) (return ()) $ \x -> liftM (`Output` a) (f x)
+           AutoState gp@(g,p) f s  -> AutoArb (toArb . AutoState gp f <$> g)
+                                              (p s)
+                                              $ \x -> let (y, s') = f x s
+                                                      in  Output y . toArb . AutoState gp f $ s'
+           AutoStateM gp@(g,p) f s -> AutoArbM (toArb . AutoStateM gp f <$> g)
+                                               (p s)
+                                               $ \x -> do
+                                                   (y, s') <- f x s
+                                                   return . Output y . toArb . AutoStateM gp f $ s'
+           _                       -> a
+
+
 -- | Force the serializing components of an 'Auto'.
 forceSerial :: Auto m a b -> Auto m a b
 forceSerial a = case a of
@@ -297,9 +319,9 @@ saveAuto :: Auto m a b -> Put
 saveAuto a = case a of
                AutoState (_, p) _ s  -> p s
                AutoStateM (_, p) _ s -> p s
-               AutoArb _ p _      -> p
-               AutoArbM _ p _     -> p
-               _                  -> return ()
+               AutoArb _ p _         -> p
+               AutoArbM _ p _        -> p
+               _                     -> return ()
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
@@ -799,10 +821,10 @@ instance Monad m => Profunctor (Auto m) where
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
     first a = case a of
-                AutoFunc f          -> AutoFunc (first f)
-                AutoFuncM f         -> AutoFuncM (firstM f)
-                AutoState gpg fa s  -> AutoState gpg (\(x, z) -> first (,z) . fa x) s
-                AutoStateM gpg fa s -> AutoStateM gpg (\(x, z) -> liftM (first (,z)) . fa x) s
+                AutoFunc f         -> AutoFunc (first f)
+                AutoFuncM f        -> AutoFuncM (firstM f)
+                AutoState gp fa s  -> AutoState gp (\(x, z) -> first (,z) . fa x) s
+                AutoStateM gp fa s -> AutoStateM gp (\(x, z) -> liftM (first (,z)) . fa x) s
                 AutoArb l s f  -> AutoArb (first <$> l)
                                           s
                                           $ \(x, z) -> let Output y a' = f x
@@ -816,18 +838,28 @@ instance Monad m => Arrow (Auto m) where
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
       where
-        a = mkAutoM (left <$> loadAuto a0)
-                    (saveAuto a0)
-                    $ \x -> case x of
-                        Left y  -> liftM (onOutput Left left) (stepAuto a0 y)
-                        Right y -> return (Output (Right y) a)
+        a = case a0 of
+              AutoFunc f -> AutoFunc (left f)
+              AutoFuncM f -> AutoFuncM (\x -> case x of Left y -> liftM Left (f y); Right y -> return (Right y))
+              AutoState gp f s -> AutoState gp (\x s' -> case x of Left y -> first Left (f y s'); Right y -> (Right y, s')) s
+              AutoStateM gp f s -> AutoStateM gp (\x s' -> case x of Left y -> liftM (first Left) (f y s'); Right y -> return (Right y, s')) s
+              AutoArb l s f -> AutoArb (left <$> l)
+                                       s
+                                       $ \x -> case x of
+                                                 Left y  -> onOutput Left left (f y)
+                                                 Right y -> Output (Right y) a
+              AutoArbM l s f -> AutoArbM (left <$> l)
+                                         s
+                                         $ \x -> case x of
+                                                   Left y  -> liftM (onOutput Left left) (f y)
+                                                   Right y -> return (Output (Right y) a)
 
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
                 AutoFunc f -> AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
                 AutoFuncM f -> AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
-                AutoState gpg f s -> AutoState gpg (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
-                AutoStateM gpg f s -> AutoStateM gpg (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
+                AutoState gp f s -> AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
+                AutoStateM gp f s -> AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
                 AutoArb l s f -> AutoArb (loop <$> l)
                                          s
                                          $ \x -> onOutput fst loop
@@ -838,25 +870,6 @@ instance MonadFix m => ArrowLoop (Auto m) where
                                            $ \x -> liftM (onOutput fst loop)
                                                  . mfix
                                                  $ \ ~(Output (_, d) _) -> f (x, d)
-                -- _ -> AutoArbM (loop <$> loadAuto a)
-                --               (saveAuto a)
-                --               $ \x -> liftM (onOutput fst loop)
-                --                     . mfix
-                --                     $ \ ~(Output (_, d) _) -> stepAuto a (x, d)
-
-    -- loop a = mkAutoM (loop <$> loadAuto a)
-    --                  (saveAuto a)
-    --                  $ \x -> liftM (onOutput fst loop)
-    --                          . mfix
-    --                          $ \ ~(Output (_, d) _) -> stepAuto a (x, d)
-
-toArb :: Monad m => Auto m a b -> Auto m a b
-toArb a = a_
-  where
-    a_ = case a of
-           AutoFunc f -> AutoArb (pure a) (return ()) $ \x -> Output (f x) a_
-           AutoFuncM f -> AutoArbM (pure a) (return ()) $ \x -> liftM (`Output` a) (f x)
-           -- AutoStateS gpg 
 
 -- Utility instances
 
