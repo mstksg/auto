@@ -745,7 +745,6 @@ instance Monad m => Category (Auto m) where
                                                                      return (Output z (ag' . af'))
       where
         mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
-        firstM f (x, y) = liftM (, y) (f x)
 
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
@@ -799,11 +798,20 @@ instance Monad m => Profunctor (Auto m) where
 
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
-    first a = mkAutoM (first <$> loadAuto a)
-                      (saveAuto a)
-                      $ \(x, y) -> do
-                          Output x' a' <- stepAuto a x
-                          return (Output (x', y) (first a'))
+    first a = case a of
+                AutoFunc f -> AutoFunc (first f)
+                AutoFuncM f -> AutoFuncM (firstM f)
+                AutoState gpg fa s -> AutoState gpg (\(x, z) -> first (,z) . fa x) s
+                AutoStateM gpg fa s -> AutoStateM gpg (\(x, z) -> liftM (first (,z)) . fa x) s
+                AutoArb l s f -> AutoArb (first <$> l)
+                                         s
+                                         $ \(x, z) -> let Output y a' = f x
+                                                      in  Output (y, z) (first a')
+                AutoArbM l s f -> AutoArbM (first <$> l)
+                                           s
+                                           $ \(x, z) -> do
+                                               Output y a' <- f x
+                                               return (Output (y, z) (first a'))
 
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
@@ -908,3 +916,7 @@ instance (Monad m, Floating b) => Floating (Output m a b) where
     atanh   = liftA atanh
     acosh   = liftA acosh
 
+-- Utility function
+firstM :: Monad m => (a -> m b) -> (a, c) -> m (b, c)
+firstM f (x, y) = liftM (, y) (f x)
+{-# INLINE firstM #-}
