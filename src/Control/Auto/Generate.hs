@@ -52,7 +52,6 @@ module Control.Auto.Generate (
   , unfoldM_
   ) where
 
-import Control.Applicative
 import Control.Auto.Core
 import Control.Category
 import Data.Serialize
@@ -190,42 +189,26 @@ iterator :: (Serialize b, Monad m)
          => (b -> b)        -- ^ iterating function
          -> b               -- ^ starting value and initial output
          -> Auto m a b
-iterator f = a_
-  where
-    a_ y0 = mkAuto (a_ <$> get)
-                   (put y0)
-                   $ \_ -> Output y0 (a_ (f y0))
+iterator f = mkAccum (\x _ -> f x)
 
 -- | Like 'iterator', but with a monadic function.
 iteratorM :: (Serialize b, Monad m)
           => (b -> m b)     -- ^ (monadic) iterating function
           -> b              -- ^ starting value and initial output
           -> Auto m a b
-iteratorM f = a_
-  where
-    a_ y0 = mkAutoM (a_ <$> get)
-                    (put y0)
-                    $ \_ -> do
-                        y1 <- f y0
-                        return (Output y0 (a_ y1))
+iteratorM f = mkAccumM (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iterator'.
 iterator_ :: Monad m
           => (b -> b)        -- ^ iterating function
           -> b               -- ^ starting value and initial output
           -> Auto m a b
-iterator_ f = a_
-  where
-    a_ y0 = mkAuto_ $ \_ -> Output y0 (a_ (f y0))
+iterator_ f = mkAccum_ (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iteratorM'.
 iteratorM_ :: Monad m
            => (b -> m b)     -- ^ (monadic) iterating function
            -> b              -- ^ starting value and initial output
            -> Auto m a b
-iteratorM_ f = a_
-  where
-    a_ y0 = mkAutoM_ $ \_ -> do
-                         y1 <- f y0
-                         return (Output y0 (a_ y1))
+iteratorM_ f = mkAccumM_ (\x _ -> f x)
 

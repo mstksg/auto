@@ -31,7 +31,7 @@ cache_ :: Monad m => m b -> Auto m a b
 cache_ m = snd <$> iteratorM_ (_cacheF m) (False, undefined)
 
 _cacheF :: Monad m => m b -> (Bool, b) -> m (Bool, b)
-_cacheF m (False, _) = liftM (True,) m
+_cacheF m (False, _) = liftM  (True,) m
 _cacheF _ (True , x) = return (True, x)
 
 execOnce :: Monad m => m b -> Auto m a ()

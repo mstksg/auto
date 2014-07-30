@@ -140,10 +140,10 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 -- it.
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
-                | forall s. AutoState   !(a -> s -> (b, s))   !s
-                | forall s. AutoStateM  !(a -> s -> m (b, s)) !s
-                | forall s. Serialize s => AutoStateS  !(a -> s -> (b, s))   !s
-                | forall s. Serialize s => AutoStateMS !(a -> s -> m (b, s)) !s
+                | forall s. AutoState_   !(a -> s -> (b, s))   !s
+                | forall s. AutoStateM_  !(a -> s -> m (b, s)) !s
+                | forall s. Serialize s => AutoState  !(a -> s -> (b, s))   !s
+                | forall s. Serialize s => AutoStateM !(a -> s -> m (b, s)) !s
                 |           AutoArb     !(a -> Output m a b)     (Get (Auto m a b)) Put
                 |           AutoArbM    !(a -> m (Output m a b)) (Get (Auto m a b)) Put
 
@@ -258,11 +258,11 @@ decodeAuto = runGet . loadAuto
 -- saved 'Auto', in the originally saved state.
 loadAuto :: Auto m a b -> Get (Auto m a b)
 loadAuto a = case a of
-               AutoStateS f _  -> AutoStateS f <$> get
-               AutoStateMS f _ -> AutoStateMS f <$> get
-               AutoArb _ l _   -> l
-               AutoArbM _ l _  -> l
-               _               -> return a
+               AutoState f _  -> AutoState f <$> get
+               AutoStateM f _ -> AutoStateM f <$> get
+               AutoArb _ l _  -> l
+               AutoArbM _ l _ -> l
+               _              -> return a
 -- loadAuto = return
 {-# INLINE loadAuto #-}
 
@@ -272,11 +272,11 @@ loadAuto a = case a of
 -- 'loadAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto a = case a of
-               AutoStateS _ s  -> put s
-               AutoStateMS _ s -> put s
-               AutoArb _ _ s   -> s
-               AutoArbM _ _ s  -> s
-               _               -> return ()
+               AutoState _ s  -> put s
+               AutoStateM _ s -> put s
+               AutoArb _ _ s  -> s
+               AutoArbM _ _ s -> s
+               _              -> return ()
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
@@ -317,15 +317,15 @@ stepAuto a x = case a of
                      (y, s') <- f x s
                      let a' = AutoStateM f s'
                      return (Output y a')
-                 AutoStateS f s -> let (y, s') = f x s
-                                       a'      = AutoStateS f s'
+                 AutoState_ f s -> let (y, s') = f x s
+                                       a'      = AutoState_ f s'
                                    in  return (Output y a')
-                 AutoStateMS f s -> do
+                 AutoStateM_ f s -> do
                      (y, s') <- f x s
-                     let a' = AutoStateMS f s'
+                     let a' = AutoStateM_ f s'
                      return (Output y a')
-                 AutoArb f  _ _ -> return (f x)
-                 AutoArbM f _ _ -> f x
+                 AutoArb f  _ _  -> return (f x)
+                 AutoArbM f _ _  -> f x
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
@@ -339,13 +339,13 @@ stepAuto' a = runIdentity . stepAuto a
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
 -- 'Auto's.
-forcer :: (NFData a, Monad m) => Auto m a a
+forcer :: NFData a => Auto m a a
 forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be evaluated to Weak Head Normal Form, with 'seq',
 -- when composed with other 'Auto's.
-seqer :: Monad m => Auto m a a
+seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 
 -- doesn't work like you'd think lol.
@@ -362,8 +362,7 @@ seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
-mkAuto :: Monad m
-       => Get (Auto m a b)      -- ^ resuming/loading 'Get'
+mkAuto :: Get (Auto m a b)      -- ^ resuming/loading 'Get'
        -> Put                   -- ^ saving 'Put'
        -> (a -> Output m a b)   -- ^ step function
        -> Auto m a b
@@ -381,7 +380,6 @@ mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
         -> Put                      -- ^ saving 'Put'
         -> (a -> m (Output m a b))  -- ^ (monadic) step function
         -> Auto m a b
--- mkAutoM = Auto
 mkAutoM l s f = AutoArbM f l s
 {-# INLINE mkAutoM #-}
 
@@ -394,8 +392,7 @@ mkAutoM l s f = AutoArbM f l s
 -- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be lost.
-mkAuto_ :: Monad m
-        => (a -> Output m a b)      -- ^ step function
+mkAuto_ :: (a -> Output m a b)      -- ^ step function
         -> Auto m a b
 mkAuto_ f = a
   where
@@ -410,8 +407,7 @@ mkAuto_ f = a
 -- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be reset.
-mkAutoM_ :: Monad m
-         => (a -> m (Output m a b))   -- ^ (monadic) step function
+mkAutoM_ :: (a -> m (Output m a b))   -- ^ (monadic) step function
          -> Auto m a b
 mkAutoM_ f = a
   where
@@ -423,52 +419,40 @@ mkAutoM_ f = a
 -- Provided for API constency, but you should really be using 'pure' from
 -- the 'Applicative' instance, from "Control.Applicative", which does the
 -- same thing.
-mkConst :: Monad m
-        => b            -- ^ constant value to be outputted
+mkConst :: b            -- ^ constant value to be outputted
         -> Auto m a b
-mkConst y = a
-  where
-    a = mkAuto_ $ \_ -> Output y a
+mkConst = AutoFunc . const
+{-# INLINE mkConst #-}
 
 -- | Construct the 'Auto' that always "executes" the given monadic value at
 -- every step, yielding the result and ignoring its input.
 --
 -- Provided for API consistency, but you shold really be using 'effect'
 -- from "Control.Auto.Effects", which does the same thing.
-mkConstM :: Monad m
-         => m b           -- ^ monadic action to be executed at every step
+mkConstM :: m b           -- ^ monadic action to be executed at every step
          -> Auto m a b
-mkConstM my = a
-  where
-    a = mkAutoM_ $ \_ -> do
-                     y <- my
-                     return (Output y a)
+mkConstM = AutoFuncM . const
+{-# INLINE mkConstM #-}
 
 -- | Construct a stateless 'Auto' that simply applies the given (pure)
 -- function to every input, yielding the output.
 --
 -- This is rarely needed; you should be using 'arr' from the 'Arrow'
 -- instance, from "Control.Arrow".
-mkFunc :: Monad m
-       => (a -> b)        -- ^ pure function
+mkFunc :: (a -> b)        -- ^ pure function
        -> Auto m a b
-mkFunc f = a
-  where
-    a = mkAuto_ $ \x -> Output (f x) a
+mkFunc = AutoFunc
+{-# INLINE mkFunc #-}
 
 -- | Construct a statelss 'Auto' that simply applies and executes the givne
 -- (monadic) function to every input, yielding the output.
 --
 -- It's recommended that you use 'arrM' from "Control.Auto.Effects".  This
 -- is only really provided for consistency.
-mkFuncM :: Monad m
-        => (a -> m b)     -- ^ "monadic" function
+mkFuncM :: (a -> m b)     -- ^ "monadic" function
         -> Auto m a b
-mkFuncM f = a
-  where
-    a = mkAutoM_ $ \x -> do
-                      y <- f x
-                      return (Output y a)
+mkFuncM = AutoFuncM
+{-# INLINE mkFuncM #-}
 
 -- | Construct an 'Auto' from a state transformer: an @a -> s -> (b, s)@
 -- gives you an @'Auto' m a b@, for any 'Monad' @m@.  At every step, it
@@ -487,16 +471,12 @@ mkFuncM f = a
 -- If your state @s@ does not have a 'Serialize' instance, then you should
 -- either write a meaningful one, or throw away serializability and use
 -- 'mkState_'.
-mkState :: (Serialize s, Monad m)
+mkState :: Serialize s
         => (a -> s -> (b, s))       -- ^ state transformer
         -> s                        -- ^ intial state
         -> Auto m a b
-mkState f = a_
-  where
-    a_ s0 = mkAuto (a_ <$> get)
-                   (put s0)
-                   $ \x -> let (y, s1) = f x s0
-                           in  Output y (a_ s1)
+mkState = AutoState
+{-# INLINE mkState #-}
 
 -- | Construct an 'Auto' from a "monadic" state transformer: @a -> s ->
 -- m (b, s)@ gives you an @'Auto' m a b@.  At every step, it takes in the
@@ -515,44 +495,32 @@ mkState f = a_
 -- If your state @s@ does not have a 'Serialize' instance, then you should
 -- either write a meaningful one, or throw away serializability and use
 -- 'mkStateM_'.
-mkStateM :: (Serialize s, Monad m)
+mkStateM :: Serialize s
          => (a -> s -> m (b, s))      -- ^ (monadic) state transformer
          -> s                         -- ^ initial state
          -> Auto m a b
-mkStateM f = a_
-  where
-    a_ s0 = mkAutoM (a_ <$> get)
-                    (put s0)
-                    $ \x -> do
-                        (y, s1) <- f x s0
-                        return (Output y (mkStateM f s1))
+mkStateM = AutoStateM
+{-# INLINE mkStateM #-}
 
 -- | A version of 'mkState', where the internal state isn't serialized.  It
 -- can be "saved" and "loaded", but the state is lost in the process.
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
-mkState_ :: Monad m
-         => (a -> s -> (b, s))    -- ^ state transformer
+mkState_ :: (a -> s -> (b, s))    -- ^ state transformer
          -> s                     -- ^ initial state
          -> Auto m a b
-mkState_ f = a_
-  where
-    a_ s0 = mkAuto_ $ \x -> let (y, s1) = f x s0
-                        in  Output y (a_ s1)
+mkState_ = AutoState_
+{-# INLINE mkState_ #-}
 
 -- | A version of 'mkStateM', where the internal state isn't serialized.
 -- It can be "saved" and "loaded", but the state is lost in the process.
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
-mkStateM_ :: Monad m
-          => (a -> s -> m (b, s))   -- ^ (monadic) state transformer
+mkStateM_ :: (a -> s -> m (b, s))   -- ^ (monadic) state transformer
           -> s                      -- ^ initial state
           -> Auto m a b
-mkStateM_ f = a_
-  where
-    a_ s0 = mkAutoM_ $ \x -> do
-                         (y, s1) <- f x s0
-                         return (Output y (a_ s1))
+mkStateM_ = AutoStateM_
+{-# INLINE mkStateM_ #-}
 
 -- | Construct an 'Auto' from a "folding" function: @b -> a -> b@ yields an
 -- @'Auto' m a b@.  Basically acts like a 'foldl' or a 'scanl'.  There is
@@ -572,16 +540,12 @@ mkStateM_ f = a_
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
 -- use 'mkAccum_'.
-mkAccum :: (Serialize b, Monad m)
+mkAccum :: Serialize b
         => (b -> a -> b)      -- ^ accumulating function
         -> b                  -- ^ initial accumulator
         -> Auto m a b
-mkAccum f = a_
-  where
-    a_ y0 = mkAuto (a_ <$> get)
-                   (put y0)
-                   $ \x -> let y1 = f y0 x
-                           in  Output y1 (a_ y1)
+mkAccum f = mkState (\x s -> let y = f s x in (y, y))
+{-# INLINE mkAccum #-}
 
 -- | Construct an 'Auto' from a "monadic" "folding" function: @b -> a ->
 -- m b@ yields an @'Auto' m a b@.  Basically acts like a 'foldM' or 'scanM'
@@ -596,13 +560,8 @@ mkAccumM :: (Serialize b, Monad m)
          => (b -> a -> m b)       -- ^ (monadic) accumulating function
          -> b                     -- ^ initial accumulator
          -> Auto m a b
-mkAccumM f = a_
-  where
-    a_ y0 = mkAutoM (a_ <$> get)
-                    (put y0)
-                    $ \x -> do
-                        y1 <- f y0 x
-                        return (Output y1 (a_ y1))
+mkAccumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
+{-# INLINE mkAccumM #-}
 
 -- | A version of 'mkAccum_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
@@ -614,10 +573,8 @@ mkAccum_ :: Monad m
          => (b -> a -> b)   -- ^ accumulating function
          -> b               -- ^ intial accumulator
          -> Auto m a b
-mkAccum_ f = a_
-  where
-    a_ y0 = mkAuto_ $ \x -> let y1 = f y0 x
-                            in  Output y1 (a_ y1)
+mkAccum_ f = mkState_ (\x s -> let y = f s x in (y, y))
+{-# INLINE mkAccum_ #-}
 
 -- | A version of 'mkAccumM_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
@@ -629,11 +586,8 @@ mkAccumM_ :: Monad m
           => (b -> a -> m b)    -- ^ (monadic) accumulating function
           -> b                  -- ^ initial accumulator
           -> Auto m a b
-mkAccumM_ f = a_
-  where
-    a_ y0 = mkAutoM_ $ \x -> do
-                         y1 <- f y0 x
-                         return (Output y1 (a_ y1))
+mkAccumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
+{-# INLINE mkAccumM_ #-}
 
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
