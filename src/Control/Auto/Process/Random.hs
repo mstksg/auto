@@ -35,17 +35,8 @@ stdRands :: Monad m
          => (StdGen -> (b, StdGen)) -- ^ Random function
          -> StdGen                  -- ^ Initial generator
          -> Auto m a b
-stdRands r = go
-  where
-    go g = mkAuto (go . read <$> get)
-                  (put (show g))
-                  $ \_ -> let (y, g') = r g
-                          in  Output y (go g')
--- stdRands r g = mkState f (show g)
---   where
---     f _ sg = let (res, g') = r (read sg)
---              in  (res, show g')
--- {-# INLINE stdRands #-}
+stdRands r = mkState' (read <$> get) (put . show) (\_ g -> r g)
+{-# INLINE stdRands #-}
 
 rands :: (Serialize g, RandomGen g, Monad m)
       => (g -> (b, g)) -- ^ Random function
@@ -65,13 +56,8 @@ stdRandsM :: Monad m
           => (StdGen -> m (b, StdGen))
           -> StdGen
           -> Auto m a b
-stdRandsM r = go
-  where
-    go g = mkAutoM (go . read <$> get)
-                   (put (show g))
-                   $ \_ -> do
-                       (y, g') <- r g
-                       return (Output y (go g'))
+stdRandsM r = mkStateM' (read <$> get) (put . show) (\_ g -> r g)
+{-# INLINE stdRandsM #-}
 
 randsM :: (Serialize g, RandomGen g, Monad m)
        => (g -> m (b, g))

@@ -33,6 +33,7 @@ module Control.Auto.Core (
   -- ** Type
     Auto
   , Auto'
+  , autoConstr
   , toArb
   -- ** Running
   , stepAuto
@@ -58,6 +59,8 @@ module Control.Auto.Core (
   -- ** from State transformers
   , mkState
   , mkStateM
+  , mkState'
+  , mkStateM'
   , mkState_
   , mkStateM_
   -- ** from Accumulators
@@ -166,8 +169,8 @@ onOutRes fx (Output x a) = Output (fx x) a
 -- it.
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
-                | forall s. AutoState   !(Get s, s -> Put) !(a -> s -> (b, s))   !s
-                | forall s. AutoStateM  !(Get s, s -> Put) !(a -> s -> m (b, s)) !s
+                | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
+                | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
                 |           AutoArb     (Get (Auto m a b)) Put !(a -> Output m a b)
                 |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
 
@@ -192,18 +195,30 @@ toArb :: Monad m => Auto m a b -> Auto m a b
 toArb a = a_
   where
     a_ = case a of
-           AutoFunc f              -> AutoArb (pure a) (return ()) $ \x -> Output (f x) a_
-           AutoFuncM f             -> AutoArbM (pure a) (return ()) $ \x -> liftM (`Output` a) (f x)
-           AutoState gp@(g,p) f s  -> AutoArb (toArb . AutoState gp f <$> g)
-                                              (p s)
-                                              $ \x -> let (y, s') = f x s
-                                                      in  Output y . toArb . AutoState gp f $ s'
-           AutoStateM gp@(g,p) f s -> AutoArbM (toArb . AutoStateM gp f <$> g)
-                                               (p s)
-                                               $ \x -> do
-                                                   (y, s') <- f x s
-                                                   return . Output y . toArb . AutoStateM gp f $ s'
+           AutoFunc f              -> AutoArb (pure a_) (return ()) $ \x -> Output (f x) a_
+           AutoFuncM f             -> AutoArbM (pure a_) (return ()) $ \x -> liftM (`Output` a_) (f x)
+           AutoState gp@(g,p) f s  -> let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
+                                                           (p s')
+                                                           $ \x -> let (y, s'') = f x s'
+                                                                   in  Output y (a__ s'')
+                                      in  a__ s
+           AutoStateM gp@(g,p) f s -> let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
+                                                            (p s)
+                                                            $ \x -> do
+                                                                (y, s'') <- f x s'
+                                                                return (Output y (a__ s''))
+                                      in  a__ s
            _                       -> a
+
+
+autoConstr :: Auto m a b -> String
+autoConstr (AutoFunc _)       = "AutoFunc"
+autoConstr (AutoFuncM _)      = "AutoFuncM"
+autoConstr (AutoState _ _ _)  = "AutoState"
+autoConstr (AutoStateM _ _ _) = "AutoStateM"
+autoConstr (AutoArb _ _ _)    = "AutoArb"
+autoConstr (AutoArbM _ _ _)   = "AutoArbM"
+
 
 
 -- | Force the serializing components of an 'Auto'.
@@ -349,7 +364,6 @@ stepAuto :: Monad m
          => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
          -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
--- stepAuto = _autoStep
 stepAuto a x = case a of
                  AutoFunc f     -> return (Output (f x) a)
                  AutoFuncM f    -> do
@@ -364,6 +378,22 @@ stepAuto a x = case a of
                      return (Output y a')
                  AutoArb _ _ f  -> return (f x)
                  AutoArbM _ _ f  -> f x
+-- stepAuto a x = case a of
+--                  AutoFunc f     -> let y = f x in y `seq` return (Output y a)
+--                  AutoFuncM f    -> do
+--                      y <- f x
+--                      y `seq` return (Output y a)
+--                  AutoState gp f s  -> let (y, s') = f x s
+--                                           a'      = AutoState gp f s'
+--                                       in  y `seq` return (Output y a')
+--                  AutoStateM gp f s -> do
+--                      (y, s') <- f x s
+--                      let a' = AutoStateM gp f s'
+--                      y `seq` return (Output y a')
+--                  AutoArb _ _ f   -> let o@(Output y _) = f x in y `seq` return o
+--                  AutoArbM _ _ f  -> do
+--                      o@(Output y _) <- f x
+--                      y `seq` return o
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
@@ -379,12 +409,14 @@ stepAuto' a = runIdentity . stepAuto a
 -- 'Auto's.
 forcer :: NFData a => Auto m a a
 forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
+{-# INLINE forcer #-}
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be evaluated to Weak Head Normal Form, with 'seq',
 -- when composed with other 'Auto's.
 seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
+{-# INLINE seqer #-}
 
 -- doesn't work like you'd think lol.
 -- serialForcer :: Monad m => Auto m a a
@@ -432,9 +464,8 @@ mkAutoM = AutoArbM
 -- be lost.
 mkAuto_ :: (a -> Output m a b)      -- ^ step function
         -> Auto m a b
-mkAuto_ f = a
-  where
-    a = mkAuto (pure a) (return ()) f
+mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
+{-# INLINE mkAuto_ #-}
 
 -- | Like 'mkAutoM', but without any way of meaningful serializing or
 -- deserializing.
@@ -447,9 +478,8 @@ mkAuto_ f = a
 -- be reset.
 mkAutoM_ :: (a -> m (Output m a b))   -- ^ (monadic) step function
          -> Auto m a b
-mkAutoM_ f = a
-  where
-    a = mkAutoM (pure a) (return ()) f
+mkAutoM_ f = mkAutoM (pure (mkAutoM_ f)) (return ()) f
+{-# INLINE mkAutoM_ #-}
 
 -- | Construct the 'Auto' that always yields the given value, ignoring its
 -- input.
@@ -507,7 +537,8 @@ mkFuncM = AutoFuncM
 -- have to deal with it explicitly.
 --
 -- If your state @s@ does not have a 'Serialize' instance, then you should
--- either write a meaningful one, or throw away serializability and use
+-- either write a meaningful one, provide the serialization methods
+-- manually with 'mkState'', or throw away serializability and use
 -- 'mkState_'.
 mkState :: Serialize s
         => (a -> s -> (b, s))       -- ^ state transformer
@@ -531,7 +562,8 @@ mkState = AutoState (get, put)
 -- have to deal with it explicitly.
 --
 -- If your state @s@ does not have a 'Serialize' instance, then you should
--- either write a meaningful one, or throw away serializability and use
+-- either write a meaningful one, provide the serialization methods
+-- manually with 'mkStateM'', or throw away serializability and use
 -- 'mkStateM_'.
 mkStateM :: Serialize s
          => (a -> s -> m (b, s))      -- ^ (monadic) state transformer
@@ -539,6 +571,28 @@ mkStateM :: Serialize s
          -> Auto m a b
 mkStateM = AutoStateM (get, put)
 {-# INLINE mkStateM #-}
+
+-- | A version of 'mkState', where the internal state doesn't have
+-- a 'Serialize' instance, so you provide your own instructions for getting
+-- and putting the state.
+mkState' :: Get s                     -- ^ 'Get'; strategy for reading and deserializing the state
+         -> (s -> Put)                -- ^ 'Put'; strategy for serializing given state
+         -> (a -> s -> (b, s))        -- ^ state transformer
+         -> s                         -- ^ intial state
+         -> Auto m a b
+mkState' = curry AutoState
+{-# INLINE mkState' #-}
+
+-- | A version of 'mkStateM', where the internal state doesn't have
+-- a 'Serialize' instance, so you provide your own instructions for getting
+-- and putting the state.
+mkStateM' :: Get s                      -- ^ 'Get'; strategy for reading and deserializing the state
+          -> (s -> Put)                 -- ^ 'Put'; strategy for serializing given state
+          -> (a -> s -> m (b, s))       -- ^ (monadic) state transformer
+          -> s                          -- ^ initial state
+          -> Auto m a b
+mkStateM' = curry AutoStateM
+{-# INLINE mkStateM' #-}
 
 -- | A version of 'mkState', where the internal state isn't serialized.  It
 -- can be "saved" and "loaded", but the state is lost in the process.
@@ -629,12 +683,15 @@ mkAccumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
+    {-# INLINE fmap #-}
 
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
+    {-# INLINE pure #-}
     af <*> ax = mkAutoM ((<*>) <$> loadAuto af <*> loadAuto ax)
                         (saveAuto af *> saveAuto ax)
                         $ \x -> liftM2 (<*>) (stepAuto af x) (stepAuto ax x)
+    {-# INLINE (<*>) #-}
 
 instance Monad m => Category (Auto m) where
     id      = mkFunc id
@@ -767,6 +824,7 @@ instance Monad m => Category (Auto m) where
                                                                      return (Output z (ag' . af'))
       where
         mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
+    {-# INLINE (.) #-}
 
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
@@ -785,6 +843,7 @@ instance Monad m => Profunctor (Auto m) where
                                              $ \x -> do
                                                  Output y a' <- fa (f x)
                                                  return (Output y (a_ a'))
+    {-# INLINE lmap #-}
     rmap g = a_
       where
         a_ a = case a of
@@ -801,6 +860,7 @@ instance Monad m => Profunctor (Auto m) where
                                              $ \x -> do
                                                  Output y a' <- fa x
                                                  return (Output (g y) (a_ a'))
+    {-# INLINE rmap #-}
     dimap f g = a_
       where
         a_ a = case a of
@@ -817,6 +877,7 @@ instance Monad m => Profunctor (Auto m) where
                                              $ \x -> do
                                                  Output y a' <- fa (f x)
                                                  return (Output (g y) (a_ a'))
+    {-# INLINE dimap #-}
 
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
@@ -853,6 +914,7 @@ instance Monad m => ArrowChoice (Auto m) where
                                          $ \x -> case x of
                                                    Left y  -> liftM (onOutput Left left) (f y)
                                                    Right y -> return (Output (Right y) a)
+    {-# INLINE left #-}
 
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
@@ -870,6 +932,7 @@ instance MonadFix m => ArrowLoop (Auto m) where
                                            $ \x -> liftM (onOutput fst loop)
                                                  . mfix
                                                  $ \ ~(Output (_, d) _) -> f (x, d)
+    {-# INLINE loop #-}
 
 -- Utility instances
 

@@ -44,8 +44,8 @@ module Control.Auto.Time (
   , delay_
   -- ** Stretching
   , stretch
-  , stretch_
   , stretchB
+  , stretch_
   -- ** Accelerating
   , accelerate
   , accelerateWith
@@ -65,26 +65,51 @@ import Control.Monad
 import Control.Monad.Loops
 import Data.Serialize
 
+-- | A simple 'Auto' that outputs the step count.  First output is 0.
 count :: (Serialize b, Num b, Monad m) => Auto m a b
 count = iterator (+1) 0
 
+-- | A non-resuming/non-serializing version of 'count'.
 count_ :: (Num b, Monad m) => Auto m a b
 count_ = iterator_ (+1) 0
 
+-- | An 'Auto' that returns the last value received by it.  Given an
+-- "initial value" to output first.
+--
+-- This is a __very dangerous__ 'Auto', because its usage and its very
+-- existence opens the door to breaking denotative/declarative style and
+-- devolving into imperative style coding.
+--
+-- From my experience, the only meaningful usage of this is for recursive
+-- bindings.  If you ever are laying out recursive bindings in
+-- a high-level/denotative way and run into a @<<loop>>@, then you can use
+-- 'lastVal' to explicitly state what depends on something in the past,
+-- instead of right now (introducing a loop).
 lastVal :: (Serialize a, Monad m) => a -> Auto m a a
 lastVal = mkState $ \x s -> (s, x)
 
+-- | The non-resuming/non-serializing version of 'lastVal'.
 lastVal_ :: Monad m => a -> Auto m a a
 lastVal_ = mkState_ $ \x s -> (s, x)
 
+-- | An alias for 'lastVal'; used in contexts where "delay" is more
+-- a meaningful description than "last value".
 delay :: (Serialize a, Monad m) => a -> Auto m a a
 delay = lastVal
 
+-- | The non-resuming/non-serializing version of 'delay'.
 delay_ :: Monad m => a -> Auto m a a
 delay_ = lastVal_
 
-
-
+-- | "stretch" an 'Auto' out, slowing time.  @'stretch' n a@ will take one
+-- input, repeat the same output @n@ times (ignoring input), and then take
+-- another.
+--
+-- >>> let a       = stretch 2 (mkAccum (+) 0)
+-- >>> let (ys, _) = overList' a [1,8,5,4,3,7,2,0]
+-- >>> ys
+--    [1,1,6,6,9,9,11,11]
+-- -- [1,_,5,_,3,_,2 ,_ ] <-- the inputs
 stretch :: (Serialize b, Monad m) => Int -> Auto m a b -> Auto m a b
 stretch n = go (1, undefined)
   where
@@ -99,6 +124,7 @@ stretch n = go (1, undefined)
                                    return (Output y  (go (i - 1, y ) a ))
 
 
+-- | The non-resuming/non-serializing version of 'stretch'.
 stretch_ :: Monad m => Int -> Auto m a b -> Auto m a b
 stretch_ n = go (1, undefined)
   where
@@ -110,6 +136,17 @@ stretch_ n = go (1, undefined)
                                   else
                                     return $ Output y (go (i - 1, y ) a )
 
+-- | Like 'stretch', but instead of holding the the "stretched" outputs,
+-- emits a 'Blip' every time the stretched 'Auto' "progresses" (every @n@
+-- ticks)
+--
+-- See 'stretch' for more information.
+--
+-- >>> let a = stretchB 2 (mkAccum (+) 0)
+-- >>> let (ys, _) = overList' a [1,8,5,4,3,7,2,0]
+-- >>> ys
+-- [Blip 1, NoBlip, Blip 6, NoBlip, Blip 9, NoBlip, Blip 11, NoBlip]
+--
 stretchB :: Monad m => Int -> Auto m a b -> Auto m a (Blip b)
 stretchB (max 1 -> n) = go 1
   where
@@ -123,6 +160,18 @@ stretchB (max 1 -> n) = go 1
                            else
                              return $ Output NoBlip   (go (i - 1) a )
 
+-- | Turns an 'Auto' into an "accelerated" 'Auto'; an 'Auto' that takes
+-- an @a@ and returns a @b@ turns into an 'Auto' that takes a /list/ of @a@
+-- and returns a /list/ of @b@ from running that 'Auto' on all of those @a@
+-- in order.
+--
+-- >>> let a = accelOverList (mkAccum (+) 0)
+-- >>> let Output ys1 a' = stepAuto' a [3,9,2]
+-- >>> ys1
+-- [3, 12, 14]
+-- >>> let Output ys2 _  = stepAuto' a' [8,5]
+-- >>> ys2
+-- [22, 30]
 accelOverList :: Monad m => Auto m a b -> Auto m [a] [b]
 accelOverList = go
   where
@@ -141,24 +190,48 @@ accelOverList = go
       Output y a' <- stepAuto a x
       return $ Just ((y, a'), (a', xs))
 
-
+-- | @'accelerate' n a@ turns an 'Auto' @a@ into an "accelerated" 'Auto',
+-- where every input is fed into the 'Auto' @n@ times.  All of the results
+-- are collected in the output.
+--
+-- The same input is fed repeatedly @n@ times.
+--
+-- >>> let a = accelerate 3 (mkAccum (+) 0)
+-- >>> let Output ys1 a' = stepAuto a 5
+-- >>> ys1
+-- [5,10,15]
+-- >>> let Output ys2 _  = stepAuto a' (-8)
+-- >>> ys2
+-- [7,-1,-9]
 accelerate :: Monad m => Int -> Auto m a b -> Auto m a [b]
 accelerate n = go
   where
-    n'       = max n 1
+    n'    = max n 1
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     $ \x0 -> do
                         yas <- flip (iterateM n') (undefined, a0)
                                $ \(_, a) -> do
                                    Output x a' <- stepAuto a x0
-                                   return (x, a')
+                                   x `seq` return (x, a')
                         let ys = map fst yas
                             a' = snd (last yas)
                         return (Output ys (go a'))
+{-# INLINE accelerate #-}
 
+-- | @'accelerateWith' xd n a@ behaves like @'accelerate' n a@, except
+-- instead of /repeating/ the same intput @n@ times, that input is fed
+-- once; the rest of the @n@ times, @a@ is fed @xd@, the "default" @x@.
+--
+-- >>> let a = accelerateWith (-1) 3 (mkAccum (+) 0)
+-- >>> let Output ys1 a' = stepAuto a 5
+-- >>> ys1
+-- [5,4,3]    -- fed 5, then (-1) twice
+-- >>> let Output ys2 _  = stepAuto a' 14
+-- >>> ys2
+-- [17,16,15] -- fed 14, then (-1) twice
 accelerateWith :: Monad m => a -> Int -> Auto m a b -> Auto m a [b]
-accelerateWith dx n | n <= 1    = fmap (:[])
+accelerateWith xd n | n <= 1    = fmap (:[])
                     | otherwise = go
   where
     n'    = n - 1
@@ -168,7 +241,7 @@ accelerateWith dx n | n <= 1    = fmap (:[])
                         Output y0 a1  <- stepAuto a0 x0
                         yas <- flip (iterateM n') (undefined, a1)
                                $ \(_, a) -> do
-                                   Output x a' <- stepAuto a dx
+                                   Output x a' <- stepAuto a xd
                                    return (x, a')
                         let ys = y0 : map fst yas
                             a' = snd (last yas)
@@ -235,9 +308,6 @@ fastForwardEither x0 = fmap (second reverse) . go
         Right y -> return (Output (y, zs) (go a1))
 
 
-
--- skip :: forall m a b. Monad m => Auto m (Maybe a) b -> Auto m a b
--- skip = undefined
 
 iterateM :: Monad m => Int -> (a -> m a) -> a -> m [a]
 iterateM n f = go (max n 0)
