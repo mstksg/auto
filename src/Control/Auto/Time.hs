@@ -39,8 +39,8 @@ module Control.Auto.Time (
   -- * Manipulating time
   -- ** Delaying
   , lastVal
-  , lastVal_
   , delay
+  , lastVal_
   , delay_
   -- ** Stretching
   , stretch
@@ -51,6 +51,7 @@ module Control.Auto.Time (
   , accelerateWith
   , accelOverList
   -- ** Skipping
+  -- $skippers
   , skipTo
   , fastForward
   , fastForwardEither
@@ -85,21 +86,31 @@ count_ = iterator_ (+1) 0
 -- a high-level/denotative way and run into a @<<loop>>@, then you can use
 -- 'lastVal' to explicitly state what depends on something in the past,
 -- instead of right now (introducing a loop).
-lastVal :: (Serialize a, Monad m) => a -> Auto m a a
+lastVal :: Serialize a
+        => a              -- ^ initial value
+        -> Auto m a a
 lastVal = mkState $ \x s -> (s, x)
+{-# INLINE lastVal #-}
 
 -- | The non-resuming/non-serializing version of 'lastVal'.
-lastVal_ :: Monad m => a -> Auto m a a
+lastVal_ :: a             -- ^ initial value
+         -> Auto m a a
 lastVal_ = mkState_ $ \x s -> (s, x)
+{-# INLINE lastVal_ #-}
 
 -- | An alias for 'lastVal'; used in contexts where "delay" is more
 -- a meaningful description than "last value".
-delay :: (Serialize a, Monad m) => a -> Auto m a a
+delay :: Serialize a
+      => a                -- ^ initial value
+      -> Auto m a a
 delay = lastVal
+{-# INLINE delay #-}
 
 -- | The non-resuming/non-serializing version of 'delay'.
-delay_ :: Monad m => a -> Auto m a a
+delay_ :: a               -- ^ initial value
+       -> Auto m a a
 delay_ = lastVal_
+{-# INLINE delay_ #-}
 
 -- | "stretch" an 'Auto' out, slowing time.  @'stretch' n a@ will take one
 -- input, repeat the same output @n@ times (ignoring input), and then take
@@ -110,7 +121,10 @@ delay_ = lastVal_
 -- >>> ys
 --    [1,1,6,6,9,9,11,11]
 -- -- [1,_,5,_,3,_,2 ,_ ] <-- the inputs
-stretch :: (Serialize b, Monad m) => Int -> Auto m a b -> Auto m a b
+stretch :: (Serialize b, Monad m)
+        => Int              -- ^ stretching factor
+        -> Auto m a b       -- ^ 'Auto' to stretch
+        -> Auto m a b
 stretch n = go (1, undefined)
   where
     go (i, y) a = mkAutoM (go <$> get <*> loadAuto a)
@@ -125,7 +139,10 @@ stretch n = go (1, undefined)
 
 
 -- | The non-resuming/non-serializing version of 'stretch'.
-stretch_ :: Monad m => Int -> Auto m a b -> Auto m a b
+stretch_ :: Monad m
+         => Int               -- ^ stretching factor
+         -> Auto m a b        -- ^ 'Auto' to stretch
+         -> Auto m a b
 stretch_ n = go (1, undefined)
   where
     go (i, y) a = mkAutoM_ $ \x ->
@@ -147,7 +164,10 @@ stretch_ n = go (1, undefined)
 -- >>> ys
 -- [Blip 1, NoBlip, Blip 6, NoBlip, Blip 9, NoBlip, Blip 11, NoBlip]
 --
-stretchB :: Monad m => Int -> Auto m a b -> Auto m a (Blip b)
+stretchB :: Monad m
+         => Int                 -- ^ stretching factor
+         -> Auto m a b          -- ^ 'Auto' to stretch
+         -> Auto m a (Blip b)
 stretchB (max 1 -> n) = go 1
   where
     go i a = mkAutoM (go <$> get <*> loadAuto a)
@@ -172,7 +192,9 @@ stretchB (max 1 -> n) = go 1
 -- >>> let Output ys2 _  = stepAuto' a' [8,5]
 -- >>> ys2
 -- [22, 30]
-accelOverList :: Monad m => Auto m a b -> Auto m [a] [b]
+accelOverList :: Monad m
+              => Auto m a b       -- ^ 'Auto' to accelerate
+              -> Auto m [a] [b]
 accelOverList = go
   where
     go a0 = mkAutoM (go <$> loadAuto a0)
@@ -197,13 +219,16 @@ accelOverList = go
 -- The same input is fed repeatedly @n@ times.
 --
 -- >>> let a = accelerate 3 (mkAccum (+) 0)
--- >>> let Output ys1 a' = stepAuto a 5
+-- >>> let Output ys1 a' = stepAuto' a 5
 -- >>> ys1
 -- [5,10,15]
--- >>> let Output ys2 _  = stepAuto a' (-8)
+-- >>> let Output ys2 _  = stepAuto' a' (-8)
 -- >>> ys2
 -- [7,-1,-9]
-accelerate :: Monad m => Int -> Auto m a b -> Auto m a [b]
+accelerate :: Monad m
+           => Int             -- ^ acceleration factor
+           -> Auto m a b      -- ^ 'Auto' to accelerate
+           -> Auto m a [b]
 accelerate n = go
   where
     n'    = max n 1
@@ -224,13 +249,17 @@ accelerate n = go
 -- once; the rest of the @n@ times, @a@ is fed @xd@, the "default" @x@.
 --
 -- >>> let a = accelerateWith (-1) 3 (mkAccum (+) 0)
--- >>> let Output ys1 a' = stepAuto a 5
+-- >>> let Output ys1 a' = stepAuto' a 5
 -- >>> ys1
 -- [5,4,3]    -- fed 5, then (-1) twice
--- >>> let Output ys2 _  = stepAuto a' 14
+-- >>> let Output ys2 _  = stepAuto' a' 14
 -- >>> ys2
 -- [17,16,15] -- fed 14, then (-1) twice
-accelerateWith :: Monad m => a -> Int -> Auto m a b -> Auto m a [b]
+accelerateWith :: Monad m
+               => a               -- ^ default input value, during acceleration periods
+               -> Int             -- ^ acceleration factor
+               -> Auto m a b      -- ^ 'Auto' to accelerate
+               -> Auto m a [b]
 accelerateWith xd n | n <= 1    = fmap (:[])
                     | otherwise = go
   where
@@ -247,20 +276,51 @@ accelerateWith xd n | n <= 1    = fmap (:[])
                             a' = snd (last yas)
                         return (Output ys (go a'))
 
-skipTo :: forall m a b c. Monad m => a -> Auto m a (b, Blip c) -> Auto m a ([b], c)
+-- $skippers
+--
+-- TODO: say something
+
+-- | Takes an 'Auto' that produces @(b, 'Blip' c)@, and turns it into an
+-- 'Auto' that produces @([b], c)@.
+--
+-- Basically, the new 'Auto' "squishes together" the periods of output
+-- between each 'Blip' occurrnece.  All outputs between each 'Blip'
+-- occurrence are accumulated and returned in the resulting @[b]@.
+--
+-- It "does this" in the same manner as 'accelerateWith' and 'fastForward':
+-- first feed the input, then step repeatedly with the default input value.
+--
+-- >>> let a :: Auto' Int (Int, Blip String)
+--         a = proc i -> do
+--                 sums <- mkAccum (+) 0 -< i
+--                 blp  <- inB 3         -< i     -- Blip at every 3 ticks.
+--                 id    -< (sums, show <$> blp)
+-- >>> let skipA :: Auto' Int ([Int], String)
+--         skipA = skipTo (-1) a
+-- >>> let Output res1 skipA' = stepAuto' skipA 8
+-- >>> res1
+-- ([8,7,6], "6")     -- fed 8 first, then (-1) repeatedly
+-- >>> let Output res2 _      = stepAuto' skipA' 5
+-- >>> res2
+-- ([11,10,9], "9")   -- fed 5 first, then (-1) repeatedly
+--
+skipTo :: Monad m
+       => a                       -- ^ default input value, during skipping periods
+       -> Auto m a (b, Blip c)    -- ^ 'Auto' to skip over, until each 'Blip'.
+       -> Auto m a ([b], c)
 skipTo x0 = go
   where
-    go :: Auto m a (b, Blip c)
-       -> Auto m a ([b], c)
+    -- go :: Auto m a (b, Blip c)
+    --    -> Auto m a ([b], c)
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     $ \x -> do
                       ((ys, z), a1) <- skipOut a0 x []
                       return (Output (reverse ys, z) (go a1))
-    skipOut :: Auto m a (b, Blip c)
-            -> a
-            -> [b]
-            -> m (([b], c), Auto m a (b, Blip c))
+    -- skipOut :: Auto m a (b, Blip c)
+    --         -> a
+    --         -> [b]
+    --         -> m (([b], c), Auto m a (b, Blip c))
     skipOut a0 x ys = do
       Output (y, bz) a1 <- stepAuto a0 x
       let ys' = y:ys
@@ -268,9 +328,33 @@ skipTo x0 = go
         Blip z -> return ((ys', z), a1)
         NoBlip -> skipOut a1 x0 ys'
 
+-- | Takes an 'Auto' and basically "removes" the periods in which it
+-- returns 'Nothing', by re-running the 'Auto' with the same input until it
+-- outputs a 'Just'.
+--
+-- Basically, it magically turns an @'Auto' m a ('Maybe' b)@ into an
+-- @'Auto' m a b@, by skipping over each 'Nothing'.
+--
+-- It does this in the same manner as 'accelerateWith' and 'skipTo': first
+-- feed in the input, then step repeatedly with the default input value.
+--
+-- >>> let a :: Auto' Int (Maybe Int)
+--         a = proc i -> do
+--                 sums <- mkAccum (+) 0 -< i
+--                 id    -< if (i `mod` 5) == 0
+--                            then Just i
+--                            else Nothing
+-- >>> let ffA :: Auto' Int Int
+--         ffA = fastForward (-1) a
+-- >>> let Output y1 ffA' = stepAuto' ffA 7
+-- >>> y1
+-- 5          -- went from 7 (Nothing), to 6 (Nothing), to 5 (Just 5)
+-- >>> let Output y2 _    = stepAuto' ffA' (-9)
+-- -5         -- went from -4 (Nothing) to -5 (Just (-5))
+--
 fastForward :: forall m a b. Monad m
-            => a                      -- ^ Default input
-            -> Auto m a (Maybe b)
+            => a                      -- ^ default input
+            -> Auto m a (Maybe b)     -- ^ 'Auto' to fastforward (past each 'Nothing')
             -> Auto m a b
 fastForward x0 = go
   where
@@ -286,9 +370,11 @@ fastForward x0 = go
         Nothing -> skipNothings a1 x0
         Just y  -> return (Output y (go a1))
 
+-- | Same behavior as 'fastForward', except accumulates all of the @'Left'
+-- c@ outputs in a list.
 fastForwardEither :: forall m a b c. Monad m
-                  => a
-                  -> Auto m a (Either c b)
+                  => a                        -- ^ default input
+                  -> Auto m a (Either c b)    -- ^ 'Auto' to fastfowrad (past each 'Left')
                   -> Auto m a (b, [c])
 fastForwardEither x0 = fmap (second reverse) . go
   where
@@ -306,7 +392,6 @@ fastForwardEither x0 = fmap (second reverse) . go
       case ey of
         Left z  -> skipNothings a1 (z:zs) x0
         Right y -> return (Output (y, zs) (go a1))
-
 
 
 iterateM :: Monad m => Int -> (a -> m a) -> a -> m [a]

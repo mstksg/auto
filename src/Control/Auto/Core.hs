@@ -94,6 +94,9 @@ import Data.Typeable
 import GHC.Generics
 import Prelude hiding        ((.), id)
 
+-- TODO: provde combinators/ability to map over the result or use the
+-- result of stepAuto, without ruining the internal constructor structure
+
 -- | The output of a 'stepAuto'.  Contains the "result" value of the
 -- stepping ('outRes'), and the "next 'Auto'", 'outAuto'.
 --
