@@ -1,36 +1,41 @@
 module Control.Auto (
-  -- * Types
+  -- * Output
     Output(..)
-  , Auto
-  , Blip
-  -- * Accessors and type manipulators
+  , Output'
   , onOutput
-  , loadAuto
-  , saveAuto
+  -- * Auto
+  , Auto
+  , Auto'
+  -- ** Running
   , stepAuto
+  , stepAuto'
+  -- ** Serializing
+  -- | See the header of the "serializing" section of "Control.Auto.Core"
+  -- for more detail on how these work.
   , encodeAuto
   , decodeAuto
+  -- * Blip
+  , Blip
+  -- ** Strictness
+  , forcer
+  , seqer
   -- * Auto constructors
-  -- ** Lifting values and functions
-  , mkConst
-  , mkConstM
-  , mkFunc
-  , mkFuncM
   -- ** from State transformers
   , mkState
   , mkStateM
   , mkState_
   , mkStateM_
   -- ** from Accumulators
+  -- *** Result-first
   , mkAccum
-  , mkAccumM
   , mkAccum_
+  , mkAccumM
   , mkAccumM_
-  -- ** Arbitrary Autos
-  , mkAuto
-  , mkAutoM
-  , mkAuto_
-  , mkAutoM_
+  -- *** Initial accumulator-first
+  , mkAccumD
+  , mkAccumD_
+  , mkAccumMD
+  , mkAccumMD_
   -- * Re-exports
   , module Control.Category
   , module Control.Applicative
@@ -39,7 +44,7 @@ module Control.Auto (
   ) where
 
 import Control.Applicative
-import Control.Arrow
+import Control.Arrow hiding (loop)
 import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Category

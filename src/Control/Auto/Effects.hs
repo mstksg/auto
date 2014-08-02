@@ -1,18 +1,36 @@
 {-# LANGUAGE TupleSections #-}
 
+-- |
+-- Module      : Control.Auto.Effects
+-- Description : Accessing, executing, and manipulating underyling monadic
+--               effects.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module exports the preferred ways of interacting with the
+-- underlying 'Monad' of the 'Auto' type, including accessing, executing,
+-- and manipulating such effects.
+--
+
+
 module Control.Auto.Effects (
-  -- Running effects
-    effect
-  , effectB
+  -- * Running effects
+  -- ** Continually
+    arrM
+  , effect
   , exec
-  , exec'
+  -- ** On 'Blip's
+  , arrMB
+  , effectB
   , execB
-  , execB'
-  -- One-time effects
+  -- * One-time effects
   , cache
-  , cache_
   , execOnce
-  , arrM
+  , cache_
+  , execOnce_
   ) where
 
 import Control.Applicative
@@ -21,56 +39,106 @@ import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
 import Control.Monad
-import Data.Functor.Identity
 import Data.Serialize
 import Prelude hiding        ((.), id)
 
-cache :: (Serialize b, Monad m) => m b -> Auto m a b
+-- | "Executes" a monadic action once (and only once), and continues to
+-- echo the result forevermore.
+cache :: (Serialize b, Monad m)
+      => m b          -- ^ monadic action to execute and use the result of
+      -> Auto m a b
 cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
 
-cache_ :: Monad m => m b -> Auto m a b
+-- | The non-resumable/non-serializable version of 'cache'.  Every time the
+-- 'Auto' is deserialized/reloaded, it re-executes the action to retrieve
+-- the result again.
+cache_ :: Monad m
+       => m b         -- ^ monadic action to execute and use the result of
+       -> Auto m a b
 cache_ m = snd <$> iteratorM_ (_cacheF m) (False, undefined)
 
 _cacheF :: Monad m => m b -> (Bool, b) -> m (Bool, b)
-_cacheF m (False, _) = liftM (True,) m
+_cacheF m (False, _) = liftM  (True,) m
 _cacheF _ (True , x) = return (True, x)
+{-# INLINE _cacheF #-}
 
-execOnce :: Monad m => m b -> Auto m a ()
-execOnce = cache_ . liftM (const ())
+-- | "Executes" the monadic action once, and outputs '()' forevermore.
+--
+-- TODO: literally fix
+execOnce :: Monad m
+         => m b           -- ^ monadic action to execute; result discared
+         -> Auto m a ()
+execOnce m = pure () . cache_ m
 
-effect :: Monad m => m b -> Auto m a b
+-- | The non-resumable/non-serializable version of 'execOnce'.  Every time
+-- the 'Auto' is deserialized/reloaded, the action is re-executed again.
+execOnce_ :: Monad m
+          => m b          -- ^ monadic action to execute; result discared
+          -> Auto m a ()
+execOnce_ m = pure () . cache_ m
+
+-- | "Executes" the given monadic action at every tick/step of the 'Auto',
+-- outputting the result.  Particularly useful with the 'Reader' 'Monad'.
+effect :: m b           -- ^ monadic action to contually execute.
+       -> Auto m a b
 effect = mkConstM
+{-# INLINE effect #-}
 
-exec :: Monad m => m b -> Auto m a a
+-- | "Executes" the given monadic action at every tick/step of the 'Auto',
+-- but ignores the result.  Basically acts like 'id'.
+exec :: Monad m
+     => m b           -- ^ monadic action to contually execute.
+     -> Auto m a a
 exec m = mkFuncM $ \x -> m >> return x
+{-# INLINE exec #-}
 
-exec' :: Monad m => m b -> Auto m a ()
-exec' = mkConstM . liftM (const ())
+-- -- | Like 'exec', but the 'Auto' just always outputs '()'.
+-- exec' :: Monad m
+--       => m b            -- ^ monadic action to contually execute.
+--       -> Auto m a ()
+-- exec' m = pure () . mkConstM m
 
-arrM :: Monad m => (a -> m b) -> Auto m a b
+-- | Lifts a "monadic function" (Kleisli arrow) into an 'Auto'.  Like
+-- 'arr', but with monadic functions.  Composition works just like the
+-- composition of Kleisli arrows, with '(<=<)'.
+arrM :: (a -> m b)    -- ^ monadic function
+     -> Auto m a b
 arrM = mkFuncM
+{-# INLINE arrM #-}
 
-effectB :: Monad m => m b -> Auto m (Blip a) (Blip b)
+-- | Applies the "monadic function" to the contents of every incoming
+-- 'Blip', and replaces the contents of the 'Blip' with the result of the
+-- function.
+arrMB :: Monad m
+      => (a -> m b)
+      -> Auto m (Blip a) (Blip b)
+arrMB = perBlip . arrM
+{-# INLINE arrMB #-}
+
+-- | Executes a monadic action with every incoming 'Blip', and replaces the
+-- contents of the 'Blip' with the result of the action.
+effectB :: Monad m
+        => m b
+        -> Auto m (Blip a) (Blip b)
 effectB = perBlip . effect
+{-# INLINE effectB #-}
 
-execB :: Monad m => m b -> Auto m (Blip a) (Blip a)
+-- | Executes a monadic action with every incoming 'Blip', and passes back
+-- that same 'Blip' unchanged.
+execB :: Monad m
+      => m b
+      -> Auto m (Blip a) (Blip a)
 execB = perBlip . exec
+{-# INLINE execB #-}
 
-execB' :: Monad m => m b -> Auto m (Blip a) (Blip ())
-execB' = perBlip . exec'
+-- -- | Executes a monadic action with every incoming 'Blip', returning back
+-- -- a unit 'Blip'.
+-- execB' :: Monad m
+--        => m b
+--        -> Auto m (Blip a) (Blip ())
+-- execB' = perBlip . exec'
 
 -- runStateA
 -- runReaderA
 -- runListA
-
--- runListA :: Auto [] a b -> Auto Identity [a] [b]
--- runListA = go . (:[])
---   where
---     go as = mkAutoM (runListA <$> sequence (loadAuto as))
---                     (mapM saveAuto as)
---                     $ \xs -> do
---                       let outputs = concatMap (\a -> stepAuto (a . mkConstM xs) ()) as
---                       return undefined
---                       -- return (Output res (runListA a'))
-
 

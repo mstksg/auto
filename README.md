@@ -71,7 +71,7 @@ and automations, with implicitly derived serialization.
 *   **Implicitly derived serialization**: All components and their
     compositions by construction are automatically "freezable" and
     serializable, and re-loaded and resumed with all internal state restored.
-    it has been called by ertes, it's "save states for free".
+    As it has been called by ertes, it's "save states for free".
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
@@ -146,33 +146,30 @@ benefits of a high-level declarative style over an imperative one :)
 Why not Auto?
 -------------
 
-That being said, there are cases where Auto is either the wrong tool or not
-very helpful.
+That being said, there are cases where **Auto** is either the wrong tool or
+not very helpful.
 
-*   Cases involving inherently continuous time.  Auto is meant for situations
-    where time progresses in discrete ticks --- integers, not reals.  Auto is
-    not suggested even to "simulate" continuous time with discrete sampling.
-    You can do it...but FRP is a much, much better abstraction/system for
-    handling this than Auto is.  See the later section on FRP.
+*   Cases involving inherently continuous time.  **Auto** is meant for
+    situations where time progresses in discrete ticks --- integers, not
+    reals.  Auto is not suggested even to "simulate" continuous time with
+    discrete sampling. You can do it...but FRP is a much, much better
+    abstraction/system for handling this than **Auto** is.  See the later
+    section on FRP.
 
 *   Cases where you really don't have interactions/compositions between
     different stateful components.  If all your program is just one `foldr` or
     `scanl` or `iterate`, and you don't have multiple interacting parts of
-    your state, Auto really can't offer much.  If, however, you have multiple
-    folds or states that you want run together and compose, then this might be
-    useful!
+    your state, **Auto** really can't offer much.  If, however, you have
+    multiple folds or states that you want run together and compose, then this
+    might be useful!
 
-*   Intense IO stuff and resource handling.  Auto is not *pipes* or *conduit*.
-    All IO is done "outside" of the Auto components; Auto can be useful for
-    file processing and stream modification, but only if you separately handle
-    the IO portions.  You can think of Auto as being able to behave like
-    pipes/conduits, but with "only pipes" (no producers or consumers).  Except
-    with much more flexible composition.
+*   Intense IO stuff and resource handling.  **Auto** is not *pipes* or
+    *conduit*. All IO is done "outside" of the **Auto** components; **Auto**
+    can be useful for file processing and stream modification, but only if you
+    separately handle the IO portions.  **Auto** works very well with *pipes*
+    or *conduit*; those libraries are used to "connect" **Auto** to the
+    outside word, and provide a safe interface.
 
-    So, this doesn't mean that Auto isn't useful for intense IO/stream
-    processing --- you just have to handle the actual "IO part" on your own.
-    In fact, Auto and pipes/conduit would probably work pretty well together
-    :)
 
 Relation to FRP
 ---------------
