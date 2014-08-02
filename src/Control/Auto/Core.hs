@@ -58,20 +58,26 @@ module Control.Auto.Core (
   , mkFuncM
   -- ** from State transformers
   , mkState
+  , mkState_
   , mkStateM
+  , mkStateM_
   , mkState'
   , mkStateM'
-  , mkState_
-  , mkStateM_
   -- ** from Accumulators
+  -- *** Result-first
   , mkAccum
-  , mkAccumM
   , mkAccum_
+  , mkAccumM
   , mkAccumM_
+  -- *** Initial accumulator-first
+  , mkAccumD
+  , mkAccumD_
+  , mkAccumMD
+  , mkAccumMD_
   -- ** Arbitrary Autos
   , mkAuto
-  , mkAutoM
   , mkAuto_
+  , mkAutoM
   , mkAutoM_
   -- * Strictness
   , forceSerial
@@ -214,13 +220,16 @@ toArb a = a_
            _                       -> a
 
 
+-- | Returns a string representation of the internal constructor of the
+-- 'Auto'.  Useful for debugging the result of compositions and functions
+-- and seeing how they affect the internal structure of the 'Auto'.
 autoConstr :: Auto m a b -> String
-autoConstr (AutoFunc _)       = "AutoFunc"
-autoConstr (AutoFuncM _)      = "AutoFuncM"
-autoConstr (AutoState _ _ _)  = "AutoState"
-autoConstr (AutoStateM _ _ _) = "AutoStateM"
-autoConstr (AutoArb _ _ _)    = "AutoArb"
-autoConstr (AutoArbM _ _ _)   = "AutoArbM"
+autoConstr (AutoFunc {})   = "AutoFunc"
+autoConstr (AutoFuncM {})  = "AutoFuncM"
+autoConstr (AutoState {})  = "AutoState"
+autoConstr (AutoStateM {}) = "AutoStateM"
+autoConstr (AutoArb {})    = "AutoArb"
+autoConstr (AutoArbM {})   = "AutoArbM"
 
 
 
@@ -420,6 +429,7 @@ forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
 seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 {-# INLINE seqer #-}
+
 
 -- doesn't work like you'd think lol.
 -- serialForcer :: Monad m => Auto m a a
@@ -664,8 +674,7 @@ mkAccumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-mkAccum_ :: Monad m
-         => (b -> a -> b)   -- ^ accumulating function
+mkAccum_ :: (b -> a -> b)   -- ^ accumulating function
          -> b               -- ^ intial accumulator
          -> Auto m a b
 mkAccum_ f = mkState_ (\x s -> let y = f s x in (y, y))
@@ -683,6 +692,40 @@ mkAccumM_ :: Monad m
           -> Auto m a b
 mkAccumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 {-# INLINE mkAccumM_ #-}
+
+-- | A "delayed" version of 'mkAccum', where the first output is actually
+-- the initial state of the accumulator.  Useful in recursive bindings.
+mkAccumD :: Serialize b
+         => (b -> a -> b)      -- ^ accumulating function
+         -> b                  -- ^ initial accumulator
+         -> Auto m a b
+mkAccumD f = mkState (\x s -> (s, f s x))
+{-# INLINE mkAccumD #-}
+
+-- | A "delayed" version of 'mkAccumM', where the first output is actually
+-- the initial state of the accumulator.  Useful in recursive bindings.
+mkAccumMD :: (Serialize b, Monad m)
+          => (b -> a -> m b)       -- ^ (monadic) accumulating function
+          -> b                     -- ^ initial accumulator
+          -> Auto m a b
+mkAccumMD f = mkStateM (\x s -> liftM (s,) (f s x))
+{-# INLINE mkAccumMD #-}
+
+-- | The non-resuming/non-serializing version of 'mkAccumD'.
+mkAccumD_ :: (b -> a -> b)   -- ^ accumulating function
+          -> b               -- ^ intial accumulator
+          -> Auto m a b
+mkAccumD_ f = mkState_ (\x s -> (s, f s x))
+{-# INLINE mkAccumD_ #-}
+
+-- | The non-resuming/non-serializing version of 'mkAccumMD'.
+mkAccumMD_ :: Monad m
+           => (b -> a -> m b)    -- ^ (monadic) accumulating function
+           -> b                  -- ^ initial accumulator
+           -> Auto m a b
+mkAccumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
+{-# INLINE mkAccumMD_ #-}
+
 
 instance Monad m => Functor (Auto m a) where
     fmap = rmap

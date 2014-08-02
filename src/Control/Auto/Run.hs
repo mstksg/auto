@@ -25,6 +25,8 @@ import Control.Monad hiding  (mapM)
 import Data.Functor.Identity
 import Data.Maybe
 import Text.Read
+import Control.Monad.Trans.State
+import Control.Monad.Trans.Reader
 import Control.Arrow
 import Control.Auto.Interval
 import Prelude hiding        (interact, mapM)
@@ -178,3 +180,17 @@ interact = interact' putStrLn
 interactId :: Auto Identity String (Maybe String)
            -> IO (Auto Identity String (Maybe String))
 interactId = interact (return . runIdentity)
+
+runStateA :: Monad m
+          => Auto (StateT s m) a b
+          -> Auto m (a, s) (b, s)
+runStateA = undefined
+
+runReaderA :: Monad m
+           => Auto (ReaderT r m) a b
+           -> Auto m (a, r) b
+runReaderA = undefined
+
+runListA :: Auto [] a b
+         -> Auto m [a] [b]
+runListA = undefined

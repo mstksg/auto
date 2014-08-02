@@ -70,7 +70,7 @@ import Prelude hiding                 ((.), id)
 --   * Loading: O(1) time in the number of times the 'Auto' has been
 --   stepped + O(n) time in the length of the remaining list.
 --
-fromList :: (Serialize b, Monad m)
+fromList :: Serialize b
          => [b]                 -- ^ list to output element-by-element
          -> Auto m a (Maybe b)
 fromList = mkState (const _uncons)
@@ -86,8 +86,7 @@ fromList = mkState (const _uncons)
 --   * Storing: O(1) time and space on the length of the remaining list
 --   * Loading: O(n) time on the number of times the 'Auto' has been
 --   stepped, maxing out at O(n) on the length of the entire input list.
-fromLongList :: Monad m
-             => [b]                 -- ^ list to output element-by-element
+fromLongList :: [b]                 -- ^ list to output element-by-element
              -> Auto m a (Maybe b)
 fromLongList xs = go 0 xs
   where
@@ -108,8 +107,7 @@ fromLongList xs = go 0 xs
                                 []       -> Output Nothing finished
 
 -- | The non-resuming/non-serializing version of 'fromList'.
-fromList_ :: Monad m
-          => [b]                -- ^ list to output element-by-element
+fromList_ :: [b]                -- ^ list to output element-by-element
           -> Auto m a (Maybe b)
 fromList_ = mkState_ (const _uncons)
 
@@ -124,28 +122,27 @@ _uncons (x:xs) = (Just x , xs)
 -- @'Just' (y, acc)@, outputs @y@ and stores @acc@ as the new accumulator.
 --
 -- Given an initial accumulator.
-unfold :: forall m a b c. (Serialize c, Monad m)
+unfold :: Serialize c
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
        -> Auto m a (Maybe b)
 unfold f = mkState (_unfoldF f) . Just
 
 -- | Like 'unfold', but the unfolding function is monadic.
-unfoldM :: forall m a b c. (Serialize c, Monad m)
+unfoldM :: (Serialize c, Monad m)
         => (c -> m (Maybe (b, c)))     -- ^ unfolding function
         -> c                           -- ^ initial accumulator
         -> Auto m a (Maybe b)
 unfoldM f = mkStateM (_unfoldMF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfold'.
-unfold_ :: forall m a b c. Monad m
-        => (c -> Maybe (b, c))     -- ^ unfolding function
+unfold_ :: (c -> Maybe (b, c))     -- ^ unfolding function
         -> c                       -- ^ initial accumulator
         -> Auto m a (Maybe b)
 unfold_ f = mkState_ (_unfoldF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfoldM'.
-unfoldM_ :: forall m a b c. Monad m
+unfoldM_ :: Monad m
          => (c -> m (Maybe (b, c)))     -- ^ unfolding function
          -> c                           -- ^ initial accumulator
          -> Auto m a (Maybe b)
@@ -185,7 +182,7 @@ _unfoldMF f _ (Just x) = do
 -- >>> let (y, _) = stepAutoN' 10 (iterator (*2) 1) ()
 -- >>> y
 -- [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
-iterator :: (Serialize b, Monad m)
+iterator :: Serialize b
          => (b -> b)        -- ^ iterating function
          -> b               -- ^ starting value and initial output
          -> Auto m a b
@@ -199,8 +196,7 @@ iteratorM :: (Serialize b, Monad m)
 iteratorM f = mkAccumM (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iterator'.
-iterator_ :: Monad m
-          => (b -> b)        -- ^ iterating function
+iterator_ :: (b -> b)        -- ^ iterating function
           -> b               -- ^ starting value and initial output
           -> Auto m a b
 iterator_ f = mkAccum_ (\x _ -> f x)

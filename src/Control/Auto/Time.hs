@@ -39,13 +39,17 @@ module Control.Auto.Time (
   -- * Manipulating time
   -- ** Delaying
   , lastVal
-  , delay
   , lastVal_
+  , delay
   , delay_
+  , delayList
+  , delayList_
+  , delayN
+  , delayN_
   -- ** Stretching
   , stretch
-  , stretchB
   , stretch_
+  , stretchB
   -- ** Accelerating
   , accelerate
   , accelerateWith
@@ -58,20 +62,22 @@ module Control.Auto.Time (
   ) where
 
 import Control.Applicative
-import Control.Auto.Blip.Internal
 import Control.Arrow
+import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Auto.Generate
+import Control.Category
 import Control.Monad
 import Control.Monad.Loops
 import Data.Serialize
+import Prelude hiding             ((.), id)
 
 -- | A simple 'Auto' that outputs the step count.  First output is 0.
-count :: (Serialize b, Num b, Monad m) => Auto m a b
+count :: (Serialize b, Num b) => Auto m a b
 count = iterator (+1) 0
 
 -- | A non-resuming/non-serializing version of 'count'.
-count_ :: (Num b, Monad m) => Auto m a b
+count_ :: Num b => Auto m a b
 count_ = iterator_ (+1) 0
 
 -- | An 'Auto' that returns the last value received by it.  Given an
@@ -111,6 +117,43 @@ delay_ :: a               -- ^ initial value
        -> Auto m a a
 delay_ = lastVal_
 {-# INLINE delay_ #-}
+
+-- | Like 'delay', except has as many "initial values" as the input list.
+-- Outputs every item in the input list in order before returning the first
+-- received value.
+--
+-- prop> delayList [y0] = delay y0
+delayList :: (Serialize a, Monad m)
+          => [a]
+          -> Auto m a a
+delayList = foldr ((>>>) . delay) id
+
+-- | The non-resuming/non-serializing version of 'delayList'.
+delayList_ :: Monad m
+           => [a]
+           -> Auto m a a
+delayList_ = foldr ((>>>) . delay_) id
+
+-- | Like 'delay', except delays the desired number of steps with the same
+-- initial output value.
+--
+-- prop> delayN n x0 = delayList (replicate n x0)
+--
+-- prop> delayN 1 x0 = delay x0
+delayN :: (Serialize a, Monad m)
+       => Int
+       -> a
+       -> Auto m a a
+delayN n y0 = iterate (delay y0 .) id !! n
+
+-- | The non-resuming/non-serializing version of 'delayN'
+delayN_ :: Monad m
+        => Int
+        -> a
+        -> Auto m a a
+delayN_ n y0 = iterate (delay_ y0 .) id !! n
+
+
 
 -- | "stretch" an 'Auto' out, slowing time.  @'stretch' n a@ will take one
 -- input, repeat the same output @n@ times (ignoring input), and then take
@@ -374,7 +417,7 @@ fastForward x0 = go
 -- c@ outputs in a list.
 fastForwardEither :: forall m a b c. Monad m
                   => a                        -- ^ default input
-                  -> Auto m a (Either c b)    -- ^ 'Auto' to fastfowrad (past each 'Left')
+                  -> Auto m a (Either c b)    -- ^ 'Auto' to fast-forward (past each 'Left')
                   -> Auto m a (b, [c])
 fastForwardEither x0 = fmap (second reverse) . go
   where

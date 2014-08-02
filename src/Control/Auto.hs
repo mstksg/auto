@@ -26,10 +26,16 @@ module Control.Auto (
   , mkState_
   , mkStateM_
   -- ** from Accumulators
+  -- *** Result-first
   , mkAccum
-  , mkAccumM
   , mkAccum_
+  , mkAccumM
   , mkAccumM_
+  -- *** Initial accumulator-first
+  , mkAccumD
+  , mkAccumD_
+  , mkAccumMD
+  , mkAccumMD_
   -- * Re-exports
   , module Control.Category
   , module Control.Applicative
