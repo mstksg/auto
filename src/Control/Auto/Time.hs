@@ -89,9 +89,13 @@ count_ = iterator_ (+1) 0
 --
 -- From my experience, the only meaningful usage of this is for recursive
 -- bindings.  If you ever are laying out recursive bindings in
--- a high-level/denotative way and run into a @<<loop>>@, then you can use
--- 'lastVal' to explicitly state what depends on something in the past,
--- instead of right now (introducing a loop).
+-- a high-level/denotative way, you need to have at least one value be able
+-- to have a "initial output" without depending on anything else.
+-- 'lastVal' and 'delay' allow you to do this.
+--
+-- See the <https://github.com/mstksg/auto-examples/blob/master/src/Recursive.hs recursive>
+-- example for more information on the appropriate usage of 'lastVal' and
+-- 'delay'.
 lastVal :: Serialize a
         => a              -- ^ initial value
         -> Auto m a a
@@ -105,7 +109,8 @@ lastVal_ = mkState_ $ \x s -> (s, x)
 {-# INLINE lastVal_ #-}
 
 -- | An alias for 'lastVal'; used in contexts where "delay" is more
--- a meaningful description than "last value".
+-- a meaningful description than "last value".  All of the warnings for
+-- 'lastVal' still apply, so you should probably read it if you haven't :)
 delay :: Serialize a
       => a                -- ^ initial value
       -> Auto m a a
