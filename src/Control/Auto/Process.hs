@@ -1,11 +1,30 @@
+-- |
+-- Module      : Control.Auto.Process
+-- Description : 'Auto's useful for various commonly occurring processes.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- Various 'Auto's for miscellaneous common processes.
+--
+-- Note that all of these can be turned into an equivalent version acting
+-- on 'Blip' streams, with 'perBlip':
+--
+-- @
+-- 'sumFrom'         :: ('Serialize' a, 'Num' a) => a -> 'Auto' m a a
+-- 'perBlip' 'sumFrom' :: ('Serialize' a, 'Num' a) => a -> 'Auto' m ('Blip' a) ('Blip' a)
+-- @
+--
 module Control.Auto.Process (
   -- * Numerical
-    summer
-  , summer_
-  , summerD
-  , summerD_
-  , differ
-  , differ_
+    sumFrom
+  , sumFrom_
+  , sumFromD
+  , sumFromD_
+  , diffs
+  , diffs_
   -- * Monoidal/Semigroup
   , mappender
   , mappender_
@@ -19,21 +38,21 @@ import Data.Serialize
 -- | Outputs the running sum of all items passed so far, starting with an
 -- initial count.
 --
--- prop> summer = mkAccum (+)
-summer :: (Serialize a, Num a)
-       => a             -- ^ initial count
-       -> Auto m a a
-summer = mkAccum (+)
-
--- | The non-resuming/non-serializing version of 'summer'.
-summer_ :: Num a
+-- prop> sumFrom = mkAccum (+)
+sumFrom :: (Serialize a, Num a)
         => a             -- ^ initial count
         -> Auto m a a
-summer_ = mkAccum_ (+)
+sumFrom = mkAccum (+)
 
--- | Like 'summer', except the first output is the starting count.
+-- | The non-resuming/non-serializing version of 'sumFrom'.
+sumFrom_ :: Num a
+         => a             -- ^ initial count
+         -> Auto m a a
+sumFrom_ = mkAccum_ (+)
+
+-- | Like 'sumFrom', except the first output is the starting count.
 --
--- >>> let a = summerD 5
+-- >>> let a = sumFromD 5
 -- >>> let Output y1 a' = stepAuto' a 10
 -- >>> y1
 -- 5
@@ -41,29 +60,29 @@ summer_ = mkAccum_ (+)
 -- >>> y2
 -- 10
 --
--- It's 'summer', but "delayed".
+-- It's 'sumFrom', but "delayed".
 --
 -- Useful for recursive bindings, where you need at least one value to be
 -- able to produce its "first output" without depending on anything else.
 --
--- prop> summerD x0 = delay x0 . summer x0
-summerD :: (Serialize a, Num a)
-        => a             -- ^ initial count
-        -> Auto m a a
-summerD = mkAccumD (+)
-
--- | The non-resuming/non-serializing version of 'summerD'.
-summerD_ :: Num a
+-- prop> sumFromD x0 = delay x0 . sumFrom x0
+sumFromD :: (Serialize a, Num a)
          => a             -- ^ initial count
          -> Auto m a a
-summerD_ = mkAccumD_ (+)
+sumFromD = mkAccumD (+)
+
+-- | The non-resuming/non-serializing version of 'sumFromD'.
+sumFromD_ :: Num a
+          => a             -- ^ initial count
+          -> Auto m a a
+sumFromD_ = mkAccumD_ (+)
 
 -- | Returns the difference between the received input and the previous
 -- input.  The first result is 'Nothing'; if you have something you want
 -- the first result to be, you can use '(<|!>)' from
 -- "Control.Auto.Interval", or just 'fromMaybe'/'maybe' from "Data.Maybe".
 --
--- >>> let a = differ
+-- >>> let a = diffs
 -- >>> let Output y1 a'  = stepAuto' a 5
 -- >>> y1
 -- Nothing
@@ -76,27 +95,27 @@ summerD_ = mkAccumD_ (+)
 --
 -- Usage with '(<|!>)':
 --
--- >>> let a = differ <|!> pure 100
+-- >>> let a = diffs <|!> pure 100
 -- >>> let (ys, _) = overList' a [5,7,4]
 -- >>> ys
 -- [100, 2, -3]
 --
 -- Usage with 'fromMaybe':
 --
--- >>> let a = fromMaybe 100 <$> differ
+-- >>> let a = fromMaybe 100 <$> diffs
 -- >>> let (ys, _) = overList' a [5,7,4]
 -- >>> ys
 -- [100, 2, -3]
 --
-differ :: (Serialize a, Num a) => Auto m a (Maybe a)
-differ = mkState _differF Nothing
+diffs :: (Serialize a, Num a) => Auto m a (Maybe a)
+diffs = mkState _diffsF Nothing
 
--- | The non-resuming/non-serializing version of 'differ'.
-differ_ :: Num a => Auto m a (Maybe a)
-differ_ = mkState_ _differF Nothing
+-- | The non-resuming/non-serializing version of 'diffs'.
+diffs_ :: Num a => Auto m a (Maybe a)
+diffs_ = mkState_ _diffsF Nothing
 
-_differF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)
-_differF x s = case s of
+_diffsF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)
+_diffsF x s = case s of
                  Nothing -> (Nothing     , Just x)
                  Just y  -> (Just (y - x), Just y)
 
