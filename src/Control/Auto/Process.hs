@@ -23,8 +23,8 @@ module Control.Auto.Process (
   , sumFrom_
   , sumFromD
   , sumFromD_
-  , diffs
-  , diffs_
+  , deltas
+  , deltas_
   -- * Monoidal/Semigroup
   , mappender
   , mappender_
@@ -38,7 +38,7 @@ import Data.Serialize
 -- | Outputs the running sum of all items passed so far, starting with an
 -- initial count.
 --
--- prop> sumFrom = mkAccum (+)
+-- prop> sumFrom x0 = mkAccum (+) x0
 sumFrom :: (Serialize a, Num a)
         => a             -- ^ initial count
         -> Auto m a a
@@ -82,7 +82,7 @@ sumFromD_ = mkAccumD_ (+)
 -- the first result to be, you can use '(<|!>)' from
 -- "Control.Auto.Interval", or just 'fromMaybe'/'maybe' from "Data.Maybe".
 --
--- >>> let a = diffs
+-- >>> let a = deltas
 -- >>> let Output y1 a'  = stepAuto' a 5
 -- >>> y1
 -- Nothing
@@ -95,27 +95,27 @@ sumFromD_ = mkAccumD_ (+)
 --
 -- Usage with '(<|!>)':
 --
--- >>> let a = diffs <|!> pure 100
+-- >>> let a = deltas <|!> pure 100
 -- >>> let (ys, _) = overList' a [5,7,4]
 -- >>> ys
 -- [100, 2, -3]
 --
 -- Usage with 'fromMaybe':
 --
--- >>> let a = fromMaybe 100 <$> diffs
+-- >>> let a = fromMaybe 100 <$> deltas
 -- >>> let (ys, _) = overList' a [5,7,4]
 -- >>> ys
 -- [100, 2, -3]
 --
-diffs :: (Serialize a, Num a) => Auto m a (Maybe a)
-diffs = mkState _diffsF Nothing
+deltas :: (Serialize a, Num a) => Auto m a (Maybe a)
+deltas = mkState _deltasF Nothing
 
--- | The non-resuming/non-serializing version of 'diffs'.
-diffs_ :: Num a => Auto m a (Maybe a)
-diffs_ = mkState_ _diffsF Nothing
+-- | The non-resuming/non-serializing version of 'deltas'.
+deltas_ :: Num a => Auto m a (Maybe a)
+deltas_ = mkState_ _deltasF Nothing
 
-_diffsF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)
-_diffsF x s = case s of
+_deltasF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)
+_deltasF x s = case s of
                  Nothing -> (Nothing     , Just x)
                  Just y  -> (Just (y - x), Just y)
 
@@ -150,9 +150,10 @@ mappender_ = mkAccum_ mappend mempty
 -- >>> let Output y2 _  = stepAuto' a' (Max (-2))
 -- >>> y2
 -- Max 3
+--
+-- prop> mappendFrom m0 = mkAccum (<>) m0
 mappendFrom :: (Serialize a, Semigroup a) => a -> Auto m a a
 mappendFrom = mkAccum (<>)
-
 
 -- | The non-resuming/non-serializing version of 'mappender'.
 mappendFrom_ :: Semigroup a => a -> Auto m a a
