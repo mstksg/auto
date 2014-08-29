@@ -2,6 +2,39 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
+-- |
+-- Module      : Control.Auto.Blip.Internal
+-- Description : Exposing internal unsafe functions for working with
+--               'Blip'.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module exposes an "unsafe" interface for working with the internal
+-- representation of "'Blip' streams".  If you are programming at the logic
+-- level or the application level, you should thoroughly be able to avoid
+-- importing this, and should be happy with importing the 'Blip' type from
+-- "Control.Auto" and 'Blip' stream manipulators from "Control.Auto.Blip".
+--
+-- If, however, you are programming a framework, library, or backend, you
+-- might find it useful to manually create your own 'Blip' streams/sources.
+-- In this case, this module will be useful.
+--
+-- It is important, as with most of this library in general, to always keep
+-- in mind when you are programming at the "logic" level, and when you are
+-- programming at the "backend" level.  If you can justify that you are at
+-- the backend level and not at the logic level of whatever you are
+-- programming, then this is useful.  See more on "Control.Auto.Tutorial".
+--
+-- Be sure, of course, that whatever 'Blip' streams you do manually
+-- construct preserve "'Blip' semantics", which is further defined in
+-- "Control.Auto.Blip" and "Control.Auto.Tutorial".
+--
+-- You have been warned!
+--
+
 module Control.Auto.Blip.Internal (
     Blip(..)
   , merge
@@ -15,8 +48,9 @@ import Data.Typeable
 import GHC.Generics
 
 -- | A type representing a "discrete" sort of event-like thing.  It's
--- represents something that happens alone, and one at a time, as opposed
--- to things that are "on" or "off" for large intervals at a time.
+-- supposed to represent something that happens alone, and one at a time,
+-- as opposed to things that are "on" or "off" for large intervals at
+-- a time.
 --
 -- It's here mainly because it's a pretty useful abstraction in the context
 -- of the many combinators found in various modules of this library.  If
@@ -30,6 +64,12 @@ import GHC.Generics
 -- 'Blip'ness" --- one-at-a-time occurrences remain one-at-a-time under all
 -- of these combinators, and you should have enough so that direct access
 -- to the constructor is not needed.
+--
+-- If you are creating a framework, library, or backend, you might want to
+-- manually create 'Blip' stream-producing 'Auto's for your users to
+-- access.  In this case, you can import the constructors and useful
+-- internal (and, of course, semantically unsafe) functions from
+-- "Control.Auto.Blip.Internal".
 data Blip a =  NoBlip
              | Blip !a
              deriving ( Functor

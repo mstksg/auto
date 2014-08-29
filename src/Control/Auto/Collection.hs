@@ -57,6 +57,7 @@ module Control.Auto.Collection (
 
 import Control.Applicative
 import Control.Category
+import CompatInstances
 import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
