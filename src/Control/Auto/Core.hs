@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LAnGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 -- |
@@ -96,7 +96,7 @@ import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
-import Data.Typeable
+-- import Data.Typeable
 import GHC.Generics
 import Prelude hiding        ((.), id)
 
@@ -113,7 +113,7 @@ import Prelude hiding        ((.), id)
 data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
                            , outAuto :: Auto m a b    -- ^ The next 'Auto'
                            } deriving ( Functor
-                                      , Typeable
+                                      -- , Typeable
                                       , Generic
                                       )
 
