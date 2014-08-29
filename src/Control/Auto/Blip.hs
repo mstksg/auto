@@ -69,31 +69,53 @@ import qualified Control.Auto.Generate as A
 infixl 5 <&
 infixl 5 &>
 
+-- | Merges two 'Blip' streams together into one, which emits
+-- /either/ of the original 'Blip' streams emit.  If both emit at the same
+-- time, the left (first) one is favored.
 mergeL :: Blip a -> Blip a -> Blip a
 mergeL = merge const
 
+-- | Merges two 'Blip' streams together into one, which emits
+-- /either/ of the original 'Blip' streams emit.  If both emit at the same
+-- time, the right (second) one is favored.
 mergeR :: Blip a -> Blip a -> Blip a
 mergeR = merge (flip const)
 
-
-
+-- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
+-- 'Auto' that emits when either of the original 'Auto's emit.  When both
+-- emit at the same time, the left (first) one is favored.
+--
+-- prop> a1 <& a2 == mergeL <$> a1 <*> a2
 (<&) :: Monad m => Auto m a (Blip b) -> Auto m a (Blip b) -> Auto m a (Blip b)
 (<&) = liftA2 (merge const)
 
+-- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
+-- 'Auto' that emits when either of the original 'Auto's emit.  When both
+-- emit at the same time, the right (second) one is favored.
+--
+-- prop> a1 &> a2 == mergeR <$> a1 <*> a2
 (&>) :: Monad m => Auto m a (Blip b) -> Auto m a (Blip b) -> Auto m a (Blip b)
 (&>) = liftA2 (merge (flip const))
 
 
-
+-- | An 'Auto' that ignores its input and produces a 'Blip' stream that
+-- never emits.
 never :: Monad m => Auto m a (Blip b)
 never = pure NoBlip
 
+-- | An 'Auto' that produces a 'Blip' stream that emits on the first ever
+-- "tick", with the input at that step.  It never emits again after that.
 immediately :: Monad m => Auto m a (Blip a)
 immediately = mkState f False
   where
     f _ True  = (NoBlip, True)
     f x False = (Blip x, True)
 
+-- | An 'Auto' that produces a 'Blip' stream that only emits once, after
+-- waiting the given number of ticks.  It emits the input at that step.
+--
+-- prop> immediately == inB 0
+--
 inB :: Monad m => Int -> Auto m a (Blip a)
 inB n = mkState f (n, False)
   where
@@ -101,9 +123,18 @@ inB n = mkState f (n, False)
     f x (i, False) | i <= 0    = (Blip x, (0  , True ))
                    | otherwise = (NoBlip, (i-1, False))
 
+-- | An 'Auto' producing a 'Blip' stream that emits the input whenever the
+-- input satisfies a given predicate.
+--
+-- Warning!  This 'Auto' has the capability of "breaking" 'Blip' semantics.
+-- Be sure you know what you are doing when using this.  'Blip' streams are
+-- semantically supposed to only emit at discrete, separate occurrences.
+-- Do not use this for interval-like (on and off for chunks at a time)
+-- things; each input should be dealt with as a separate thing.
 emitOn :: Monad m => (a -> Bool) -> Auto m a (Blip a)
-emitOn p = filterB p . every 1
+emitOn p = arr $ \x -> if p x then Blip x else NoBlip
 
+-- | An 'Auto' 
 emitJusts :: Monad m => (a -> Maybe b) -> Auto m a (Blip b)
 emitJusts p = onJusts <<^ p
 
