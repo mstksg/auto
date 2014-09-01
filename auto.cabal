@@ -26,8 +26,8 @@ library
                      , Control.Auto.Effects
                      , Control.Auto.Generate
                      , Control.Auto.Interval
+                     , Control.Auto.Process
                      , Control.Auto.Process.Random
-                     , Control.Auto.Process.Numerical
                      , Control.Auto.Run
                      , Control.Auto.Serialize
                      , Control.Auto.Switch
