@@ -241,6 +241,7 @@ forceSerial a = case a of
                   _              -> a
 
 -- $serializing
+--
 -- The 'Auto' type offers an interface in which you can serialize
 -- ("freeze") and "resume" an Auto, in 'ByteString' (binary) form.
 --
@@ -362,9 +363,8 @@ saveAuto a = case a of
 --             -- an Auto that sums all of its input.
 -- >>> let Identity (Output y a') = stepAuto a 3
 -- >>> y      -- the result
--- 3
--- :: Int
--- >> :t a'   -- the updated 'Auto'
+-- 3 :: Int
+-- >>> :t a'   -- the updated 'Auto'
 -- a' :: Auto Identity Int Int
 --
 -- ('Identity', from "Data.Functor.Identity", is the "dumb Functor": @data
