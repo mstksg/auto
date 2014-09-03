@@ -38,6 +38,9 @@ import Data.Serialize
 -- | Outputs the running sum of all items passed so far, starting with an
 -- initial count.
 --
+-- The first output is the sum of the first input with the initial count.
+-- See the documentation for 'sumFromD' for more information.
+--
 -- prop> sumFrom x0 = mkAccum (+) x0
 sumFrom :: (Serialize a, Num a)
         => a             -- ^ initial count
