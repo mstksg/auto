@@ -12,9 +12,10 @@
 --
 -- This module provides tools for generating and manipulating 'Blip'
 -- streams.  The 'Blip' abstraction is not fundamental to 'Auto', but
--- rather is a very useful semantic tool for the denotation of many
--- programs, games, simulations, and computations in general that you are
--- likely to write with this library.
+-- rather, like /interval/, is a very useful semantic tool for the
+-- denotation of many programs, games, simulations, and computations in
+-- general that you are likely to write with this library.
+--
 --
 
 module Control.Auto.Blip (
@@ -119,6 +120,19 @@ infixl 5 &>
 -- "blips" --- each emitted value alone and (semantically) isolated from
 -- the rest.
 --
+-- == Motivations
+--
+-- The main motivations of the semantic concept of 'Blip's (and why they
+-- even exist in the first place) is probably for how well they integrate
+-- (with /interval/ semantics) with the various powerful switching
+-- combinators from "Control.Auto.Switch".  Many of the combinators in that
+-- module are designed so that switches can be "triggered" by 'Blip's.
+--
+-- 'Blip's have many usages, as will be explained later.  You'll also find
+-- that 'Blip' streams work well with their cousins, /interval/ streams.
+-- But perhaps the use case that stands out above all (and is alone enough
+-- to motivate their existence) is in switching.
+--
 -- == "'Blip' semantics"
 --
 -- We say that a 'Blip' stream has "'Blip' semantics" when it is used in
@@ -138,7 +152,7 @@ infixl 5 &>
 -- slowly-moving and meandering, and might spend a lot of time negative at
 -- a time, then the same blip stream would /not/ preserve 'Blip' semantics.
 --
--- === Why it's important
+-- === Why semantics are important
 --
 -- Why should you care?  I can't tell you want to do, right?
 --
@@ -337,7 +351,7 @@ emitJusts p = mkFunc (maybe NoBlip Blip . p)
 -- a blip stream that emits the input @a@ every @n@ steps.  First emission
 -- is on the @n@th step.
 --
--- Obviously breaks 'Blip' semantics when you pass in 1.
+-- Will usually break 'Blip' semantics when you pass in 1.
 --
 every :: Int    -- ^ emit every @n@ steps.
       -> Auto m a (Blip a)
@@ -635,10 +649,10 @@ modifyBlips f = mkFunc (fmap f)
 --
 -- >>> let a    = perBlip (sumFrom 0)
 -- >>> let blps = eachAt 2 [1,5,2]
--- >>> let Output bres _ = stepAutoN 8 blps ()
+-- >>> let Output bres _ = stepAutoN' 8 blps ()
 -- >>> bres
 -- [NoBlip, Blip 1, NoBlip, Blip 5, NoBlip, Blip 2, NoBlip, NoBlip]
--- >>> let Output ares _ = stepAutoN 8 a ()
+-- >>> let Output ares _ = stepAutoN' 8 a ()
 -- >>> ares
 -- [NoBlip, Blip 1, NoBlip, Blip 6, NoBlip, Blip 8, NoBlip, NoBlip]
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)

@@ -7,6 +7,7 @@ module Control.Auto (
   , Auto
   , Auto'
   -- ** Running
+  -- TODO: stepAutoN
   , stepAuto
   , stepAuto'
   -- ** Serializing

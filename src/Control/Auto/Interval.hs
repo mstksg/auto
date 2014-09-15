@@ -1,4 +1,22 @@
+
+-- |
+-- Module      : Control.Auto.Interval
+-- Description : Tools for working with "interval" semantics: "On or off"
+--               'Auto's.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+--
+-- This module provides combinators and utilities for working with the
+-- semantic concept of "intervals": 'Auto's producing values that can
+-- either be "on" or "off"...typically for contiguous chunks at a time.
+
 module Control.Auto.Interval (
+  -- * Intervals
+  -- $intervals
   -- * Static intervals
     off
   , toOn
@@ -23,7 +41,7 @@ module Control.Auto.Interval (
   , hold_
   , holdFor
   , holdFor_
-  -- * Composing with intervals
+  -- * Composition with intervals
   , during
   , bindI
   ) where
@@ -39,11 +57,163 @@ import Data.Maybe
 import Data.Serialize
 import Prelude hiding             ((.), id)
 
+-- $intervals
+--
+-- In practice, and for convenience, this "on or offness" is represented by
+-- the very handy common type, 'Maybe'.  An "interval-producing" 'Auto'
+-- looks like this:
+--
+-- @
+--     'Auto' m a ('Maybe' b)
+-- @
+--
+-- (In contrast to the "normal", "always-on" 'Auto', @'Auto' m a b@)
+--
+-- We say that the above 'Auto' takes in a stream of @a@s and produces
+-- an "interval stream" of @b@s.  When it outputs a 'Nothing', the stream
+-- is interpreted as "off".  When it outputs a 'Just', the stream is
+-- interpreted as "on", with the value inside the 'Just'.
+--
+-- For example, we can look at @'onFor' :: 'Int' -> 'Auto' m a ('Maybe' a)@
+-- in action. @'onFor' n@ is "on", and lets all values through, for @n@
+-- steps; then it turns "off" forever.
+--
+-- >>> let a = onFor 2 . count
+-- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> res
+-- [Just 1, Just 2, Nothing, Nothing, Nothing]
+--
+-- (Recall that 'count', from "Control.Auto.Time", outputs the current step
+-- count)
+--
+-- @'onFor' 2@ is "on" for two steps, and lets the output of 'count'
+-- through; then it is "off", and "blocks" all of the output of 'count'.
+--
+-- == Motivation
+--
+-- Intervals happen to particularly useful when used with the various
+-- /switching/ combinators from "Control.Auto.Switch".
+--
+-- You might find it useful to "sequence" 'Auto's such that they "switch"
+-- from one to the other, dynamically.  For example, an 'Auto' that acts
+-- like @'pure' 0@ for three steps, and then like 'count' for the rest:
+--
+-- >>> let a1 = (onFor 3 . pure 0) --> count
+-- >>> let Output res1 _ = stepAutoN' 8 a1 ()
+-- >>> res1
+-- [0, 0, 0, 1, 2, 3, 4, 5]
+--
+-- (Recall that @'pure' x@ is the 'Auto' that ignores its input and always
+-- outputs @x@)
+--
+-- Or in reverse, an 'Auto' that behaves like 'count' until the count is
+-- above 3, then switches to @'pure' 0@
+--
+-- >>> let a2 = (when (<= 3) . count) --> pure 0
+-- >>> let Output res2 _ = stepAutoN' 8 a2 ()
+-- >>> res2
+-- [1, 2, 3, 0, 0, 0, 0, 0]
+--
+-- That's just a small example using one switching combinator, '-->'.  But
+-- hopefully it demonstrates that one powerful motivation behind
+-- "intervals" being a "thing" is because of how it works with switches.
+--
+-- Another neat motivation is that intervals work pretty well with the
+-- 'Blip' semantic tool, as well.
+--
+-- The following 'Auto' will be "off" and suppress all of its input (from
+-- 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
+-- something, then it'll allow 'count' to pass.
+--
+-- >>> let a3 = after . (count &&& inB 3)
+-- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> res3
+-- [Nothing, Nothing, Just 3, Just 4, Just 4]
+--
+-- == Combinators
+--
+-- === Converting back into normal streams
+--
+-- You can convert interval streams back into normal streams by using
+-- 'fromInterval' and 'fromIntervalWith', analogous to 'fromMaybe' and
+-- 'maybe' from "Data.Maybe", respectively:
+--
+-- >>> let a = fromIntervalWith "off" show . onFor 2 . count
+-- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> res
+-- ["1", "2", "off", "off", "off"]
+--
+-- === Choice
+--
+-- You can also "choose" between interval streams, with choice combinators
+-- like '<|?>' and '<|!>'.
+--
+-- >>> let a = onFor 2 . pure "hello"
+--        <|!> onFor 4 . pure "world"
+--        <|!> pure "goodbye!"
+-- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> res
+-- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
+--
+-- The above could also be written with 'choose':
+--
+-- >>> let a = choose (pure "goodbye!")
+--                    [ onFor 2 . pure "hello"
+--                    , onFor 4 . pure "world"
+--                    ]
+--
+-- === Composition
+--
+-- You can also "compose" together 'Auto's involving intervals.
+--
+-- If you have an @'Auto' m a b@ and an @'Auto' m b c@, then you can
+-- compose them with '.'.  But if you can't compose the second if the first
+-- is @'Auto' m a ('Maybe' b)@.
+--
+-- You can use 'during' to turn an @'Auto' m b c@ into an @'Auto' m ('Maybe' b) ('Maybe' c)@,
+-- you can compose it fine!
+--
+-- If you had an @'Auto' m b ('Maybe' c)@, like 'onFor' and literally
+-- almost every 'Auto' provided in this module, you can use 'bindI' to turn
+-- it into an @'Auto' m ('Maybe' b) ('Maybe' c)@.
+--
+-- >>> let a1 = bindI (onFor 4) . offFor 1 . count
+-- >>> let Output res1 _ = stepAutoN' 6 a1 ()
+-- >>> res1
+-- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
+--
+-- >>> let a2 = bindI (when even) . bindI (onFor 4) . offFor 1 . count
+-- >>> let Output res2 _ = stepAutoN' 6 a2 ()
+-- >>> res2
+-- [Nothing, Just 2, Nothing, Just 4, Nothing, Nothing]
+--
+-- The implementation works so that any "on"/'Just' inputs will step the
+-- lifted 'Auto' like normal, with the contents of the 'Just', and any
+-- "off"/'Nothing' inputs cause the lifted 'Auto' to be skipped and frozen.
+--
+-- == Warning: Switching
+--
+-- Note that when any of these combinators "block"/"inhibit"/"suppress" its
+-- input as a part of a composition pipeline (as in for 'off', 'onFor',
+-- 'offFor', etc.), the /input/ 'Auto's are /still stepped/ and "run".  If
+-- the inputs had any monad effects, they would too be exected at every
+-- step.  In order to "freeze" and not run or step an 'Auto' at all, you
+-- have to use switches.
+--
+-- ('during' and 'bindI' are not included in this bunch.)
+--
+--
+
 infixr 3 <|?>
 infixr 3 <|!>
 
 -- | An 'Auto' that produces an interval that always "off" ('Nothing'),
 -- never letting anything pass.
+--
+-- Note that any monadic effects of the input 'Auto' when composed with
+-- 'off' are still executed, even though their result value is suppressed.
+--
+-- prop> off == arr (const Nothing)
 off :: Auto m a (Maybe b)
 off = mkConst Nothing
 
@@ -76,8 +246,8 @@ fromIntervalWith :: b
 fromIntervalWith d f = mkFunc (maybe d f)
 
 -- | An 'Auto' that behaves like 'toOn' (letting values pass, "on")
--- for the given number of steps, then otherwise is off (preventing all
--- values from passing) forevermore.
+-- for the given number of steps, then otherwise is off (suppressing all
+-- input values from passing) forevermore.
 --
 onFor :: Int      -- ^ amount of steps to stay "on" for
       -> Auto m a (Maybe a)
@@ -149,9 +319,15 @@ unless p = mkFunc f
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
 --
--- 'count' is the 'Auto' that ignores its input and outputs the current
+-- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
--- a 'Blip' stream that emits at the third step.
+-- a 'Blip' stream that emits at the third step.)
+--
+-- Be careful to remember that 'after' does not actually "switch" anything.
+-- In the above example, 'count' is still "run" at every step, and is
+-- progressed (and if it were an 'Auto' with monadic effects, they would
+-- still be executed).  It just isn't allowed to pass through 'after' until
+-- the 'Blip' stream emits.
 --
 after :: Auto m (a, Blip b) (Maybe a)
 after = mkState f False
@@ -169,9 +345,14 @@ after = mkState f False
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
--- 'count' is the 'Auto' that ignores its input and outputs the current
+-- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
--- a 'Blip' stream that emits at the third step.
+-- a 'Blip' stream that emits at the third step.)
+--
+-- Be careful to remember that 'before' doesn't actually "switch" anything.
+-- In the above example, 'count' is /still/ "run" at every step (and if it
+-- were an 'Auto' with monad effects, they would still be executed).  It's
+-- just that the values are suppressed.
 --
 before :: Auto m (a, Blip b) (Maybe a)
 before = mkState f False
@@ -209,7 +390,7 @@ between = mkState f False
 -- 'Nothing's) by providing a "default" value, to be used when the input
 -- stream has not yet emitted, in one of two ways:
 --
--- The first, using '(<|!>)':
+-- The first, using '<|!>':
 --
 -- >>> let a2 = (hold . inB 3 . count) <|!> pure 100
 -- >>> let Output res2 _ = stepAutoN' 5 a2 ()
@@ -337,7 +518,7 @@ chooseInterval = fmap asum . sequenceA
 -- first one that is not 'Nothing'; if all are 'Nothing', return the
 -- behavior of the "default case".
 --
--- prop> choose = foldr (<|!>)
+-- prop> choose == foldr (<|!>)
 choose :: Monad m
        => Auto m a b            -- ^ the 'Auto' to behave like if all
                                 --   others are 'Nothing'
@@ -354,11 +535,11 @@ choose = foldr (<|!>)
 -- value, and skipping/pausing it whenever it receives a 'Nothing' value.
 --
 -- >>> let a1 = during (sumFrom 0) . onFor 2 . pure 1
--- >>> let Output res1 _ = stepAutoN 5 a1 ()
+-- >>> let Output res1 _ = stepAutoN' 5 a1 ()
 -- >>> res1
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 -- >>> let a2 = during (sumFrom 0) . offFor 2 . pure 1
--- >>> let Output res2 _ = stepAutoN 5 a2 ()
+-- >>> let Output res2 _ = stepAutoN' 5 a2 ()
 -- >>> res2
 -- [Nothing, Nothing, Just 1, Just 2, Just 3]
 --
@@ -370,7 +551,7 @@ choose = foldr (<|!>)
 -- and putting the 'sumFrom' "before":
 --
 -- >>> let a3 = offFor 2 . sumFrom 0 . pure 1
--- >>> let Output res3 _ = stepAutoN 5 a3 ()
+-- >>> let Output res3 _ = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 5]
 --
@@ -426,8 +607,8 @@ during a = a_
 -- through during a window...between, say, the second and fourth steps:
 --
 -- >>> let window start finish = bindI (onFor finish) . offFor start
--- >>> let a = window 2 4 . count
--- >>> let Output res _ = stepAutoN 5 a ()
+-- >>> let a = window 1 4 . count
+-- >>> let Output res _ = stepAutoN' 5 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --

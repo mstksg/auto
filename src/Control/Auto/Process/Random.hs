@@ -1,5 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Arrows #-}
 
 module Control.Auto.Process.Random (
   -- * Streams of random values
@@ -9,56 +8,111 @@ module Control.Auto.Process.Random (
   , randsM
   , stdRandsM
   , randsM_
-  -- * Bernoulli (on/off) processes
+  -- * Random processes
+  -- ** Bernoulli (on/off) processes
   , bernoulli
   , stdBernoulli
   , bernoulli_
-  -- * Follow Markov chains
-  , markov
-  , stdMarkov
-  , markov_
-  , stdMarkov_
+  -- ** Random-length intervals
+  , randIntervals
+  , stdRandIntervals
+  , randIntervals_
   ) where
 
+-- import Data.Foldable
+-- import Data.Map.Strict           (Map)
+-- import qualified Data.Map.Strict as M
 import Control.Applicative
 import Control.Auto.Blip
+import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
 import Data.Serialize
-import Data.Foldable
-import Data.Map.Strict           (Map)
-import Prelude hiding            (id, (.), concat, concatMap, sum)
+import Data.Tuple
+import Prelude hiding               (id, (.), concat, concatMap, sum)
 import System.Random
-import qualified Data.Map.Strict as M
 
-stdRands :: Monad m
-         => (StdGen -> (b, StdGen)) -- ^ Random function
-         -> StdGen                  -- ^ Initial generator
+-- | Given a seed-consuming generating function of form @g -> (b, g)@
+-- (where @g@ is the seed, and @b@ is the result) and an initial seed,
+-- return an 'Auto' that continually generates random values using the
+-- given generating funcion.
+--
+-- You'll notice that most of the useful functions from "System.Random" fit
+-- this form:
+--
+-- @
+--     'random'  :: 'RandomGen' g =>            g -> (b, g)
+--     'randomR' :: 'RandomGen' g => (b, b) -> (g -> (b, g))
+-- @
+--
+-- If you are using something from <http://hackage.haskell.org/package/MonadRandom MonadRandom>,
+-- then you can use the 'runRand' function to turn a @'Rand' g b@ into a @g
+-- -> (b, g)@:
+--
+-- @
+--     'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
+-- @
+--
+--
+-- Here is an example using 'stdRands' (for 'StdGen'), but 'rands' works
+-- exactly the same way, I promise!
+--
+-- >>> let g = mkStdGen 8675309
+-- >>> let a = stdRands (randomR (1,100)) g :: Auto' a Int
+-- >>> let (res, _) = stepAutoN' 10 a ()
+-- >>> res
+-- [67, 15, 97, 13, 55, 12, 34, 86, 57, 42]
+--
+--
+-- Yeah, if you are using 'StdGen' from "System.Random", you'll notice that
+-- 'StdGen' has no 'Serialize' instance, so you can't use it with this; you
+-- have to either use 'stdRands' or 'rands_' (if you don't want
+-- serialization/resumability).
+--
+-- In the context of these generators, resumability basically means
+-- deterministic behavior over re-loads.
+--
+rands :: (Serialize g, RandomGen g)
+      => (g -> (b, g)) -- ^ random generating function
+      -> g             -- ^ initial generator
+      -> Auto m a b
+rands r = mkState (\_ g -> g `seq` r g)
+{-# INLINE rands #-}
+
+-- | Like 'rands', but specialized for 'StdGen' from "System.Random", so
+-- that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'rands' for more information.
+--
+stdRands :: (StdGen -> (b, StdGen)) -- ^ random generating function
+         -> StdGen                  -- ^ initial generator
          -> Auto m a b
 stdRands r = mkState' (read <$> get) (put . show) (\_ g -> r g)
 {-# INLINE stdRands #-}
 
-rands :: (Serialize g, RandomGen g, Monad m)
-      => (g -> (b, g)) -- ^ Random function
-      -> g             -- ^ Initial generator
-      -> Auto m a b
-rands r = mkState (\_ g -> r g)
-{-# INLINE rands #-}
 
-rands_ :: (RandomGen g, Monad m)
-       => (g -> (b, g))   -- ^ Random function
-       -> g               -- ^ Initial generator
+-- | The non-serializing/non-resuming version of 'rands'.
+rands_ :: RandomGen g
+       => (g -> (b, g))   -- ^ random generating function
+       -> g               -- ^ initial generator
        -> Auto m a b
 rands_ r = mkState_ (\_ g -> r g)
 {-# INLINE rands_ #-}
 
-stdRandsM :: Monad m
-          => (StdGen -> m (b, StdGen))
-          -> StdGen
-          -> Auto m a b
-stdRandsM r = mkStateM' (read <$> get) (put . show) (\_ g -> r g)
-{-# INLINE stdRandsM #-}
-
+-- | Like 'rands', except taking a "monadic" random seed function @g ->
+-- m (b, g)@, instead of @g -> (b, g)@.  Your random generating function
+-- has access to the underlying monad.
+--
+-- If you are using something from <http://hackage.haskell.org/package/MonadRandom MonadRandom>,
+-- then you can use the 'runRandT' function to turn a @'RandT' g m b@ into a @g
+-- -> m (b, g)@:
+--
+-- @
+--     'runRandT' :: ('Monad' m, 'RandomGen' g)
+--                => 'RandT' g m b -> m (g -> (b, g))
+-- @
+--
 randsM :: (Serialize g, RandomGen g, Monad m)
        => (g -> m (b, g))
        -> g
@@ -66,6 +120,20 @@ randsM :: (Serialize g, RandomGen g, Monad m)
 randsM r = mkStateM (\_ g -> r g)
 {-# INLINE randsM #-}
 
+-- | Like 'randsM', but specialized for 'StdGen' from "System.Random", so
+-- that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'randsM' for more information.
+--
+stdRandsM :: Monad m
+          => (StdGen -> m (b, StdGen))
+          -> StdGen
+          -> Auto m a b
+stdRandsM r = mkStateM' (read <$> get) (put . show) (\_ g -> r g)
+{-# INLINE stdRandsM #-}
+
+-- | The non-serializing/non-resuming version of 'randsM'.
 randsM_ :: (RandomGen g, Monad m)
         => (g -> m (b, g))
         -> g
@@ -73,82 +141,157 @@ randsM_ :: (RandomGen g, Monad m)
 randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
 
-markov :: forall a b m g. (Serialize g, Serialize b, RandomGen g, Monad m, Ord b)
-       => Map b (Map b Double)
-       -> g
-       -> b
-       -> Auto m a b
-markov tm g0 b0 = mkState (const (_markovF tm _rF)) (b0, g0)
+-- markov :: forall a b m g. (Serialize g, Serialize b, RandomGen g, Monad m, Ord b)
+--        => Map b (Map b Double)
+--        -> g
+--        -> b
+--        -> Auto m a b
+-- markov tm g0 b0 = mkState (const (_markovF tm _rF)) (b0, g0)
 
-stdMarkov :: forall a b m. (Serialize b, Monad m, Ord b)
-          => Map b (Map b Double)
-          -> StdGen
-          -> b
-          -> Auto m a b
-stdMarkov tm g0 b0 = mkState f (b0, show g0)
+-- stdMarkov :: forall a b m. (Serialize b, Monad m, Ord b)
+--           => Map b (Map b Double)
+--           -> StdGen
+--           -> b
+--           -> Auto m a b
+-- stdMarkov tm g0 b0 = mkState f (b0, show g0)
+--   where
+--     f _ (b, sg) = let (b', (_, g')) = _markovF tm _rF (b, read sg :: StdGen)
+--                   in  (b', (b', show g'))
+
+-- stdMarkov_ :: forall a b m. (Monad m, Ord b)
+--            => Map b (Map b Double)
+--            -> StdGen
+--            -> b
+--            -> Auto m a b
+-- stdMarkov_ tm g0 b0 = mkAuto (stdMarkov_ tm . read <$> get <*> pure b0)
+--                              (put (show g0))
+--                              $ \_ -> let (b', (_, g')) = _markovF tm _rF (b0, g0)
+--                                      in  Output b' (stdMarkov_ tm g' b')
+
+
+-- markov_ :: forall a b m g. (RandomGen g, Monad m, Ord b)
+--         => Map b (Map b Double)
+--         -> g
+--         -> b
+--         -> Auto m a b
+-- markov_ tm g0 b0 = mkState_ (const (_markovF tm _rF)) (b0, g0)
+
+-- _rF :: RandomGen g => Double -> g -> (Double, g)
+-- _rF x = randomR (0, x)
+
+-- _markovF :: Ord b => Map b (Map b Double) -> (Double -> g -> (Double, g)) -> (b, g) -> (b, (b, g))
+-- _markovF tm f (b0, g) | wsum <= 0 = (b0, (b0, g ))
+--                       | otherwise = (wr, (wr, wg))
+--   where
+--     tm' = M.lookup b0 tm
+--     weights = concatMap M.toList tm'
+--     wsum = sum . map snd $ weights
+--     (wr, wg) = weightedRandom weights g f
+
+-- weightedRandom :: [(a, Double)] -> g -> (Double -> g -> (Double, g)) -> (a, g)
+-- weightedRandom [] _ _ = error "weightedRandom: empty list."
+-- weightedRandom xs g f = er0 `seq` (x, g')
+--   where
+--     s       = sum (map snd xs)
+--     cs      = scanl1 (\(_,q) (y,s') -> (y, s' + q)) xs
+--     (p, g') = f s g
+--     x       = fst . head . dropWhile ((< p) . snd) $ cs
+--     er0 | s <= 0    = error "weightedRandom: weights sum to zero."
+--         | otherwise = ()
+
+-- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
+-- a process where, at every trial, the result is "on" with the given
+-- probability @p@, and "off" otherwise.  Every step is independent from
+-- the last.
+--
+-- Basically, the result of every trial is an independent weighted coin
+-- flip.
+--
+-- It is implemented here as a 'Blip' stream that emits whenever the
+-- Bernoulli trial succeeds and does not emit otherwise.
+--
+-- It is expected that, for probability @p@, the stream will emit a value
+-- on average once every @1/p@ ticks.
+--
+bernoulli :: (Serialize g, RandomGen g)
+          => Double       -- ^ probability of any step emitting
+          -> g            -- ^ initial seed
+          -> Auto m a (Blip a)
+bernoulli p = mkState (_bernoulliF p)
+
+-- | Like 'bernoulli', but specialized for 'StdGen' from "System.Random",
+-- so that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'bernoulli' for more information.
+--
+stdBernoulli :: Double    -- ^ probability of any step emitting
+             -> StdGen    -- ^ initial seed
+             -> Auto m a (Blip a)
+stdBernoulli p = mkState' (read <$> get) (put . show) (_bernoulliF p)
+
+-- | The non-serializing/non-resuming version of 'bernoulli'.
+bernoulli_ :: RandomGen g
+           => Double      -- ^ probability of any step emitting
+           -> g           -- ^ initial seed
+           -> Auto m a (Blip a)
+bernoulli_ p = mkState_ (_bernoulliF p)
+
+_bernoulliF :: RandomGen g => Double -> a -> g -> (Blip a, g)
+_bernoulliF p x g = (outp, g')
   where
-    f _ (b, sg) = let (b', (_, g')) = _markovF tm _rF (b, read sg :: StdGen)
-                  in  (b', (b', show g'))
+    (roll, g') = randomR (0, 1) g
+    outp | roll <= p = Blip x
+         | otherwise = NoBlip
 
-stdMarkov_ :: forall a b m. (Monad m, Ord b)
-           => Map b (Map b Double)
-           -> StdGen
-           -> b
-           -> Auto m a b
-stdMarkov_ tm g0 b0 = mkAuto (stdMarkov_ tm . read <$> get <*> pure b0)
-                             (put (show g0))
-                             $ \_ -> let (b', (_, g')) = _markovF tm _rF (b0, g0)
-                                     in  Output b' (stdMarkov_ tm g' b')
+-- | An 'Auto' that outputs intervals that are "on" and "off" for
+-- contiguous but random lengths of time --- when "on", it allows values to
+-- pass (in a 'Just'); when "off", it prevents values from passing (as
+-- 'Nothing').
+--
+-- You provide a 'Double', an @l@ parameter, representing the
+-- average/expected length of each interval.
+--
+-- The distribution of interval lengths follows
+-- a <http://en.wikipedia.org/wiki/Geometric_distribution Geometric Distribution>.
+-- This distribution is, as we call it in maths, "memoryless", which means
+-- that the "time left" that the 'Auto' will be "on" or "off" at any given
+-- time is going to be, on average, the given @l@ parameter.
+--
+-- Internally, the "toggling" events follow a bernoulli process with a @p@
+-- parameter of @1 / l@.
+--
+randIntervals :: (Serialize g, RandomGen g)
+              => Double
+              -> g
+              -> Auto m a (Maybe a)
+randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 
+-- | Like 'randIntervals', but specialized for 'StdGen' from
+-- "System.Random", so that you can serialize and resume.  This is needed
+-- because 'StdGen' doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'randIntervals' for more information.
+--
+stdRandIntervals :: Double
+                 -> StdGen
+                 -> Auto m a (Maybe a)
+stdRandIntervals l = mkState' (read <$> get)
+                              (put . show)
+                              (_randIntervalsF (1/l))
+                   . swap . random
 
-markov_ :: forall a b m g. (RandomGen g, Monad m, Ord b)
-        => Map b (Map b Double)
-        -> g
-        -> b
-        -> Auto m a b
-markov_ tm g0 b0 = mkState_ (const (_markovF tm _rF)) (b0, g0)
+-- | The non-serializing/non-resuming version of 'randIntervals'.
+randIntervals_ :: RandomGen g
+               => Double
+               -> g
+               -> Auto m a (Maybe a)
+randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
-_rF :: RandomGen g => Double -> g -> (Double, g)
-_rF x = randomR (0, x)
-
-_markovF :: Ord b => Map b (Map b Double) -> (Double -> g -> (Double, g)) -> (b, g) -> (b, (b, g))
-_markovF tm f (b0, g) | wsum <= 0 = (b0, (b0, g ))
-                      | otherwise = (wr, (wr, wg))
+_randIntervalsF :: RandomGen g => Double -> a -> (g, Bool) -> (Maybe a, (g, Bool))
+_randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    tm' = M.lookup b0 tm
-    weights = concatMap M.toList tm'
-    wsum = sum . map snd $ weights
-    (wr, wg) = weightedRandom weights g f
-
-weightedRandom :: [(a, Double)] -> g -> (Double -> g -> (Double, g)) -> (a, g)
-weightedRandom [] _ _ = error "weightedRandom: empty list."
-weightedRandom xs g f = er0 `seq` (x, g')
-  where
-    s       = sum (map snd xs)
-    cs      = scanl1 (\(_,q) (y,s') -> (y, s' + q)) xs
-    (p, g') = f s g
-    x       = fst . head . dropWhile ((< p) . snd) $ cs
-    er0 | s <= 0    = error "weightedRandom: weights sum to zero."
-        | otherwise = ()
-
-bernoulli :: (Serialize g, RandomGen g, Monad m) => Double -> g -> Auto m a (Blip a)
-bernoulli p g = proc x -> do
-    q <- rands (randomR (0, 1)) g -< ()
-    b <- emitOn (<= p)            -< q
-    id -< x <$ b
-{-# INLINE bernoulli #-}
-
-bernoulli_ :: (RandomGen g, Monad m) => Double -> g -> Auto m a (Blip a)
-bernoulli_ p g = proc x -> do
-    q <- rands_ (randomR (0, 1)) g -< ()
-    b <- emitOn (<= p)            -< q
-    id -< x <$ b
-{-# INLINE bernoulli_ #-}
-
-stdBernoulli :: Monad m => Double -> StdGen -> Auto m a (Blip a)
-stdBernoulli p g = proc x -> do
-    q <- stdRands (randomR (0, 1)) g -< ()
-    b <- emitOn (<= p)               -< q
-    id -< x <$ b
-{-# INLINE stdBernoulli #-}
-
+    (roll, g') = randomR (0, 1) g
+    onoff'     = roll <= thresh
+    outp | onoff     = Just x
+         | otherwise = Nothing
