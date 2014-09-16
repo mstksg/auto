@@ -1,7 +1,59 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+-- |
+-- Module      : Control.Auto.Process.Random
+-- Description : Entropy generationg 'Auto's.
+-- Copyright   : (c) Justin Le 2014
+-- License     : MIT
+-- Maintainer  : justin@jle.im
+-- Stability   : unstable
+-- Portability : portable
+--
+-- This module provides 'Auto's (purely) generating entropy in the form of
+-- random or noisy processes.  Note that every 'Auto' here is completely
+-- deterministic --- given the same initial seed, one would expect the same
+-- stream of outputs on every run.  Furthermore, if a serializable 'Auto'
+-- is serialized and resumed, it will continue along the deterministic path
+-- dictated by the /original/ seed given.
+--
+-- All of the 'Auto's in this module are generators: they ignore their
+-- inputs and just provide random outputs.  As such, you are likely to be
+-- running them with inputs of type '()', and combining them with your
+-- other processes using @proc@ notation or the various 'Arrow'
+-- combinators.
+--
+-- All of these 'Auto's come in three flavors: one serializing one that
+-- works with any serializable 'RandomGen' instance, one serializing one
+-- that works specifically with 'StdGen' from "System.Random", and one that
+-- takes any 'RandomGen' (including 'StdGen') and runs it without the
+-- ability to serialize and resume deterministically.
+--
+-- The reason why there's a specialized 'StdGen' version for all of these
+-- is that 'StdGen' actually doesn't have a 'Serialize' instance, so a
+-- rudimentary serialization process is provded with the 'StdGen' versions.
+--
+-- The first class of generators take arbitrary @g -> (b, g)@ functions:
+-- "Generate a random @b@, using the given function, and replace the seed
+-- with the resulting seed".  Most "random" functions follow this pattern,
+-- including 'random' and 'randomR', and if you are using something from
+-- <http://hackage.haskell.org/package/MonadRandom MonadRandom>,
+-- then you can use the 'runRand' function to turn a @'Rand' g b@ into a @g
+-- -> (b, g)@, as well:
+--
+-- @
+--     'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
+-- @
+--
+-- These are useful for generating noise...a new random value at every
+-- stoep.  They are entropy sources.
+--
+-- The other two generators given are for useful random processes you might
+-- run into.  The first is a 'Blip' stream that emits at random times with
+-- the given frequency/probability.  The second works /Interval/ semantics
+-- from "Control.Auto.Interval", and is a stream that is "on" or "off",
+-- chunks at a time, for random lengths.  The average length of each on or
+-- off period is controlled by the parameter you pass in.
 
 module Control.Auto.Process.Random (
-  -- * Streams of random values
+  -- * Streams of random values from random generators
     rands
   , stdRands
   , rands_
@@ -19,15 +71,13 @@ module Control.Auto.Process.Random (
   , randIntervals_
   ) where
 
--- import Data.Foldable
--- import Data.Map.Strict           (Map)
--- import qualified Data.Map.Strict as M
 import Control.Applicative
 import Control.Auto.Blip
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
 import Data.Serialize
+import Data.Bits
 import Data.Tuple
 import Prelude hiding               (id, (.), concat, concatMap, sum)
 import System.Random
@@ -141,64 +191,6 @@ randsM_ :: (RandomGen g, Monad m)
 randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
 
--- markov :: forall a b m g. (Serialize g, Serialize b, RandomGen g, Monad m, Ord b)
---        => Map b (Map b Double)
---        -> g
---        -> b
---        -> Auto m a b
--- markov tm g0 b0 = mkState (const (_markovF tm _rF)) (b0, g0)
-
--- stdMarkov :: forall a b m. (Serialize b, Monad m, Ord b)
---           => Map b (Map b Double)
---           -> StdGen
---           -> b
---           -> Auto m a b
--- stdMarkov tm g0 b0 = mkState f (b0, show g0)
---   where
---     f _ (b, sg) = let (b', (_, g')) = _markovF tm _rF (b, read sg :: StdGen)
---                   in  (b', (b', show g'))
-
--- stdMarkov_ :: forall a b m. (Monad m, Ord b)
---            => Map b (Map b Double)
---            -> StdGen
---            -> b
---            -> Auto m a b
--- stdMarkov_ tm g0 b0 = mkAuto (stdMarkov_ tm . read <$> get <*> pure b0)
---                              (put (show g0))
---                              $ \_ -> let (b', (_, g')) = _markovF tm _rF (b0, g0)
---                                      in  Output b' (stdMarkov_ tm g' b')
-
-
--- markov_ :: forall a b m g. (RandomGen g, Monad m, Ord b)
---         => Map b (Map b Double)
---         -> g
---         -> b
---         -> Auto m a b
--- markov_ tm g0 b0 = mkState_ (const (_markovF tm _rF)) (b0, g0)
-
--- _rF :: RandomGen g => Double -> g -> (Double, g)
--- _rF x = randomR (0, x)
-
--- _markovF :: Ord b => Map b (Map b Double) -> (Double -> g -> (Double, g)) -> (b, g) -> (b, (b, g))
--- _markovF tm f (b0, g) | wsum <= 0 = (b0, (b0, g ))
---                       | otherwise = (wr, (wr, wg))
---   where
---     tm' = M.lookup b0 tm
---     weights = concatMap M.toList tm'
---     wsum = sum . map snd $ weights
---     (wr, wg) = weightedRandom weights g f
-
--- weightedRandom :: [(a, Double)] -> g -> (Double -> g -> (Double, g)) -> (a, g)
--- weightedRandom [] _ _ = error "weightedRandom: empty list."
--- weightedRandom xs g f = er0 `seq` (x, g')
---   where
---     s       = sum (map snd xs)
---     cs      = scanl1 (\(_,q) (y,s') -> (y, s' + q)) xs
---     (p, g') = f s g
---     x       = fst . head . dropWhile ((< p) . snd) $ cs
---     er0 | s <= 0    = error "weightedRandom: weights sum to zero."
---         | otherwise = ()
-
 -- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
 -- a process where, at every trial, the result is "on" with the given
 -- probability @p@, and "off" otherwise.  Every step is independent from
@@ -292,6 +284,7 @@ _randIntervalsF :: RandomGen g => Double -> a -> (g, Bool) -> (Maybe a, (g, Bool
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
     (roll, g') = randomR (0, 1) g
-    onoff'     = roll <= thresh
+    onoff' = onoff `xor` (roll <= thresh)
     outp | onoff     = Just x
          | otherwise = Nothing
+
