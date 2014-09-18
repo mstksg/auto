@@ -3,23 +3,27 @@ module Control.Auto (
     Output(..)
   , Output'
   , onOutput
+  -- * Blip
+  , Blip
   -- * Auto
   , Auto
   , Auto'
   -- ** Running
-  -- TODO: stepAutoN
   , stepAuto
   , stepAuto'
+  , stepAutoN
+  , stepAutoN'
   -- ** Serializing
   -- | See the header of the "serializing" section of "Control.Auto.Core"
   -- for more detail on how these work.
   , encodeAuto
   , decodeAuto
-  -- * Blip
-  , Blip
   -- ** Strictness
   , forcer
   , seqer
+  -- ** Fixed points
+  , lastVal
+  , lastVal_
   -- * Auto constructors
   -- ** from State transformers
   , mkState
@@ -48,5 +52,7 @@ import Control.Applicative
 import Control.Arrow hiding (loop)
 import Control.Auto.Blip
 import Control.Auto.Core
+import Control.Auto.Run
+import Control.Auto.Time
 import Control.Category
 import Data.Semigroup

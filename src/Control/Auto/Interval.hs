@@ -29,8 +29,8 @@ module Control.Auto.Interval (
   , when
   , unless
   -- * Choice
-  , (<|?>)
   , (<|!>)
+  , (<|?>)
   , chooseInterval
   , choose
   -- * Blip-based intervals

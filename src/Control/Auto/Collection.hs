@@ -9,9 +9,9 @@ module Control.Auto.Collection (
     zipAuto
   , dZipAuto
   , dZipAuto_
-  -- , zipAutoB
-  -- , dZipAutoB
-  -- , dZipAutoB_
+  , zipAutoB
+  , dZipAutoB
+  , dZipAutoB_
   -- * Dynamic collections
   , dynZip_
   , dynMap_
@@ -90,14 +90,14 @@ dZipAuto x0 as = zipAuto x0 as . delay []
 dZipAuto_ :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto_ x0 as = zipAuto x0 as . delay_ []
 
--- zipAutoB :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
--- zipAutoB = zipAuto NoBlip
+zipAutoB :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+zipAutoB = zipAuto NoBlip
 
--- dZipAutoB :: (Serialize a, Monad m) => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
--- dZipAutoB = dZipAuto NoBlip
+dZipAutoB :: (Serialize a, Monad m) => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+dZipAutoB = dZipAuto NoBlip
 
--- dZipAutoB_ :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
--- dZipAutoB_ = dZipAuto_ NoBlip
+dZipAutoB_ :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
+dZipAutoB_ = dZipAuto_ NoBlip
 
 
 -- another problem
@@ -133,22 +133,22 @@ muxMany_ :: forall m a b k. (Ord k, Monad m)
      => (k -> Auto m a b) -> Auto m (Map k a) (Map k b)
 muxMany_ f = muxManyI_ (fmap Just . f)
 
-mux :: forall m a b k. (Serialize k, Ord k, Monad m)
-     => (k -> Auto m a b)
-     -> Auto m (k, a) b
+mux :: (Serialize k, Ord k, Monad m)
+    => (k -> Auto m a b)
+    -> Auto m (k, a) b
 mux f = dimap (uncurry M.singleton) (head . M.elems) (muxMany f)
 
-mux_ :: forall m a b k. (Ord k, Monad m)
-      => (k -> Auto m a b)
-      -> Auto m (k, a) b
+mux_ :: (Ord k, Monad m)
+     => (k -> Auto m a b)
+     -> Auto m (k, a) b
 mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 
-muxI :: forall m a b k. (Serialize k, Ord k, Monad m)
+muxI :: (Serialize k, Ord k, Monad m)
      => (k -> Auto m a (Maybe b))
      -> Auto m (k, a) (Maybe b)
 muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
 
-muxI_ :: forall m a b k. (Ord k, Monad m)
+muxI_ :: (Ord k, Monad m)
       => (k -> Auto m a (Maybe b))
       -> Auto m (k, a) (Maybe b)
 muxI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI_ f)

@@ -292,9 +292,10 @@ immediately = mkState f False
     f x False = (Blip x, True)
 
 -- | An 'Auto' that produces a 'Blip' stream that only emits once, after
--- waiting the given number of ticks.  It emits the input at that step.
+-- waiting the given number of ticks.  It emits the input after /waiting/
+-- that many steps.
 --
--- prop> immediately == inB 1
+-- prop> immediately == inB 0
 inB :: Int                -- ^ number of steps before value is emitted.
     -> Auto m a (Blip a)
 inB n = mkState f (n, False)

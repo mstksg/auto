@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- |
 -- Module      : Control.Auto.Process.Random
 -- Description : Entropy generationg 'Auto's.
@@ -229,10 +231,14 @@ bernoulli_ :: RandomGen g
            -> Auto m a (Blip a)
 bernoulli_ p = mkState_ (_bernoulliF p)
 
-_bernoulliF :: RandomGen g => Double -> a -> g -> (Blip a, g)
+_bernoulliF :: forall a g. RandomGen g
+            => Double
+            -> a
+            -> g
+            -> (Blip a, g)
 _bernoulliF p x g = (outp, g')
   where
-    (roll, g') = randomR (0, 1) g
+    (roll, g') = randomR (0, 1) g :: (Double, g)
     outp | roll <= p = Blip x
          | otherwise = NoBlip
 
@@ -280,10 +286,14 @@ randIntervals_ :: RandomGen g
                -> Auto m a (Maybe a)
 randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
-_randIntervalsF :: RandomGen g => Double -> a -> (g, Bool) -> (Maybe a, (g, Bool))
+_randIntervalsF :: forall a g. RandomGen g
+                => Double
+                -> a
+                -> (g, Bool)
+                -> (Maybe a, (g, Bool))
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    (roll, g') = randomR (0, 1) g
+    (roll, g') = randomR (0, 1) g :: (Double, g)
     onoff' = onoff `xor` (roll <= thresh)
     outp | onoff     = Just x
          | otherwise = Nothing
