@@ -41,6 +41,17 @@ module Control.Auto (
   , mkAccumD_
   , mkAccumMD
   , mkAccumMD_
+  -- ** Generators
+  -- *** Iterators
+  , iterator
+  , iterator_
+  , iteratorM
+  , iteratorM_
+  -- -- *** Unfolders
+  -- , unfold
+  -- , unfoldM
+  -- , unfold_
+  -- , unfoldM_
   -- * Re-exports
   , module Control.Category
   , module Control.Applicative
@@ -54,5 +65,6 @@ import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Auto.Run
 import Control.Auto.Time
+import Control.Auto.Generate
 import Control.Category
 import Data.Semigroup

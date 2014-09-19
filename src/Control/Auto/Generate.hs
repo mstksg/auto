@@ -36,19 +36,19 @@
 module Control.Auto.Generate (
   -- * From lists
     fromList
-  , fromLongList
   , fromList_
+  , fromLongList
   -- * From functions
   -- ** Iterating
   , iterator
-  , iteratorM
   , iterator_
+  , iteratorM
   , iteratorM_
   -- ** Unfolding
   -- | "Iterating with state".
   , unfold
-  , unfoldM
   , unfold_
+  , unfoldM
   , unfoldM_
   ) where
 

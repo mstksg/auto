@@ -359,10 +359,11 @@ every :: Int    -- ^ emit every @n@ steps.
 every (max 1 -> n) = mkState f n
   where
     f x i | i <= 1    = (Blip x, n    )
-          | otherwise = (NoBlip, n - 1)
+          | otherwise = (NoBlip, i - 1)
 
 -- | @'eachAt' n xs@ is an 'Auto' that ignores its input and emits each
--- element of @xs@ one at a time, every @n@ steps.
+-- element of @xs@ one at a time, evey @n@ steps.  First emitted value is
+-- at step @n@.
 --
 -- Once the list is exhausted, never emits again.
 --
@@ -387,7 +388,7 @@ _eachAtF :: Int -> (Int, [b]) -> (Blip b, (Int, [b]))
 _eachAtF n (i, xs) = case xs of
                        []               -> (NoBlip, (0    , xs))
                        y:ys | i <= 1    -> (Blip y, (n    , ys))
-                            | otherwise -> (NoBlip, (n - 1, xs))
+                            | otherwise -> (NoBlip, (i - 1, xs))
 
 -- | Suppress all emissions when the predicate is false.
 filterB :: (a -> Bool)      -- ^ filtering predicate

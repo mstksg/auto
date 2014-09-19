@@ -48,14 +48,14 @@ module Control.Auto.Serialize (
   , serializing
   -- ** Triggered ('Blip'-based) automatic serialization
   -- $onfrom
-  -- *** Intrinsic triggering
-  , saveFromB
-  , loadFromB'
-  , loadFromB
   -- *** External triggering
   , saveOnB
   , loadOnB'
   , loadOnB
+  -- *** Intrinsic triggering
+  , saveFromB
+  , loadFromB'
+  , loadFromB
   ) where
 
 import Control.Auto.Blip.Internal

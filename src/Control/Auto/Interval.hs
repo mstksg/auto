@@ -193,12 +193,12 @@ import Prelude hiding             ((.), id)
 --
 -- == Warning: Switching
 --
--- Note that when any of these combinators "block"/"inhibit"/"suppress" its
--- input as a part of a composition pipeline (as in for 'off', 'onFor',
--- 'offFor', etc.), the /input/ 'Auto's are /still stepped/ and "run".  If
--- the inputs had any monad effects, they would too be exected at every
--- step.  In order to "freeze" and not run or step an 'Auto' at all, you
--- have to use switches.
+-- Note that when any of these combinators "block" (or "inhibit" or
+-- "suppress", whatever you call it) their input as a part of a composition
+-- pipeline (as in for 'off', 'onFor', 'offFor', etc.), the /input/ 'Auto's
+-- are /still stepped/ and "run".  If the inputs had any monad effects,
+-- they would too be exected at every step.  In order to "freeze" and not
+-- run or step an 'Auto' at all, you have to use switches.
 --
 -- ('during' and 'bindI' are not included in this bunch.)
 --
@@ -443,8 +443,8 @@ _holdForF n = f   -- n should be >= 0
                    (_     , (_, 0)) -> (Nothing, 0    )
                    (_     , (z, j)) -> (z      , j - 1)
 
--- | "Chooses" between two interval-producing 'Auto's; behaves like the
--- first 'Auto' if it is "on"; otherwise, behaves like the second.
+-- | This "chooses" between two interval-producing 'Auto's; behaves like
+-- the first 'Auto' if it is "on"; otherwise, behaves like the second.
 --
 -- >>> let a = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
 -- >>> let Output res _ = stepAutoN' 5 a ()
@@ -460,7 +460,7 @@ _holdForF n = f   -- n should be >= 0
 -- 'Auto's are run at every step, along with any monadic effects,
 -- regardless of whether they are "on" or "off".
 --
--- Note that more often than not, '(<|!>)' is probably more useful.  This
+-- Note that more often than not, '<|!>' is probably more useful.  This
 -- is useful only in the case that you really, really want an interval at
 -- the end of it all.
 --
@@ -488,6 +488,8 @@ _holdForF n = f   -- n should be >= 0
 -- >>> let Output res2 _ = stepAutoN' 6 a2 ()
 -- >>> res2
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
+--
+-- TODO: Formatting here
 --
 -- @a <|!> b <|!> c@ associates as @a <|!> (b <|!> c)@
 --

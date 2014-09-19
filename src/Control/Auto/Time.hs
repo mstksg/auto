@@ -30,6 +30,8 @@
 -- ('count') and actiong as a "delay" or a way to access the previously
 -- stepped values of an 'Auto'.
 --
+-- TODO: dropping first few elements
+--
 
 module Control.Auto.Time (
   -- * A counter
@@ -157,8 +159,6 @@ delayN_ :: Monad m
         -> a
         -> Auto m a a
 delayN_ n y0 = iterate (delay_ y0 .) id !! n
-
-
 
 -- | "stretch" an 'Auto' out, slowing time.  @'stretch' n a@ will take one
 -- input, repeat the same output @n@ times (ignoring input), and then take
