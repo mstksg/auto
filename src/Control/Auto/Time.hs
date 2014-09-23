@@ -74,6 +74,8 @@ import Data.Serialize
 import Prelude hiding             ((.), id)
 
 -- | A simple 'Auto' that outputs the step count.  First output is 0.
+--
+-- TODO: should be 1?
 count :: (Serialize b, Num b) => Auto m a b
 count = iterator (+1) 0
 

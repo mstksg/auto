@@ -74,7 +74,46 @@ import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id, seq
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict    as M
 
-zipAuto :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
+-- | Give a list of @'Auto' m a b@ and get back an @'Auto' m [a] [b]@  ---
+-- take a list of @a@'s and feed them to each of the 'Auto's, and collects
+-- their output @b@'s.
+--
+-- If the input list doesn't have enough items to give to all of the
+-- 'Auto's wrapped, then use the given default value.  Any extra items in
+-- the input list are ignored.
+--
+-- For an example, we're going to make a list of 'Auto's that output
+-- a running sum of all of their inputs, but each starting at a different
+-- beginning value:
+--
+-- @
+--     summerList :: [Auto' Int Int]
+--     summerList = map sumFrom [0, 10, 20, 30]
+-- @
+--
+-- Then, let's throw it into 'zipAuto' with a sensible default value, 0:
+--
+-- @
+--     summings0 :: Auto' [Int] [Int]
+--     summings0 = zipAuto 0 summerList
+-- @
+--
+-- Now let's try it out!
+--
+-- >>> let Output r1 summings1 = stepAuto' summings0 [1,2,3,4]
+-- >>> r1
+-- [ 1, 12, 23, 34]
+-- >>> let Output r2 summings2 = stepAuto' summings1 [5,5]
+-- >>> r2
+-- [ 6, 17, 23, 34]
+-- >>> let Output r3 _         = stepAuto' summings2 [10,1,10,1,10000]
+-- >>> r3
+-- [16, 18, 33, 35]
+--
+zipAuto :: Monad m
+        => a                -- ^ default input value
+        -> [Auto m a b]     -- ^ 'Auto's to zip up
+        -> Auto m [a] [b]
 zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                         (mapM_ saveAuto as)
                         $ \xs -> do
@@ -83,24 +122,126 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                                 as' = map outAuto res
                             return (Output ys (zipAuto x0 as'))
 
--- delay with nop
+-- | Like 'zipAuto', but delay the input by one step, using the default
+-- value as the delaying value.
+--
+-- Let's try the example from 'zipAuto', except with 'dZipAuto' instead:
+--
+-- @
+--     summerList :: [Auto' Int Int]
+--     summerList = map sumFrom [0, 10, 20, 30]
+--
+--     summings0 :: Auto' [Int] [Int]
+--     summings0 = dZipAuto 0 summerList
+-- @
+--
+-- Trying it out:
+--
+-- >>> let Output r1 summings1 = stepAuto' summings0 [1,2,3,4]
+-- >>> r1
+-- [ 0, 10, 20, 30]
+-- >>> let Output r2 summings2 = stepAuto' summings1 [5,5]
+-- >>> r2
+-- [ 1, 12, 23, 34]
+-- >>> let Output r3 summings3 = stepAuto' summings2 [10,1,10,1,10000]
+-- >>> r3
+-- [ 6, 17, 23, 34]
+-- >>> let Output r4 _         = stepAuto' summings3 [100,100,100,100]
+-- >>> r4
+-- [16, 18, 33, 35]
+--
 dZipAuto :: (Serialize a, Monad m) => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto x0 as = zipAuto x0 as . delay []
 
+-- | The non-serializing/non-resuming version of 'dZipAuto'.
 dZipAuto_ :: Monad m => a -> [Auto m a b] -> Auto m [a] [b]
 dZipAuto_ x0 as = zipAuto x0 as . delay_ []
 
+-- | Takes a bunch of 'Auto's that take 'Blip' streams, and turns them into
+-- an 'Auto' that takes a bunch of 'Blip' streams and feeds them into each
+-- one in order.
+--
+-- It's basically like 'zipAuto', except instead of taking in normal
+-- streams of values, it takes in 'Blip' streams of values.
+--
+-- If the input streams ever number less than the number of 'Auto's zipped,
+-- then the other 'Auto's are just stepped with a 'Blip' stream that
+-- doesn't emit in that step.
 zipAutoB :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
 zipAutoB = zipAuto NoBlip
 
+-- | A delayed version of 'zipAutoB'
 dZipAutoB :: (Serialize a, Monad m) => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
 dZipAutoB = dZipAuto NoBlip
 
+-- | The non-serializing/non-resuming version of 'dZipAutoB'.
 dZipAutoB_ :: Monad m => [Auto m (Blip a) b] -> Auto m [Blip a] [b]
 dZipAutoB_ = dZipAuto_ NoBlip
 
-
 -- another problem
+
+-- | A dynamic box of 'Auto's.  Takes a list of inputs to feed to each one,
+-- in the order that they were added.  Also takes a 'Blip' stream, which
+-- emits with new 'Auto's to to the box.
+--
+-- Add new 'Auto's to the box however you want with the 'Blip' stream.  It
+-- collects all of the 'Just' outputs and outputs them all.  Whenever any
+-- of the wrapped 'Auto's begins to output 'Nothing', it is removed from
+-- the box.
+--
+-- The adding/removing aside, the routing of the inputs (the first field of
+-- the tuple) to the internal 'Auto's and the outputs behaves the same as
+-- with 'zipAuto'.
+--
+-- This will be a pretty powerful collection if you ever imagine adding and
+-- destroying behaviors dynamically...like spawning new enemies, or
+-- something like that.
+--
+-- Let's see an example...here we are going to be throwing a bunch of
+-- 'Auto's that count to five and then die into our 'dynZip_'...once every
+-- other step.
+--
+-- @
+--     -- count upwards, then die when you reach 5
+--     countThenDie :: Auto' () (Maybe Int)
+--     countThenDie = onFor 5 . iterator (+1) 1
+--
+--     -- emit a new `countThenDie` every two steps
+--     throwCounters :: Auto' () (Blip [Auto' () (Maybe Int)])
+--     throwCounters = tagBlips [countThenDie] . every 2
+--
+--     a :: Auto' () [Int]
+--     a = proc _ -> do
+--         newCounter <- throwCounters -< ()
+--         dynZip_ ()  -< (repeat (), newCounter)
+--
+--     -- or
+--     a' = dynZip_ () . (pure (repeat ()) &&& throwCounters)
+-- @
+--
+-- >>> let (res, _) = stepAutoN' 15 a ()
+-- >>> res
+-- [[], [1            ]
+--    , [2,           ]
+--    , [3, 1         ]
+--    , [4, 2         ]
+--    , [5, 3, 1      ]
+--    , [   4, 2      ]
+--    , [   5, 3, 1   ]
+--    , [      4, 2   ]
+--    , [      5, 3, 1]
+-- ]
+--
+-- This is a little unweildy, because 'Auto's maybe disappearing out of the
+-- thing while you are trying to feed inputs into it.  You might be feeding
+-- an input to an 'Auto'...but one of the 'Auto's before it on the list has
+-- disappeared, so it accidentally goes to the wrong one.
+--
+-- Because of this, it is suggested that you use 'dynMap_', which allows
+-- you to "target" labeled 'Auto's with your inputs.
+--
+-- TODO: Consider putting it in and running inputs immediately?
+--
 dynZip_ :: Monad m => a -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]
 dynZip_ x0 = go []
   where
@@ -110,6 +251,52 @@ dynZip_ x0 = go []
                          let (ys, as') = unzip [ (y, a) | (Output (Just y) a) <- res ]
                          return (Output ys (go as'))
 
+-- | A dynamic box of 'Auto's, indexed by an 'Int'.  Takes an 'IntMap' of
+-- inputs to feed into their corresponding 'Auto's, and collect all of the
+-- outputs into an output 'IntMap'.
+--
+-- Whenever any of the internal 'Auto's return 'Nothing', they are removed
+-- from the collection.
+--
+-- Toy examples here are of limited use, but let's try it out.  Here we
+-- will have a 'dynMap_' that feeds each internal 'Auto' back to itself.
+-- The result of each is sent directly back to itself.
+--
+-- @
+--     looper :: Auto' () (IntMap Int)
+--     looper = proc _ -> do
+--         initAutos <- immediately -< sumFromD <$> [1,-1,0]
+--         rec
+--             outs <- dynMap_ 0 . delay mempty -< (outs, initAutos)
+--         id -< outs
+-- @
+--
+-- >>> let (res, _) = stepAutoN' 20 looper ()
+-- >>> tail res
+-- [ fromList []
+-- , fromList [(0, 1 ), (1, -1 ), (2, 0 )]
+-- , fromList [(0, 1 ), (1, -1 ), (2, 0 )]
+-- , fromList [(0, 2 ), (1, -2 ), (2, 0 )]
+-- , fromList [(0, 3 ), (1, -3 ), (2, 0 )]
+-- , fromList [(0, 5 ), (1, -5 ), (2, 0 )]
+-- , fromList [(0, 8 ), (1, -8 ), (2, 0 )]
+-- , fromList [(0, 13), (1, -13), (2, 0 )]
+-- , fromList [(0, 21), (1, -21), (2, 0 )]
+-- , fromList [(0, 34), (1, -34), (2, 0 )]
+-- ]
+--
+-- The first part of each tuple is the 'Int' "key", and the second part is
+-- the value.
+--
+-- Basically, the twice-delayed results are fed into the each corresponding
+-- 'Auto' --- the results from the 'Auto' starting at positive 1 is fed
+-- back to the 'Auto' with a positive counter....results from the 'Auto'
+-- starting at negative 1 are fed back into the 'Auto' with the negative
+-- counter...and results of the 'Auto' starting at 0 is fed back into the
+-- 'Auto' that stays at 0.
+--
+-- TODO: put in pointers to real examples
+--
 dynMap_ :: Monad m => a -> Auto m (IntMap a, Blip [Auto m a (Maybe b)]) (IntMap b)
 dynMap_ x0 = go 0 mempty
   where
@@ -129,6 +316,7 @@ muxMany :: forall m a b k. (Serialize k, Ord k, Monad m)
     -> Auto m (Map k a) (Map k b)
 muxMany f = muxManyI (fmap Just . f)
 
+-- | The non-serializing/non-resuming version of 'muxMany'.
 muxMany_ :: forall m a b k. (Ord k, Monad m)
      => (k -> Auto m a b) -> Auto m (Map k a) (Map k b)
 muxMany_ f = muxManyI_ (fmap Just . f)
@@ -138,6 +326,7 @@ mux :: (Serialize k, Ord k, Monad m)
     -> Auto m (k, a) b
 mux f = dimap (uncurry M.singleton) (head . M.elems) (muxMany f)
 
+-- | The non-serializing/non-resuming version of 'mux'.
 mux_ :: (Ord k, Monad m)
      => (k -> Auto m a b)
      -> Auto m (k, a) b
@@ -148,6 +337,7 @@ muxI :: (Serialize k, Ord k, Monad m)
      -> Auto m (k, a) (Maybe b)
 muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
 
+-- | The non-serializing/non-resuming version of 'muxI'.
 muxI_ :: (Ord k, Monad m)
       => (k -> Auto m a (Maybe b))
       -> Auto m (k, a) (Maybe b)
@@ -168,6 +358,7 @@ muxManyI f = go mempty
     s as  = put (M.keys as) *> mapM_ saveAuto as
     t     = _muxManyIF f go
 
+-- | The non-serializing/non-resuming version of 'muxManyI'.
 muxManyI_ :: forall m a b k. (Ord k, Monad m)
       => (k -> Auto m a (Maybe b))
       -> Auto m (Map k a) (Map k b)
@@ -209,6 +400,7 @@ muxFMany :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
          -> Auto m (Map k (Either (c, a) a)) (Map k b)
 muxFMany f = muxFManyI (\k mc -> fmap Just (f k mc))
 
+-- | The non-serializing/non-resuming version of 'muxFMany'.
 muxFMany_ :: forall m a b k c. (Ord k, Monad m)
           => (k -> Maybe c -> Auto m a b)
           -> Auto m (Map k (Either (c, a) a)) (Map k b)
@@ -219,6 +411,7 @@ muxF :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
      -> Auto m (k, Either (c, a) a) b
 muxF f = dimap (uncurry M.singleton) (head . M.elems) (muxFMany f)
 
+-- | The non-serializing/non-resuming version of 'muxF'.
 muxF_ :: forall m a b k c. (Ord k, Monad m)
       => (k -> Maybe c -> Auto m a b)
       -> Auto m (k, Either (c, a) a) b
@@ -229,6 +422,7 @@ muxFI :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
       -> Auto m (k, Either (c, a) a) (Maybe b)
 muxFI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFManyI f)
 
+-- | The non-serializing/non-resuming version of 'muxFI'.
 muxFI_ :: forall m a b k c. (Ord k, Monad m)
        => (k -> Maybe c -> Auto m a (Maybe b))
        -> Auto m (k, Either (c, a) a) (Maybe b)
@@ -250,6 +444,7 @@ muxFManyI f = go mempty
         *> mapM_ (saveAuto . snd) as
     t    = _muxFManyIF f go
 
+-- | The non-serializing/non-resuming version of 'muxFManyI'.
 muxFManyI_ :: forall m a b c k. (Ord k, Monad m)
            => (k -> Maybe c -> Auto m a (Maybe b))
            -> Auto m (Map k (Either (c, a) a)) (Map k b)
