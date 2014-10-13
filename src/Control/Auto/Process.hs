@@ -32,11 +32,15 @@ module Control.Auto.Process (
   , mappendFrom_
   ) where
 
-import Control.Auto
+import Control.Auto.Core
+import Data.Semigroup
 import Data.Serialize
 
 -- | Outputs the running sum of all items passed so far, starting with an
 -- initial count.
+--
+-- The first output is the sum of the first input with the initial count.
+-- See the documentation for 'sumFromD' for more information.
 --
 -- prop> sumFrom x0 = mkAccum (+) x0
 sumFrom :: (Serialize a, Num a)
@@ -79,8 +83,9 @@ sumFromD_ = mkAccumD_ (+)
 
 -- | Returns the difference between the received input and the previous
 -- input.  The first result is 'Nothing'; if you have something you want
--- the first result to be, you can use '(<|!>)' from
--- "Control.Auto.Interval", or just 'fromMaybe'/'maybe' from "Data.Maybe".
+-- the first result to be, you can use '<|!>' from
+-- "Control.Auto.Interval", or just 'fromMaybe' or 'maybe' from
+-- "Data.Maybe".
 --
 -- >>> let a = deltas
 -- >>> let Output y1 a'  = stepAuto' a 5
@@ -93,7 +98,7 @@ sumFromD_ = mkAccumD_ (+)
 -- >>> y3
 -- Just (-3)
 --
--- Usage with '(<|!>)':
+-- Usage with '<|!>':
 --
 -- >>> let a = deltas <|!> pure 100
 -- >>> let (ys, _) = overList' a [5,7,4]

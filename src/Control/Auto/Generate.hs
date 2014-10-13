@@ -36,19 +36,19 @@
 module Control.Auto.Generate (
   -- * From lists
     fromList
-  , fromLongList
   , fromList_
+  , fromLongList
   -- * From functions
   -- ** Iterating
   , iterator
-  , iteratorM
   , iterator_
+  , iteratorM
   , iteratorM_
   -- ** Unfolding
   -- | "Iterating with state".
   , unfold
-  , unfoldM
   , unfold_
+  , unfoldM
   , unfoldM_
   ) where
 
@@ -186,25 +186,25 @@ iterator :: Serialize b
          => (b -> b)        -- ^ iterating function
          -> b               -- ^ starting value and initial output
          -> Auto m a b
-iterator f = mkAccum (\x _ -> f x)
+iterator f = mkAccumD (\x _ -> f x)
 
 -- | Like 'iterator', but with a monadic function.
 iteratorM :: (Serialize b, Monad m)
           => (b -> m b)     -- ^ (monadic) iterating function
           -> b              -- ^ starting value and initial output
           -> Auto m a b
-iteratorM f = mkAccumM (\x _ -> f x)
+iteratorM f = mkAccumMD (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iterator'.
 iterator_ :: (b -> b)        -- ^ iterating function
           -> b               -- ^ starting value and initial output
           -> Auto m a b
-iterator_ f = mkAccum_ (\x _ -> f x)
+iterator_ f = mkAccumD_ (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iteratorM'.
 iteratorM_ :: Monad m
            => (b -> m b)     -- ^ (monadic) iterating function
            -> b              -- ^ starting value and initial output
            -> Auto m a b
-iteratorM_ f = mkAccumM_ (\x _ -> f x)
+iteratorM_ f = mkAccumMD_ (\x _ -> f x)
 

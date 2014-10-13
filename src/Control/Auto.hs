@@ -3,22 +3,27 @@ module Control.Auto (
     Output(..)
   , Output'
   , onOutput
+  -- * Blip
+  , Blip
   -- * Auto
   , Auto
   , Auto'
   -- ** Running
   , stepAuto
   , stepAuto'
+  , stepAutoN
+  , stepAutoN'
   -- ** Serializing
   -- | See the header of the "serializing" section of "Control.Auto.Core"
   -- for more detail on how these work.
   , encodeAuto
   , decodeAuto
-  -- * Blip
-  , Blip
   -- ** Strictness
   , forcer
   , seqer
+  -- ** Fixed points
+  , lastVal
+  , lastVal_
   -- * Auto constructors
   -- ** from State transformers
   , mkState
@@ -36,6 +41,17 @@ module Control.Auto (
   , mkAccumD_
   , mkAccumMD
   , mkAccumMD_
+  -- ** Generators
+  -- *** Iterators
+  , iterator
+  , iterator_
+  , iteratorM
+  , iteratorM_
+  -- -- *** Unfolders
+  -- , unfold
+  -- , unfoldM
+  -- , unfold_
+  -- , unfoldM_
   -- * Re-exports
   , module Control.Category
   , module Control.Applicative
@@ -47,5 +63,8 @@ import Control.Applicative
 import Control.Arrow hiding (loop)
 import Control.Auto.Blip
 import Control.Auto.Core
+import Control.Auto.Run
+import Control.Auto.Time
+import Control.Auto.Generate
 import Control.Category
 import Data.Semigroup

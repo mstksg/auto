@@ -1,5 +1,4 @@
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Module      : Control.Auto.Time
@@ -30,6 +29,8 @@
 -- There are also various 'Auto's for observing the passage of time
 -- ('count') and actiong as a "delay" or a way to access the previously
 -- stepped values of an 'Auto'.
+--
+-- TODO: dropping first few elements
 --
 
 module Control.Auto.Time (
@@ -73,6 +74,8 @@ import Data.Serialize
 import Prelude hiding             ((.), id)
 
 -- | A simple 'Auto' that outputs the step count.  First output is 0.
+--
+-- TODO: should be 1?
 count :: (Serialize b, Num b) => Auto m a b
 count = iterator (+1) 0
 
@@ -83,15 +86,16 @@ count_ = iterator_ (+1) 0
 -- | An 'Auto' that returns the last value received by it.  Given an
 -- "initial value" to output first.
 --
--- This is a __very dangerous__ 'Auto', because its usage and its very
--- existence opens the door to breaking denotative/declarative style and
--- devolving into imperative style coding.
+-- This is (potentially) a __very dangerous__ 'Auto', because its usage and
+-- its very existence opens the door to breaking denotative/declarative
+-- style and devolving into imperative style coding.  However, when used
+-- where it is supposed to be used, it is more or less invaluable, and will
+-- be an essential part of many programs.
 --
--- From my experience, the only meaningful usage of this is for recursive
--- bindings.  If you ever are laying out recursive bindings in
--- a high-level/denotative way, you need to have at least one value be able
--- to have a "initial output" without depending on anything else.
--- 'lastVal' and 'delay' allow you to do this.
+-- Its main usage is for dealing with bindings.  If you ever are laying out
+-- recursive bindings in a high-level/denotative way, you need to have at
+-- least one value be able to have a "initial output" without depending on
+-- anything else.  'lastVal' and 'delay' allow you to do this.
 --
 -- See the <https://github.com/mstksg/auto-examples/blob/master/src/Recursive.hs recursive>
 -- example for more information on the appropriate usage of 'lastVal' and
@@ -157,8 +161,6 @@ delayN_ :: Monad m
         -> a
         -> Auto m a a
 delayN_ n y0 = iterate (delay_ y0 .) id !! n
-
-
 
 -- | "stretch" an 'Auto' out, slowing time.  @'stretch' n a@ will take one
 -- input, repeat the same output @n@ times (ignoring input), and then take
@@ -400,18 +402,18 @@ skipTo x0 = go
 -- >>> let Output y2 _    = stepAuto' ffA' (-9)
 -- -5         -- went from -4 (Nothing) to -5 (Just (-5))
 --
-fastForward :: forall m a b. Monad m
+fastForward :: Monad m
             => a                      -- ^ default input
             -> Auto m a (Maybe b)     -- ^ 'Auto' to fastforward (past each 'Nothing')
             -> Auto m a b
 fastForward x0 = go
   where
-    go :: Auto m a (Maybe b)
-       -> Auto m a b
+    -- go :: Auto m a (Maybe b)
+    --    -> Auto m a b
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     (skipNothings a0)
-    skipNothings :: Auto m a (Maybe b) -> a -> m (Output m a b)
+    -- skipNothings :: Auto m a (Maybe b) -> a -> m (Output m a b)
     skipNothings a0 x = do
       Output my a1 <- stepAuto a0 x
       case my of
@@ -420,21 +422,21 @@ fastForward x0 = go
 
 -- | Same behavior as 'fastForward', except accumulates all of the @'Left'
 -- c@ outputs in a list.
-fastForwardEither :: forall m a b c. Monad m
+fastForwardEither :: Monad m
                   => a                        -- ^ default input
                   -> Auto m a (Either c b)    -- ^ 'Auto' to fast-forward (past each 'Left')
                   -> Auto m a (b, [c])
 fastForwardEither x0 = fmap (second reverse) . go
   where
-    go :: Auto m a (Either c b)
-       -> Auto m a (b, [c])
+    -- go :: Auto m a (Either c b)
+    --    -> Auto m a (b, [c])
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     (skipNothings a0 [])
-    skipNothings :: Auto m a (Either c b)
-                 -> [c]
-                 -> a
-                 -> m (Output m a (b, [c]))
+    -- skipNothings :: Auto m a (Either c b)
+    --              -> [c]
+    --              -> a
+    --              -> m (Output m a (b, [c]))
     skipNothings a0 zs x = do
       Output ey a1 <- stepAuto a0 x
       case ey of
