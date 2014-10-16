@@ -207,6 +207,9 @@ import Prelude hiding             ((.), id)
 infixr 3 <|?>
 infixr 3 <|!>
 
+type Interval m a b = Auto m a (Maybe b)
+type Interval'  a b = Auto'  a (Maybe b)
+
 -- | An 'Auto' that produces an interval that always "off" ('Nothing'),
 -- never letting anything pass.
 --
@@ -489,9 +492,11 @@ _holdForF n = f   -- n should be >= 0
 -- >>> res2
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
--- TODO: Formatting here
+-- >  a <|!> b <!|> c
 --
--- @a <|!> b <|!> c@ associates as @a <|!> (b <|!> c)@
+-- associates as
+--
+-- >  a <|!> (b <|!> c)
 --
 -- So using this, you can "chain" a bunch of choices between intervals, and
 -- then at the right-most, "final" one, provide the default behavior.
