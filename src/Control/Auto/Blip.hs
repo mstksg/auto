@@ -23,17 +23,14 @@ module Control.Auto.Blip (
   -- $blip
   -- * The Blip type
     Blip
-  , blip
   , merge
   , mergeL
   , mergeR
+  , perBlip
   , emitOn
   , emitJusts
   , onJusts
   , fromBlips
-  -- * Composition with Blip streams
-  , perBlip
-  , bindB
   -- * Step/"time" based Blip streams and generators
   , never
   , immediately
@@ -313,7 +310,7 @@ inB n = mkState f (n, False)
 -- Do not use this for interval-like (on and off for chunks at a time)
 -- things; each input should be dealt with as a separate thing.
 --
--- For interval semantics, we have "Control.Auto.Interval".
+-- For interval semantics, we have 'Interval' from "Control.Auto.Interval".
 --
 -- Good example:
 --
@@ -326,6 +323,8 @@ inB n = mkState f (n, False)
 -- > emitOn (< 10) . iterator (+ 1) 0
 -- >
 -- > emitOn (const True) . foo
+--
+-- These bad examples would be good use cases of 'Interval'.
 --
 emitOn :: (a -> Bool)   -- ^ predicate to emit on
        -> Auto m a (Blip a)
@@ -670,19 +669,24 @@ perBlip a = a_
                              return (Output NoBlip   a_           )
 
 -- -- | Why is this even here
+-- hm i think it is for cases where 'Maybe's are used as 'Blip's or
+-- something and vice versa...
+--
+-- still weird.  should this even be in unsafe?
 -- perBlipI :: Monad m
 --           => Auto m (Maybe a) (Maybe b)
 --           -> Auto m (Blip a) (Blip b)
 -- perBlipI = dimap (blip Nothing Just) (maybe NoBlip Blip)
 
--- | Takes an @'Auto' m a ('Blip' b)@ (an 'Auto' that turns incoming @a@s
--- into a 'Blip' stream of @b@s) into an @'Auto' m ('Blip' a) ('Blip' b)@.
--- The original 'Auto' is applied only to emitted contents of a 'Blip'
--- stream.
---
--- It is like 'perBlip', but the resulting @'Blip' ('Blip' b)@ is "joined"
--- back into a @'Blip' b@.
---
--- prop> bindB a == fmap (blip NoBlip id) (perBlip a)
-bindB :: Monad m => Auto m a (Blip b) -> Auto m (Blip a) (Blip b)
-bindB  = fmap (blip NoBlip id) . perBlip
+-- again, why?
+-- -- | Takes an @'Auto' m a ('Blip' b)@ (an 'Auto' that turns incoming @a@s
+-- -- into a 'Blip' stream of @b@s) into an @'Auto' m ('Blip' a) ('Blip' b)@.
+-- -- The original 'Auto' is applied only to emitted contents of a 'Blip'
+-- -- stream.
+-- --
+-- -- It is like 'perBlip', but the resulting @'Blip' ('Blip' b)@ is "joined"
+-- -- back into a @'Blip' b@.
+-- --
+-- -- prop> bindB a == fmap (blip NoBlip id) (perBlip a)
+-- bindB :: Monad m => Auto m a (Blip b) -> Auto m (Blip a) (Blip b)
+-- bindB  = fmap (blip NoBlip id) . perBlip

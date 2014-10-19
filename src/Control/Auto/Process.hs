@@ -33,6 +33,7 @@ module Control.Auto.Process (
   ) where
 
 import Control.Auto.Core
+import Control.Auto.Interval
 import Data.Semigroup
 import Data.Serialize
 
@@ -112,11 +113,11 @@ sumFromD_ = mkAccumD_ (+)
 -- >>> ys
 -- [100, 2, -3]
 --
-deltas :: (Serialize a, Num a) => Auto m a (Maybe a)
+deltas :: (Serialize a, Num a) => Interval m a a
 deltas = mkState _deltasF Nothing
 
 -- | The non-resuming/non-serializing version of 'deltas'.
-deltas_ :: Num a => Auto m a (Maybe a)
+deltas_ :: Num a => Interval m a a
 deltas_ = mkState_ _deltasF Nothing
 
 _deltasF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)

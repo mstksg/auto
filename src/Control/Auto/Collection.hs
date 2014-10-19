@@ -74,11 +74,12 @@ module Control.Auto.Collection (
   ) where
 
 import Control.Applicative
-import Control.Category
 import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Auto.Time
+import Control.Category
 import Control.Monad hiding         (mapM, mapM_, sequence, sequence_)
 import Data.Foldable
 import Data.IntMap.Strict           (IntMap)
@@ -233,11 +234,11 @@ dZipAutoB_ = dZipAuto_ NoBlip
 --
 -- @
 --     -- count upwards, then die when you reach 5
---     countThenDie :: Auto' () (Maybe Int)
+--     countThenDie :: 'Interval'' () Int
 --     countThenDie = onFor 5 . iterator (+1) 1
 --
 --     -- emit a new `countThenDie` every two steps
---     throwCounters :: Auto' () (Blip [Auto' () (Maybe Int)])
+--     throwCounters :: Auto' () ('Blip' ['Interval'' () Int])
 --     throwCounters = tagBlips [countThenDie] . every 2
 --
 --     a :: Auto' () [Int]
@@ -274,7 +275,7 @@ dZipAutoB_ = dZipAuto_ NoBlip
 --
 dynZip_ :: Monad m
         => a    -- "default" input to feed in
-        -> Auto m ([a], Blip [Auto m a (Maybe b)]) [b]
+        -> Auto m ([a], Blip [Interval m a b]) [b]
 dynZip_ x0 = go []
   where
     go as = mkAutoM_ $ \(xs, news) -> do
@@ -331,7 +332,7 @@ dynZip_ x0 = go []
 --
 dynMap_ :: Monad m
         => a    -- ^ "default" input to feed in
-        -> Auto m (IntMap a, Blip [Auto m a (Maybe b)]) (IntMap b)
+        -> Auto m (IntMap a, Blip [Interval m a b]) (IntMap b)
 dynMap_ x0 = go 0 mempty
   where
     go i as = mkAutoM_ $ \(xs, news) -> do
@@ -496,7 +497,7 @@ eitherToMaybe :: Either (a, b) b -> (Maybe a, b)
 eitherToMaybe (Left (x, y)) = (Just x , y)
 eitherToMaybe (Right y)     = (Nothing, y)
 
-_muxgathermapF :: (k -> Maybe c -> Auto m a (Maybe b)) -> k -> (Maybe c, a) -> (Maybe c, Auto m a (Maybe b))
+_muxgathermapF :: (k -> Maybe c -> Interval m a b) -> k -> (Maybe c, a) -> (Maybe c, Interval m a b)
 _muxgathermapF f k (mz, _) = (mz, f k mz)
 
 -- | Keeps a whole bunch of 'Auto's in a 'Map', and every step, outputs
@@ -517,9 +518,9 @@ _muxgathermapF f k (mz, _) = (mz, f k mz)
 --
 -- TODO: Example
 gather :: (Ord k, Monad m, Serialize k, Serialize b)
-       => (k -> Auto m a (Maybe b))   -- ^ function to create a new 'Auto'
-                                      --   if none at that key already
-                                      --   exists
+       => (k -> Interval m a b)     -- ^ function to create a new 'Auto'
+                                    --   if none at that key already
+                                    --   exists
        -> Auto m (k, a) (Map k b)
 gather = lmap (uncurry M.singleton) . gatherMany
 
@@ -533,7 +534,7 @@ gather = lmap (uncurry M.singleton) . gatherMany
 -- in the output map at first.
 --
 gather_ :: (Ord k, Monad m, Serialize k)
-        => (k -> Auto m a (Maybe b))  -- ^ function to create a new 'Auto'
+        => (k -> Interval m a b)      -- ^ function to create a new 'Auto'
                                       --   if none at that key already
                                       --   exists
         -> Auto m (k, a) (Map k b)
@@ -544,7 +545,7 @@ gather_ = lmap (uncurry M.singleton) . gatherMany_
 -- Serializes neither the 'Auto's themselves nor the "last outputs" ---
 -- essentially, serializes/resumes nothing.
 gather__ :: (Ord k, Monad m)
-         => (k -> Auto m a (Maybe b))   -- ^ function to create a new
+         => (k -> Interval m a b)       -- ^ function to create a new
                                         --   'Auto' if none at that key
                                         --   already exists
          -> Auto m (k, a) (Map k b)
@@ -557,13 +558,13 @@ gather__ = lmap (uncurry M.singleton) . gatherMany__
 --
 -- TODO: Example
 gatherMany :: forall k a m b. (Ord k, Monad m, Serialize k, Serialize b)
-           => (k -> Auto m a (Maybe b))   -- ^ function to create a new
+           => (k -> Interval m a b)       -- ^ function to create a new
                                           --   'Auto' if none at that key
                                           --   already exists
            -> Auto m (Map k a) (Map k b)
 gatherMany f = lmap (fmap Right) (gatherFMany f')
   where
-    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' :: k -> Maybe () -> Interval m a b
     f' k _ = f k
 
 -- | The non-serializing/non-resuming version of 'gatherMany':
@@ -576,13 +577,13 @@ gatherMany f = lmap (fmap Right) (gatherFMany f')
 -- in the output map at first.
 --
 gatherMany_ :: forall k a m b. (Ord k, Monad m, Serialize k)
-            => (k -> Auto m a (Maybe b))  -- ^ function to create a new
+            => (k -> Interval m a b)      -- ^ function to create a new
                                           --   'Auto' if none at that key
                                           --   already exists
             -> Auto m (Map k a) (Map k b)
 gatherMany_ f = lmap (fmap Right) (gatherFMany_ f')
   where
-    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' :: k -> Maybe () -> Interval m a b
     f' k _ = f k
 
 -- | The non-serializing/non-resuming vervsion of 'gatherMany':
@@ -590,13 +591,13 @@ gatherMany_ f = lmap (fmap Right) (gatherFMany_ f')
 -- Serializes neither the 'Auto's themselves nor the "last outputs" ---
 -- essentially, serializes/resumes nothing.
 gatherMany__ :: forall k a m b. (Ord k, Monad m)
-             => (k -> Auto m a (Maybe b))   -- ^ function to create a new
+             => (k -> Interval m a b)       -- ^ function to create a new
                                             --   'Auto' if none at that key
                                             --   already exists
              -> Auto m (Map k a) (Map k b)
 gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
   where
-    f' :: k -> Maybe () -> Auto m a (Maybe b)
+    f' :: k -> Maybe () -> Interval m a b
     f' k _ = f k
 
 -- gatherF :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
@@ -616,7 +617,7 @@ gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
 
 
 gatherFMany :: forall k m a b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
-            => (k -> Maybe c -> Auto m a (Maybe b))
+            => (k -> Maybe c -> Interval m a b)
             -> Auto m (Map k (Either (c, a) a)) (Map k b)
 gatherFMany f = go mempty mempty
   where
@@ -631,11 +632,11 @@ gatherFMany f = go mempty mempty
     t    = _gatherFManyF f go
 
 gatherFMany_ :: forall k m a b c. (Ord k, Monad m, Serialize c, Serialize k)
-             => (k -> Maybe c -> Auto m a (Maybe b))
+             => (k -> Maybe c -> Interval m a b)
              -> Auto m (Map k (Either (c, a) a)) (Map k b)
 gatherFMany_ f = go mempty mempty
   where
-    go :: Map k (Maybe c, Auto m a (Maybe b))
+    go :: Map k (Maybe c, Interval m a b)
        -> Map k b
        -> Auto m (Map k (Either (c, a) a)) (Map k b)
     go as ys = mkAutoM l (s as) (t as ys)
@@ -645,8 +646,8 @@ gatherFMany_ f = go mempty mempty
     t    = _gatherFManyF f go
 
 _loadAs :: forall k a m b c. (Serialize k, Serialize c, Ord k)
-        => (k -> Maybe c -> Auto m a (Maybe b))
-        -> Get (Map k (Maybe c, Auto m a (Maybe b)))
+        => (k -> Maybe c -> Interval m a b)
+        -> Get (Map k (Maybe c, Interval m a b))
 _loadAs f = do
     kszs <- get :: Get [(k, Maybe c)]
     let as = M.fromList (map (\(k, mz) -> (k, (mz, f k mz))) kszs)
@@ -654,7 +655,7 @@ _loadAs f = do
 
 
 gatherFMany__ :: forall k a m b c. (Ord k, Monad m)
-              => (k -> Maybe c -> Auto m a (Maybe b))
+              => (k -> Maybe c -> Interval m a b)
               -> Auto m (Map k (Either (c, a) a)) (Map k b)
 gatherFMany__ f = go mempty mempty
   where
@@ -668,7 +669,7 @@ gatherFMany__ f = go mempty mempty
 _gatherFManyF :: forall k m a b c inAuto outAuto outOut.
                   ( Ord k
                   , Monad m
-                  , inAuto  ~ (Auto m a (Maybe b))
+                  , inAuto  ~ (Interval m a b)
                   , outAuto ~ (Auto m (Map k (Either (c, a) a)) (Map k b))
                   , outOut  ~ (Output m (Map k (Either (c, a) a)) (Map k b))
                   )

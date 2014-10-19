@@ -53,6 +53,7 @@ module Control.Auto.Generate (
   ) where
 
 import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Category
 import Data.Serialize
 import Prelude hiding                 ((.), id)
@@ -72,7 +73,7 @@ import Prelude hiding                 ((.), id)
 --
 fromList :: Serialize b
          => [b]                 -- ^ list to output element-by-element
-         -> Auto m a (Maybe b)
+         -> Interval m a b
 fromList = mkState (const _uncons)
 
 -- | A version of 'fromList' that is safe for long or infinite lists, or
@@ -87,7 +88,7 @@ fromList = mkState (const _uncons)
 --   * Loading: O(n) time on the number of times the 'Auto' has been
 --   stepped, maxing out at O(n) on the length of the entire input list.
 fromLongList :: [b]                 -- ^ list to output element-by-element
-             -> Auto m a (Maybe b)
+             -> Interval m a b
 fromLongList xs = go 0 xs
   where
     loader = do
@@ -108,7 +109,7 @@ fromLongList xs = go 0 xs
 
 -- | The non-resuming/non-serializing version of 'fromList'.
 fromList_ :: [b]                -- ^ list to output element-by-element
-          -> Auto m a (Maybe b)
+          -> Interval m a b
 fromList_ = mkState_ (const _uncons)
 
 _uncons :: [a] -> (Maybe a, [a])
@@ -125,27 +126,27 @@ _uncons (x:xs) = (Just x , xs)
 unfold :: Serialize c
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
-       -> Auto m a (Maybe b)
+       -> Interval m a b
 unfold f = mkState (_unfoldF f) . Just
 
 -- | Like 'unfold', but the unfolding function is monadic.
 unfoldM :: (Serialize c, Monad m)
         => (c -> m (Maybe (b, c)))     -- ^ unfolding function
         -> c                           -- ^ initial accumulator
-        -> Auto m a (Maybe b)
+        -> Interval m a b
 unfoldM f = mkStateM (_unfoldMF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfold'.
 unfold_ :: (c -> Maybe (b, c))     -- ^ unfolding function
         -> c                       -- ^ initial accumulator
-        -> Auto m a (Maybe b)
+        -> Interval m a b
 unfold_ f = mkState_ (_unfoldF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfoldM'.
 unfoldM_ :: Monad m
          => (c -> m (Maybe (b, c)))     -- ^ unfolding function
          -> c                           -- ^ initial accumulator
-         -> Auto m a (Maybe b)
+         -> Interval m a b
 unfoldM_ f = mkStateM_ (_unfoldMF f) . Just
 
 _unfoldF :: (c -> Maybe (b, c))

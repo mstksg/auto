@@ -67,6 +67,7 @@ import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Auto.Generate
+import Control.Auto.Interval
 import Control.Category
 import Control.Monad
 import Control.Monad.Loops
@@ -403,8 +404,8 @@ skipTo x0 = go
 -- -5         -- went from -4 (Nothing) to -5 (Just (-5))
 --
 fastForward :: Monad m
-            => a                      -- ^ default input
-            -> Auto m a (Maybe b)     -- ^ 'Auto' to fastforward (past each 'Nothing')
+            => a                  -- ^ default input
+            -> Interval m a b     -- ^ 'Auto' to fastforward (past each 'Nothing')
             -> Auto m a b
 fastForward x0 = go
   where
