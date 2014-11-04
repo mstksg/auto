@@ -84,6 +84,13 @@ unstable API.
 More examples and further descriptions will appear here as development
 continues.
 
+## Support
+
+Though this library is not officially released yet, the official support and
+discussion channel is #haskell-auto on freenode.  You can also usually find me
+as *jle`* on #haskell and #haskell-game.  Also, contributions to documentation
+and tests are welcome! :D
+
 Why Auto?
 ---------
 
