@@ -213,7 +213,13 @@ infixr 3 <|?>
 infixr 3 <|!>
 infixr 1 `compI`
 
+-- | An 'Interval' is "just" a type alias for @'Auto' m a ('Maybe' b)@.  If
+-- you ended up here with a link...no worries!  If you see @'Interval'
+-- m a b@, just think @'Auto' m a ('Maybe' b)@!
+--
+--
 type Interval m a b = Auto m a (Maybe b)
+
 type Interval'  a b = Auto'  a (Maybe b)
 
 -- | An 'Auto' that produces an interval that always "off" ('Nothing'),
@@ -593,10 +599,23 @@ during a = a_
 -- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
 -- an @'Interval' m ('Maybe' a) b@
 --
--- This very important combinator allows you to properly "chain" ("bind")
--- together series of inhibiting 'Auto's.  If you have an
--- @'Interval' m a b@ and an @'Interval' m b c@, you can chain them
--- into an @'Interval' m a c@.
+-- The given 'Auto' is "run" only on the 'Just' inputs, and paused on
+-- 'Nothing' inputs.
+--
+-- It's kind of like 'during', but the resulting @'Maybe' ('Maybe' b))@ is
+-- "joined" back into a @'Maybe' b@.
+--
+-- prop> bindI a == fmap join (during a)
+--
+-- This is really an alternative formulation of 'compI'; typically, you
+-- will be using 'compI' more often, but this form can also be useful (and
+-- slightly more general).  Note that:
+--
+-- prop> bindI f == compI f id
+--
+-- This combinator allows you to properly "chain" ("bind") together series
+-- of inhibiting 'Auto's.  If you have an @'Interval' m a b@ and an
+-- @'Interval' m b c@, you can chain them into an @'Interval' m a c@.
 --
 -- @
 --     f             :: 'Interval' m a b
@@ -608,25 +627,7 @@ during a = a_
 -- netwire might recognize this as the "default" composition in those other
 -- libraries)
 --
--- The given 'Auto' is "run" only on the 'Just' inputs, and paused on
--- 'Nothing' inputs.
---
--- It's kind of like 'during', but the resulting @'Maybe' ('Maybe' b))@ is
--- "joined" back into a @'Maybe' b@.
---
--- prop> bindI a == fmap join (during a)
---
--- As a contrived example, how about an 'Auto' that only allows values
--- through during a window...between, say, the second and fourth steps:
---
--- >>> let window start finish = bindI (onFor finish) . offFor start
--- >>> let a = window 1 4 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
--- >>> res
--- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
---
--- (Remember that 'count' is the 'Auto' that ignores its input and displays
--- the current step count, starting with 1)
+-- See 'compI' for more examples of this use case.
 --
 bindI :: Monad m => Interval m a b -> Interval m (Maybe a) b
 bindI = fmap join . during
@@ -659,25 +660,3 @@ bindI = fmap join . during
 --
 compI :: Monad m => Interval m b c -> Interval m a b -> Interval m a c
 compI f g = fmap join (during f) . g
-
--- _during' :: forall m a b t. (Monad m, Traversable t) => Auto m a b -> Auto m (t a) (t b)
--- _during' a = a_
---   where
---     a_ = mkAutoM (_during' <$> loadAuto a)
---                  (saveAuto a)
---                  f
---     f :: t a -> m (Output m (t a) (t b))
---     f  = liftM m2o . mapM (stepAuto a)
---     m2o :: t (Output m a b) -> Output m (t a) (t b)
---     m2o m  = Output (fmap outRes m) $ if null (toList m)
---                                         then a_
---                                         else (_ . fmap (_during' . outAuto)) m
-
-    -- ff :: Auto m (t a) (t b)
-    --    -> Auto m (t a) (t b)
-    --    -> Auto m (t a) (t b)
-    -- ff a' acc = liftA2 (<|>) a' acc
-    -- ff o _ = _during' (outAuto o)
-    -- f  = maybe fn fj
-    -- fj = liftM (onOutput Just _during') . stepAuto a
-    -- fn = return (Output Nothing  a_         )

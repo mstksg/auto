@@ -90,7 +90,7 @@ import Control.Category
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Fix
-import Data.ByteString
+import Data.ByteString hiding (empty)
 import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
@@ -737,6 +737,15 @@ instance Monad m => Applicative (Auto m a) where
                         (saveAuto af *> saveAuto ax)
                         $ \x -> liftM2 (<*>) (stepAuto af x) (stepAuto ax x)
     {-# INLINE (<*>) #-}
+
+instance (Monad m, Alternative m) => Alternative (Auto m a) where
+    empty = mkConstM empty
+    a1 <|> a2 = mkAutoM ((<|>) <$> loadAuto a1 <*> loadAuto a2)
+                        (saveAuto a1 *> saveAuto a2)
+                        $ \x -> let res1  = onOutAuto (<|> a2) `liftM` stepAuto a1 x
+                                    res2  = onOutAuto (a1 <|>) `liftM` stepAuto a2 x
+                                in  res1 <|> res2
+
 
 instance Monad m => Category (Auto m) where
     id      = mkFunc id
