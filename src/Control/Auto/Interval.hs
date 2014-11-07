@@ -64,9 +64,8 @@ import Prelude hiding             ((.), id, mapM, foldr)
 
 -- $intervals
 --
--- In practice, and for convenience, this "on or offness" is represented by
--- the very handy common type, 'Maybe'.  An "interval-producing" 'Auto'
--- looks like this:
+-- This concept of "on or offness" is represented as an "interval-producing
+-- 'Auto'" using 'Maybe':
 --
 -- @
 --     'Auto' m a ('Maybe' b)
@@ -74,17 +73,31 @@ import Prelude hiding             ((.), id, mapM, foldr)
 --
 -- (In contrast to the "normal", "always-on" 'Auto', @'Auto' m a b@)
 --
--- We say that the above 'Auto' takes in a stream of @a@s and produces
--- an "interval stream" of @b@s.  When it outputs a 'Nothing', the stream
--- is interpreted as "off".  When it outputs a 'Just', the stream is
--- interpreted as "on", with the value inside the 'Just'.
+-- Which from now on, we will be referring to with the equivalent /type
+-- synonym/:
 --
--- For example, we can look at @'onFor' :: 'Int' -> 'Auto' m a ('Maybe' a)@
--- in action. @'onFor' n@ is "on", and lets all values through, for @n@
+-- @
+--     type 'Interval' m a b = 'Auto' m a ('Maybe' b)
+-- @
+--
+-- So, conceptually, an @'Interval' m a b@ is the same (from the
+-- compiler's point of view) as an @'Auto' m a ('Maybe' b)@.  If you see
+-- it, you can substitute it in your head if it makes it easier.
+--
+-- Normally, an @'Auto' m a b@ takes in a stream of @a@s and produces
+-- a stream of @b@s.  So an @'Interval' m a b@ takes in a stream of @a@s
+-- and produces an /intervaled/ stream of @b@'s --- a stream that is on or
+-- off for contiguous chunks at a time.
+--
+-- When it outputs 'Nothing', it's interpreted as "off"; when it outputs
+-- @'Just' x@, it's interpreted as "on" with a value of @x@.
+--
+-- For example, take @'onFor' :: 'Int' -> 'Interval' m a a@.
+-- @'onFor' n@ is "on", and lets all values pass through through, for @n@
 -- steps; then it turns "off" forever.
 --
--- >>> let a = onFor 2 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = onFor 2 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
@@ -126,14 +139,46 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- Another neat motivation is that intervals work pretty well with the
 -- 'Blip' semantic tool, as well.
 --
--- The following 'Auto' will be "off" and suppress all of its input (from
--- 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
+-- The following 'Interval' will be "off" and suppress all of its input
+-- (from 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
 -- something, then it'll allow 'count' to pass.
 --
 -- >>> let a3 = after . (count &&& inB 3)
 -- >>> let Output res3 _ = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
+--
+-- == The Contract
+--
+-- So, why have an 'Interval' type, and not always just use 'Auto'?
+--
+-- You can say that, if you are given an 'Interval', then it comes with
+-- a "contract" (by documentation) that the 'Auto' will obey /interval
+-- semantics/.
+--
+-- @'Auto' m a ('Maybe' b)@ can mean a lot of things and represent a lot of
+-- things.
+--
+-- However, if you offer something of an 'Interval' type, or if you find
+-- something of an 'Interval' type, it comes with some sort of assurance
+-- that that 'Auto' will /behave/ like an interval: on and off for
+-- contiguous periods of time.
+--
+-- In addition, this allows us to further clarify /what our functions
+-- expect/.  By saying that a function expects an 'Interval':
+--
+-- @
+--     chooseInterval :: [Interval m a b]
+--                    -> Interval m a b
+-- @
+--
+-- 'chooseInterval' has the ability to "state" that it /expects/ things
+-- that follow interval semantics in order to "function" properly and in
+-- order to properly "return" an 'Interval'.
+--
+-- Of course, this is not enforced by the compiler.  However, it's useful
+-- to create a way to clearly state that what you are offering or what you
+-- are expecting does indeed follow this useful pattern.
 --
 -- == Combinators
 --
@@ -143,8 +188,8 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- 'fromInterval' and 'fromIntervalWith', analogous to 'fromMaybe' and
 -- 'maybe' from "Data.Maybe", respectively:
 --
--- >>> let a = fromIntervalWith "off" show . onFor 2 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = fromIntervalWith "off" show . onFor 2 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- ["1", "2", "off", "off", "off"]
 --
@@ -156,7 +201,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- >>> let a = onFor 2 . pure "hello"
 --        <|!> onFor 4 . pure "world"
 --        <|!> pure "goodbye!"
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
@@ -169,26 +214,50 @@ import Prelude hiding             ((.), id, mapM, foldr)
 --
 -- === Composition
 --
--- You can also "compose" together 'Auto's involving intervals.
+-- Another tool that makes 'Interval's powerful is the ability to compose
+-- them.
 --
 -- If you have an @'Auto' m a b@ and an @'Auto' m b c@, then you can
--- compose them with '.'.  But if you can't compose the second if the first
--- is @'Auto' m a ('Maybe' b)@.
+-- compose them with '.'.
 --
--- You can use 'during' to turn an @'Auto' m b c@ into an @'Auto' m ('Maybe' b) ('Maybe' c)@,
--- you can compose it fine!
+-- If you have an @'Auto' m a b@ and an @'Interval' m b c@, then you can
+-- compose them by throwing in a 'toOn' in the chain, or @'fmap' 'Just'@:
 --
--- If you had an @'Auto' m b ('Maybe' c)@, like 'onFor' and literally
--- almost every 'Auto' provided in this module, you can use 'bindI' to turn
--- it into an @'Auto' m ('Maybe' b) ('Maybe' c)@.
+-- @
+--     a               :: 'Auto' m a b
+--     i               :: 'Interval' m b c
+--     i . 'toOn' . a    :: 'Interval' m a c
+--     'fmap' 'Just' a :: 'Interval' m a b
+--     i . 'fmap' 'Just' a :: 'Interval' m a c
+-- @
 --
--- >>> let a1 = bindI (onFor 4) . offFor 1 . count
--- >>> let Output res1 _ = stepAutoN' 6 a1 ()
+-- If you have an @'Interval' m a b@ and an @'Auto' m b c@, you can "lift"
+-- the second 'Auto' to be an 'Auto' that only "acts" on "on"/'Just'
+-- outputs of the 'Interval':
+--
+-- @
+--     i            :: 'Interval' m a b
+--     a            :: 'Auto' m b c
+--     'during' a     :: 'Auto' m ('Maybe' a) ('Maybe' b)
+--     'during' a . i :: 'Interval' m a c
+-- @
+--
+-- Finally, the kleisli composition: if you have an @'Interval' m a b@ and
+-- an @'Interval' m b c@, you can use 'compI': (or also 'bindI')
+--
+-- @
+--     i1            :: 'Interval' m a b
+--     i2            :: 'Interval' m b c
+--     i2 `'compI'` i1 :: 'Interval' m a b c
+-- @
+--
+-- >>> let a1        = onFor 4 `compI` offFor 1 . count
+-- >>> let (res1, _) = stepAutoN' 6 a1 ()
 -- >>> res1
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
--- >>> let a2 = bindI (when even) . bindI (onFor 4) . offFor 1 . count
--- >>> let Output res2 _ = stepAutoN' 6 a2 ()
+-- >>> let a2 = when even `compI` onFor 4 `compI` offFor 1 . count
+-- >>> let (res2, _) = stepAutoN' 6 a2 ()
 -- >>> res2
 -- [Nothing, Just 2, Nothing, Just 4, Nothing, Nothing]
 --
@@ -584,7 +653,7 @@ choose = foldr (<|!>)
 -- always summing, the entire time.  The final output of that @'sumFrom' 0@
 -- is suppressed at the end with @'offFor' 2@.
 --
-during :: Monad m => Auto m a b -> Interval m (Maybe a) b
+during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
 during a = a_
   where
     a_ = mkAutoM (during <$> loadAuto a)
@@ -597,7 +666,7 @@ during a = a_
                              return (Output Nothing  a_         )
 
 -- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
--- an @'Interval' m ('Maybe' a) b@
+-- an @'Auto' m ('Maybe' a) ('Maybe' b)@ (or an @'Interval' m ('Maybe' a) b@)
 --
 -- The given 'Auto' is "run" only on the 'Just' inputs, and paused on
 -- 'Nothing' inputs.
@@ -629,7 +698,7 @@ during a = a_
 --
 -- See 'compI' for more examples of this use case.
 --
-bindI :: Monad m => Interval m a b -> Interval m (Maybe a) b
+bindI :: Monad m => Interval m a b -> Auto m (Maybe a) (Maybe b)
 bindI = fmap join . during
 
 -- | Composes two 'Interval's, the same way that '.' composes two 'Auto's:

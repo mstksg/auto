@@ -738,6 +738,7 @@ instance Monad m => Applicative (Auto m a) where
                         $ \x -> liftM2 (<*>) (stepAuto af x) (stepAuto ax x)
     {-# INLINE (<*>) #-}
 
+-- Should this even be here?  It might be kind of dangerous/unexpected.
 instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty = mkConstM empty
     a1 <|> a2 = mkAutoM ((<|>) <$> loadAuto a1 <*> loadAuto a2)

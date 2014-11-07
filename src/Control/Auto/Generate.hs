@@ -62,6 +62,10 @@ import Prelude hiding                 ((.), id)
 -- elements from the given list.  Ouputs 'Nothing' forever after reaching
 -- the end of the list.
 --
+-- Outputs an 'Interval'ed output, which is "on" ('Just') as long as the
+-- list still has elements to output, and is "off" ('Nothing') after it
+-- runs out.
+--
 -- Serializes itself by storing the entire rest of the list in binary, so
 -- if your list is long, it might take up a lot of space upon
 -- storage.  If your list is infinite, it makes an infinite binary, so be
@@ -116,11 +120,12 @@ _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
 
--- | Analogous to 'unfoldr' from "Prelude".  "unfold" out the outputs of an
--- 'Auto'; maintains an accumulator of type @c@, and at every step, applies
--- the unfolding function to the accumulator.  If the result is 'Nothing',
--- then the rest of the Auto will be 'Nothing' forever.  If the result is
--- @'Just' (y, acc)@, outputs @y@ and stores @acc@ as the new accumulator.
+-- | Analogous to 'unfoldr' from "Prelude".  Creates a generating
+-- 'Interval' by maintaining an internal accumulator of type @c@ and, at
+-- every stpe, applying to the unfolding function to the accumulator.  If
+-- the result is 'Nothing', then the 'Interval' will turn "off" forever
+-- (output 'Nothing' forever); if the result is @'Just' (y, acc)@, then it
+-- will output @y@ and store @acc@ as the new accumulator.
 --
 -- Given an initial accumulator.
 unfold :: Serialize c
