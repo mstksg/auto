@@ -117,7 +117,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- like @'pure' 0@ for three steps, and then like 'count' for the rest:
 --
 -- >>> let a1 = (onFor 3 . pure 0) --> count
--- >>> let Output res1 _ = stepAutoN' 8 a1 ()
+-- >>> let (res1, _) = stepAutoN' 8 a1 ()
 -- >>> res1
 -- [0, 0, 0, 1, 2, 3, 4, 5]
 --
@@ -128,7 +128,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- above 3, then switches to @'pure' 0@
 --
 -- >>> let a2 = (when (<= 3) . count) --> pure 0
--- >>> let Output res2 _ = stepAutoN' 8 a2 ()
+-- >>> let (res2, _) = stepAutoN' 8 a2 ()
 -- >>> res2
 -- [1, 2, 3, 0, 0, 0, 0, 0]
 --
@@ -143,8 +143,8 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- (from 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
 -- something, then it'll allow 'count' to pass.
 --
--- >>> let a3 = after . (count &&& inB 3)
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = after . (count &&& inB 3)
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
 --
@@ -265,6 +265,10 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- lifted 'Auto' like normal, with the contents of the 'Just', and any
 -- "off"/'Nothing' inputs cause the lifted 'Auto' to be skipped and frozen.
 --
+-- 'compI' adds a lot of power to 'Interval' because now you can always
+-- work "with 'Interval's", bind them just like normal 'Auto's, and then
+-- finally "exit" them after composing and combining many.
+--
 -- == Warning: Switching
 --
 -- Note that when any of these combinators "block" (or "inhibit" or
@@ -361,8 +365,8 @@ offFor = mkState f . max 0
 -- | An 'Auto' that allows values to pass whenever the input satisfies the
 -- predicate...and is off otherwise.
 --
--- >>> let a = when (\x -> x >= 2 && x <= 4) . count
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let a        = when (\x -> x >= 2 && x <= 4) . count
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
@@ -379,8 +383,8 @@ when p = mkFunc f
 -- | Like 'when', but only allows values to pass whenever the input does
 -- not satisfy the predicate.  Blocks whenever the predicate is true.
 --
--- >>> let a = unless (\x -> x < 2 &&& x > 4) . count
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let a        = unless (\x -> x < 2 &&& x > 4) . count
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
@@ -398,8 +402,8 @@ unless p = mkFunc f
 -- in at first, until the 'Blip' stream emits.  Then, allows all values
 -- through as "on" forevermore.
 --
--- >>> let a = after . (count &&& inB 3)
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = after . (count &&& inB 3)
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
 --
@@ -424,8 +428,8 @@ after = mkState f False
 -- through, as "on", until the 'Blip' stream emits...then doesn't let
 -- anything pass after that.
 --
--- >>> let a = before . (count &&& inB 3)
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = before . (count &&& inB 3)
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
@@ -450,8 +454,8 @@ before = mkState f False
 -- toggles onto the "on" state and lets everything pass; when the second
 -- 'Blip' stream emits, it toggles back onto the "off" state.
 --
--- >>> let a = before . (count &&& (inB 3 &&& inB 5))
--- >>> let Output res _ = stepAutoN' 7 a ()
+-- >>> let a        = before . (count &&& (inB 3 &&& inB 5))
+-- >>> let (res, _) = stepAutoN' 7 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
 between :: Interval m (a, (Blip b, Blip c)) a
@@ -465,8 +469,8 @@ between = mkState f False
 -- | Takes in a 'Blip' stream and constantly outputs the last emitted
 -- value.  Starts off as 'Nothing'.
 --
--- >>> let a1 = hold . inB 3 . count
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = hold . inB 3 . count
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- [Nothing, Nothing, Just 3, Just 3, Just 3]
 --
@@ -476,15 +480,15 @@ between = mkState f False
 --
 -- The first, using '<|!>':
 --
--- >>> let a2 = (hold . inB 3 . count) <|!> pure 100
--- >>> let Output res2 _ = stepAutoN' 5 a2 ()
+-- >>> let a2        = (hold . inB 3 . count) <|!> pure 100
+-- >>> let (res2, _) = stepAutoN' 5 a2 ()
 -- >>> res2
 -- [100, 100, 3, 3, 3]
 --
 -- The second, using 'fromInterval':
 --
--- >>> let a3 = fromInterval 100 . hold . inB 3 . count
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = fromInterval 100 . hold . inB 3 . count
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [100, 100, 3, 3, 3]
 --
@@ -502,8 +506,8 @@ hold_ = mkAccum_ f Nothing
 -- | Like 'hold', but it only "holds" the last emitted value for the given
 -- number of steps.
 --
--- >>> let a = holdFor 2 . inB 3 . count
--- >>> let Output res _ = stepAutoN' 7 a ()
+-- >>> let a        = holdFor 2 . inB 3 . count
+-- >>> let (res, _) = stepAutoN' 7 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
 --
@@ -530,8 +534,8 @@ _holdForF n = f   -- n should be >= 0
 -- | This "chooses" between two interval-producing 'Auto's; behaves like
 -- the first 'Auto' if it is "on"; otherwise, behaves like the second.
 --
--- >>> let a = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just "hello", Just "hello", Just "world", Just "world", Nothing]
 --
@@ -558,8 +562,8 @@ _holdForF n = f   -- n should be >= 0
 -- "always on" 'Auto'.  Behaves like the "on" value of the first 'Auto' if
 -- it is on; otherwise, behaves like the second.
 --
--- >>> let a1 = (onFor 2 . pure "hello") <|!> pure "world"
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = (onFor 2 . pure "hello") <|!> pure "world"
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- ["hello", "hello", "world", "world", "world"]
 --
@@ -569,7 +573,7 @@ _holdForF n = f   -- n should be >= 0
 -- >>> let a2 = onFor 2 . pure "hello"
 --         <|!> onFor 4 . pure "world"
 --         <|!> pure "goodbye!"
--- >>> let Output res2 _ = stepAutoN' 6 a2 ()
+-- >>> let (res2, _) = stepAutoN' 6 a2 ()
 -- >>> res2
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
@@ -622,12 +626,13 @@ choose = foldr (<|!>)
 -- It does this by "running" the given 'Auto' whenever it receives a 'Just'
 -- value, and skipping/pausing it whenever it receives a 'Nothing' value.
 --
--- >>> let a1 = during (sumFrom 0) . onFor 2 . pure 1
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = during (sumFrom 0) . onFor 2 . pure 1
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
--- >>> let a2 = during (sumFrom 0) . offFor 2 . pure 1
--- >>> let Output res2 _ = stepAutoN' 5 a2 ()
+--
+-- >>> let a2       = during (sumFrom 0) . offFor 2 . pure 1
+-- >>> let (res2, _) = stepAutoN' 5 a2 ()
 -- >>> res2
 -- [Nothing, Nothing, Just 1, Just 2, Just 3]
 --
@@ -638,8 +643,8 @@ choose = foldr (<|!>)
 -- 'offFor' in the chain with 'during' (like the previous example)
 -- and putting the 'sumFrom' "before":
 --
--- >>> let a3 = offFor 2 . sumFrom 0 . pure 1
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = offFor 2 . sumFrom 0 . pure 1
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 5]
 --
@@ -719,8 +724,8 @@ bindI = fmap join . during
 -- through during a window...between, say, the second and fourth steps:
 --
 -- >>> let window start finish = onFor finish `compI` offFor start
--- >>> let a = window 1 4 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = window 1 4 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
