@@ -21,7 +21,7 @@ module Control.Auto.Interval (
   -- $intervals
     Interval
   , Interval'
-  -- * Static intervals
+  -- * Static 'Interval's
   , off
   , toOn
   , fromInterval
@@ -29,7 +29,7 @@ module Control.Auto.Interval (
   , onFor
   , offFor
   -- , window
-  -- * Filter intervals
+  -- * Filter 'Interval's
   , when
   , unless
   -- * Choice
@@ -37,7 +37,7 @@ module Control.Auto.Interval (
   , (<|?>)
   , chooseInterval
   , choose
-  -- * Blip-based intervals
+  -- * Blip-based 'Interval's
   , after
   , before
   , between
@@ -45,7 +45,7 @@ module Control.Auto.Interval (
   , hold_
   , holdFor
   , holdFor_
-  -- * Composition with intervals
+  -- * Composition with 'Interval'
   , during
   , compI
   , bindI

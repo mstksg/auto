@@ -408,7 +408,10 @@ stepAuto a x = case a of
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
--- 'Identity'.
+-- 'Identity'.  Returns the output stripped of 'Identity'.
+--
+-- If you think of an @'Auto'' a b@ as a "stateful function" of type
+-- @a -> b@, then 'stepAuto'' lets you "run" it.
 stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
           -> Output' a b      -- ^ the output, and the updated 'Auto''

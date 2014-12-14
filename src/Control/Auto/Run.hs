@@ -36,6 +36,7 @@ module Control.Auto.Run (
   , run
   , runM
   -- * Unrolling monadic 'Auto's
+  , generalizeA
   , runStateA
   , runReaderA
   , runTraversableA
@@ -241,6 +242,13 @@ bindRead :: (Monad m, Read a)
          => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 bindRead a = bindI a <<^ readMaybe
+
+generalizeA :: Monad m => Auto' a b -> Auto m a b
+generalizeA a = mkAutoM (generalizeA <$> loadAuto a)
+                        (saveAuto a)
+                        $ \x -> do
+                            let Output y a' = stepAuto' a x
+                            return (Output y (generalizeA a'))
 
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
 -- takes in an input state every turn (in addition to the normal input) and
