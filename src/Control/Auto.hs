@@ -6,6 +6,7 @@ module Control.Auto (
   -- * Auto
   , Auto
   , Auto'
+  , generalizeA
   -- * Types
   , Blip
   , Interval

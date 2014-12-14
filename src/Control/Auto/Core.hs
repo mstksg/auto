@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 -- |
@@ -43,6 +44,9 @@ module Control.Auto.Core (
   , decodeAuto
   , saveAuto
   , loadAuto
+  -- ** Underlying monad
+  , hoistA
+  , generalizeA
   -- * Auto output
   , Output(..)
   , Output'
@@ -230,7 +234,30 @@ autoConstr (AutoStateM {}) = "AutoStateM"
 autoConstr (AutoArb {})    = "AutoArb"
 autoConstr (AutoArbM {})   = "AutoArbM"
 
-
+-- | Swaps out the underlying 'Monad' of an 'Auto' using the given monad
+-- morphism "transforming function".
+--
+-- Should be free for non-monadic functions.
+hoistA :: (Monad m, Monad m') => (forall c. m c -> m' c) -> Auto m a b -> Auto m' a b
+hoistA _ (AutoFunc f)        = AutoFunc f
+hoistA g (AutoFuncM f)       = AutoFuncM (g . f)
+hoistA _ (AutoState gp f s)  = AutoState gp f s
+hoistA g (AutoStateM gp f s) = AutoStateM gp (\x s' -> g (f x s')) s
+hoistA g (AutoArb gt pt f)   = AutoArb (fmap (hoistA g) gt)
+                                       pt 
+                                       $ \x -> let Output y a' = f x
+                                               in  Output y (hoistA g a')
+hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
+                                        pt
+                                        $ \x -> g $ do
+                                            Output y a' <- f x
+                                            return (Output y (hoistA g a'))
+                                        
+-- | Generalizes an 'Auto'' to any 'Auto' m a b', using 'hoist'.
+--
+-- Should be free for non-monadic functions.
+generalizeA :: Monad m => Auto' a b -> Auto m a b
+generalizeA = hoistA (return . runIdentity)
 
 -- | Force the serializing components of an 'Auto'.
 forceSerial :: Auto m a b -> Auto m a b
