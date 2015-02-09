@@ -22,12 +22,15 @@
 
 module Control.Auto.Run (
   -- * Special 'stepAuto' versions.
-    overList
+    streamAuto
+  , streamAuto'
+  , overList
   , overList'
   , stepAutoN
   , stepAutoN'
   -- * Running "interactively"
   , interact
+  , interactReadShow
   , interactM
   -- ** Helpers
   , duringRead
@@ -48,7 +51,7 @@ import Control.Auto.Interval
 import Control.Monad hiding       (mapM, mapM_)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
-import Data.Foldable hiding (concatMap)
+import Data.Foldable hiding       (concatMap)
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Traversable
@@ -88,6 +91,20 @@ overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
 overList' a xs = runIdentity (overList a xs)
+
+streamAuto :: Monad m
+           => Auto m a b
+           -> [a]
+           -> m [b]
+streamAuto a = liftM fst . overList a
+
+streamAuto' :: Auto' a b
+            -> [a]
+            -> [b]
+streamAuto' a [] = []
+streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
+                           ys          = streamAuto' a' xs
+                       in  y:ys
 
 -- | Repeatedly steps an 'Auto' with the same input a given number of
 -- times.
@@ -187,6 +204,12 @@ runM x0 f nt a = do
 interact :: Interval' String String         -- ^ 'Auto' to run interactively
          -> IO (Interval' String String)
 interact = interactM putStrLn (return . runIdentity)
+
+interactReadShow :: (Read a, Show b)
+                 => Auto' a b
+                 -> IO (Interval' String String)
+interactReadShow = interact . duringRead . fmap show
+
 
 -- | Like 'interact', but much more general.  You can run it with an 'Auto'
 -- of any underlying 'Monad', as long as you provide the natural

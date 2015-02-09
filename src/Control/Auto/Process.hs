@@ -82,6 +82,16 @@ sumFromD_ :: Num a
           -> Auto m a a
 sumFromD_ = mkAccumD_ (+)
 
+productFrom :: (Serialize a, Num a)
+            => a
+            -> Auto m a a
+productFrom = mkAccum (*)
+
+productFrom_ :: Num a
+             => a
+             -> Auto m a a
+productFrom_ = mkAccum_ (*)
+
 -- | Returns the difference between the received input and the previous
 -- input.  The first result is 'Nothing'; if you have something you want
 -- the first result to be, you can use '<|!>' from

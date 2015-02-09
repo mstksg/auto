@@ -445,6 +445,29 @@ stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
 stepAuto' a = runIdentity . stepAuto a
 {-# INLINE stepAuto' #-}
 
+evalAuto :: Monad m
+         => Auto m a b
+         -> a
+         -> m b
+evalAuto a = liftM outRes . stepAuto a
+
+evalAuto' :: Auto' a b
+          -> a
+          -> b
+evalAuto' a = outRes . stepAuto' a
+
+execAuto :: Monad m
+         => Auto m a b
+         -> a
+         -> m (Auto m a b)
+execAuto a = liftM outAuto . stepAuto a
+
+execAuto' :: Auto' a b
+          -> a
+          -> Auto' a b
+execAuto' a = outAuto . stepAuto' a
+
+
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
 -- 'Auto's.
@@ -459,6 +482,13 @@ seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 {-# INLINE seqer #-}
 
+-- compMAuto :: (Monad m, Monad m') => Auto m b (m' c) -> Auto m a (m' b) -> Auto m a (m' c)
+-- compMAuto g f = AutoArbM undefined
+--                          undefined
+--                          $ \x -> do
+--                              Output y f' <- stepAuto f x
+--                              undefined
+                                
 
 -- doesn't work like you'd think lol.
 -- serialForcer :: Monad m => Auto m a a
