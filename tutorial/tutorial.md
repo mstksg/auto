@@ -143,7 +143,33 @@ ghci> streamAuto' (productFrom 1) [1,3,6,10,15]
 [1,3,18,180,2700]
 ghci> streamAuto' (productFrom 1 . sumFrom 0) [1..5]
 [1,3,18,180,2700]
+~~~
 
+It also gives you an identity to this composition, `id`:
+
+~~~haskell
+ghci> streamAuto' id [1..5]
+[1,2,3,4,5]
+ghci> streamAuto' (productFrom 1 . id . sumFrom 0) [1..5]
+[1,3,18,180,2700]
+~~~
+
+(Remember to use `(.)` and `id` from `Control.Category`)
+
+### Arrow
+
+The Arrow instance gives you (among other things) a way to turn "pure" `a -> b`
+functions into `Auto m a b`'s, Autos from `a` to `b`:
+
+~~~haskell
+ghci> streamAuto' (arr (*2)) [1..5]
+[2,4,6,8,10]
+~~~
+
+But most importantly, it gives you the ability to compose complex Autos using
+*proc* notation:
+
+~~~haskell
 ~~~
 
 
