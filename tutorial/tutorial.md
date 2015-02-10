@@ -170,11 +170,19 @@ But most importantly, it gives you the ability to compose complex Autos using
 *proc* notation:
 
 ~~~haskell
+foo :: Auto' Int (Int, Maybe Int)
+foo = proc x -> do
+    sumX     <- sumFrom 0          -< x
+    prodX    <- productFrom 1      -< x + sumX
+    lastEven <- hold . emitOn even -< x
+    id -< (prodX, lastEven)
 ~~~
 
-
-
-
+~~~haskell
+ghci> streamAuto' foo [4,7,3,6,5,1]
+[ (    4, Just 4), (    144, Just 4), (    2448, Just 4)
+, (63648, Just 6), (1909440, Just 6), (51554880, Just 6) ]
+~~~
 
 
 

@@ -1099,20 +1099,26 @@ instance Monad m => ArrowChoice (Auto m) where
 
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
-                AutoFunc f        -> AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
-                AutoFuncM f       -> AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
-                AutoState gp f s  -> AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
-                AutoStateM gp f s -> AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
-                AutoArb l s f     -> AutoArb (loop <$> l)
-                                             s
-                                           $ \x -> onOutput fst loop
-                                                 . fix
-                                                 $ \ ~(Output (_, d) _) -> f (x, d)
-                AutoArbM l s f    -> AutoArbM (loop <$> l)
-                                              s
-                                            $ \x -> liftM (onOutput fst loop)
-                                                  . mfix
-                                                  $ \ ~(Output (_, d) _) -> f (x, d)
+                AutoFunc f        ->
+                    AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
+                AutoFuncM f       ->
+                    AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
+                AutoState gp f s  ->
+                    AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
+                AutoStateM gp f s ->
+                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
+                AutoArb l s f     ->
+                    AutoArb (loop <$> l)
+                            s
+                          $ \x -> onOutput fst loop
+                                . fix
+                                $ \ ~(Output (_, d) _) -> f (x, d)
+                AutoArbM l s f    ->
+                    AutoArbM (loop <$> l)
+                             s
+                           $ \x -> liftM (onOutput fst loop)
+                                 . mfix
+                                 $ \ ~(Output (_, d) _) -> f (x, d)
     {-# INLINE loop #-}
 
 -- Utility instances

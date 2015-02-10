@@ -23,6 +23,8 @@ module Control.Auto.Process (
   , sumFrom_
   , sumFromD
   , sumFromD_
+  , productFrom
+  , productFrom_
   , deltas
   , deltas_
   -- * Monoidal/Semigroup
