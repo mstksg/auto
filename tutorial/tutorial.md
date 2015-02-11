@@ -27,21 +27,21 @@ ghci> x
 
 Here, we just stepped the `sumFrom 0` Auto, feeding it with an input
 of 5.  The result (`x`) is the running total of the inputs --- in this
-case, 5.  Neat!  We named our "next 'Auto'" `a2`.  Let's try it again:
+case, 5.  Neat!  We named our "next `Auto`" `a2`.  Let's try it again:
 
 ~~~haskell
 -- a2 :: Auto' Int Int
 ghci> let Output y _ = stepAuto' a2 3
 ghci> y
 8
-~~~haskell
+~~~
 
-We feed now an 3 to our next 'Auto', `a2`, and get that the result
+We feed now an 3 to our next `Auto`, `a2`, and get that the result
 `y` is now 8!
 
-Now, normally we don't really often step our 'Auto's manually...if we
+Now, normally we don't really often step our `Auto`s manually...if we
 have an input stream (like a list), we can streamingly run them all
-through our 'Auto's one at a time, for example:
+through our `Auto`s one at a time, for example:
 
 ~~~haskell
 ghci> take 10 $ streamAuto' (sumFrom 0) [1..]
@@ -62,11 +62,11 @@ helloworld
 helloworldgoodbye
 ~~~
 
-('mappender' is the 'Auto' that is much like 'sumFrom', but it returns
-the 'mconcat' of all of its inputs so far; we fmap 'Just'
-because as soon as 'interact' sees a 'Nothing', it stops looping)
+(`mappender` is the `Auto` that is much like `sumFrom`, but it returns
+the `mconcat` of all of its inputs so far; we fmap `Just`
+because as soon as `interact` sees a `Nothing`, it stops looping)
 
-'Auto's can also be effectful, because why not?
+`Auto`s can also be effectful, because why not?
 
 ~~~haskell
 -- print      :: Show a => a -> IO ()
@@ -79,6 +79,41 @@ ghci> streamAuto (arrM print) [1..5]
 4
 5
 ~~~
+
+### The Types
+
+The most important type in this library is `Auto m a b` (well, also its
+variant, `Auto' a b`).
+
+An `Auto' a b` is, conceptually, in english, read as an *auto* (stateful
+function) that *turns `a`s into `b`s* (takes `a`s, returns `b`s).  Feed in
+`a`s, `b`s come out.
+
+An `Auto m a b` is like an `Auto' a b`, except the process of popping the `b`
+out (and updating the internal state of the `Auto`) happens in the context of
+a `Monad` `m`.  (Note that `Auto' a b` is just `Auto Identity a b`).
+
+So, if `Auto'` is a fancy internally-stateful function `a -> b`, `Auto m a b`
+is a fancy internally-stateful function `a -> m b`.
+
+For the most part, your things will be fine with just `Auto'`...however, there
+are useful `Auto`s with effects, so it's best to leave your functions
+parameterized over `Monad m => Auto m a b`, so you can use them as both an
+`Auto' a b` *and* as an `Auto m a b`, if you wanted to, without any explicit
+conversions.
+
+Another important type you see is `Output m a b`, which is just a glorified
+tuple with a `b` and an `Auto m a b`.  As you can see above, when you "step"
+an `Auto` (feed it an `a` manually), you get, as a result, a `b` and a "next
+`Auto`".  An `Output` type is a tuple containing these two.  There is also an
+`Output' a b`, which you get when you step an `Auto' a b`, which contains a
+`b` and a next `Auto'`.
+
+~~~haskell
+data Output m a b = Output { a :: outRes, Auto m a b :: outAuto }
+~~~
+
+
 
 Composing and creating
 ----------------------
@@ -184,5 +219,36 @@ ghci> streamAuto' foo [4,7,3,6,5,1]
 , (63648, Just 6), (1909440, Just 6), (51554880, Just 6) ]
 ~~~
 
+`emitOn even` produces a "Blip" stream that emits whenever the input (`x`) is
+even, and `hold` is a `Maybe` that holds the value of the most recent received
+emitted value.
+
+Most of what was just done could be written with the `Applicative`
+instance as well, but seeing it laid out almost like a dependency graph yields
+powerful expressiveness.
+
+The syntax for proc blocks is that each line is of the form:
+
+~~~haskell
+auto -< input
+~~~
+
+And, if you want to "bind" and name the result for later:
+
+~~~haskell
+output <- auto -< intput
+~~~
+
+Kind of like a little ASCII art arrow!  Cute, huh?
+
+The result of the entire block is the output of the final line, just like in
+monadic do blocks.
+
+You can actually get pretty fancy with `proc` blocks, and use conditions and
+even recursive bindings:
+
+~~~haskell
+
+~~~
 
 

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
@@ -94,14 +95,14 @@ import Control.Category
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Fix
-import Data.ByteString hiding (empty)
+import Data.ByteString hiding   (empty)
 import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
--- import Data.Typeable
+import Data.Typeable
 import GHC.Generics
-import Prelude hiding        ((.), id)
+import Prelude hiding           ((.), id)
 
 -- TODO: provde combinators/ability to map over the result or use the
 -- result of stepAuto, without ruining the internal constructor structure
@@ -116,7 +117,7 @@ import Prelude hiding        ((.), id)
 data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
                            , outAuto :: Auto m a b    -- ^ The next 'Auto'
                            } deriving ( Functor
-                                      -- , Typeable
+                                      , Typeable
                                       , Generic
                                       )
 
@@ -185,6 +186,7 @@ data Auto m a b =           AutoFunc    !(a -> b)
                 | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
                 |           AutoArb     (Get (Auto m a b)) Put !(a -> Output m a b)
                 |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
+                deriving ( Typeable )
 
 -- data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
 --                        , _saveAuto :: Put
@@ -252,7 +254,7 @@ hoistA g (AutoFuncM f)       = AutoFuncM (g . f)
 hoistA _ (AutoState gp f s)  = AutoState gp f s
 hoistA g (AutoStateM gp f s) = AutoStateM gp (\x s' -> g (f x s')) s
 hoistA g (AutoArb gt pt f)   = AutoArb (fmap (hoistA g) gt)
-                                       pt 
+                                       pt
                                        $ \x -> let Output y a' = f x
                                                in  Output y (hoistA g a')
 hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
@@ -260,7 +262,7 @@ hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
                                         $ \x -> g $ do
                                             Output y a' <- f x
                                             return (Output y (hoistA g a'))
-                                        
+
 -- | Generalizes an 'Auto'' to any 'Auto' m a b', using 'hoist'.
 --
 -- Should be free for non-monadic functions.
@@ -498,7 +500,7 @@ seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 --                          $ \x -> do
 --                              Output y f' <- stepAuto f x
 --                              undefined
-                                
+
 
 -- doesn't work like you'd think lol.
 -- serialForcer :: Monad m => Auto m a a
@@ -1047,6 +1049,17 @@ instance Monad m => Profunctor (Auto m) where
                                                    Output y a' <- fa (f x)
                                                    return (Output (g y) (a_ a'))
     {-# INLINE dimap #-}
+
+instance Monad m => Strong (Auto m) where
+    first'  = first
+    second' = second
+
+instance Monad m => Choice (Auto m) where
+    left'  = left
+    right' = right
+
+instance MonadFix m => Costrong (Auto m) where
+    unfirst = loop
 
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
