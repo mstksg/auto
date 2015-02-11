@@ -80,7 +80,7 @@ ghci> streamAuto (arrM print) [1..5]
 5
 ~~~
 
-### The Types
+### What's in a type?
 
 The most important type in this library is `Auto m a b` (well, also its
 variant, `Auto' a b`).
@@ -111,9 +111,12 @@ an `Auto` (feed it an `a` manually), you get, as a result, a `b` and a "next
 
 ~~~haskell
 data Output m a b = Output { a :: outRes, Auto m a b :: outAuto }
+
+type Output' = Output Identity
 ~~~
 
-
+There are also two more types, `Interval` (a type synonym) and `Blip`, that
+will show up later.
 
 Composing and creating
 ----------------------
@@ -248,7 +251,44 @@ You can actually get pretty fancy with `proc` blocks, and use conditions and
 even recursive bindings:
 
 ~~~haskell
+foo :: Auto' Int (Int, String)
+foo = proc goal -> do
+    rec let goUp = curr < goal
+        curr <- sumFromD 0 -< if goUp
+                                then 4
+                                else -1
+    mesg <- if goUp
+              then
+                id -< "went up from " ++ show curr
+              else do
+                numUps <- sumFrom 0 -< 1 :: Int
+                id -< "went down, #" ++ show numUps
 
+    id -< (curr, mesg)
 ~~~
+
+~~~haskell
+ghci> streamAuto' foo (replicate 10 6)
+[ (0, "went up from 0"), (4, "went up from 4"), (8, "went down, #1")
+, (7, "went down, #2"), (6, "went down, #3"), (5, "went up from 5") ]
+~~~
+
+`sumFromD` is like `sumFrom`, but always outputs the accumulator *before
+adding the input*, isntead of after adding it; sort of like `c++` instead of
+`++c`.  Put in another way, it ouputs a running sum excluding for the most
+recent input.
+
+What happens here?  Well, the auto receives an input --- a "goal number" that
+it tries to get `curr` to.  If `curr` is too low, then it is increased by 4;
+if it is too high, it is decreased by 1.  Note that `curr`'s increase/decrease
+depends on `goUp`, and `goUp` depends on `curr`, so we have a cyclic
+relationship.  Luckily, the library handles this for us.
+
+There's also a message that gets popped out too; if the thing is to be
+increased, then output a mesasge "went up to"; if it decreased, output "went
+down", and keep track of how many times it has been decreased (using `sumFrom
+0`), and output that.
+
+And that's proc notation, and the Arrow instance!
 
 
