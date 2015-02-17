@@ -275,7 +275,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- "suppress", whatever you call it) their input as a part of a composition
 -- pipeline (as in for 'off', 'onFor', 'offFor', etc.), the /input/ 'Auto's
 -- are /still stepped/ and "run".  If the inputs had any monad effects,
--- they would too be exected at every step.  In order to "freeze" and not
+-- they would too be executed at every step.  In order to "freeze" and not
 -- run or step an 'Auto' at all, you have to use switches.
 --
 -- ('during' and 'bindI' are not included in this bunch.)
@@ -293,6 +293,8 @@ infixr 1 `compI`
 --
 type Interval m a b = Auto m a (Maybe b)
 
+-- | 'Interval', specialized with 'Identity' as its underlying 'Monad'.
+-- (Analogous to 'Auto'' for 'Auto')
 type Interval'  a b = Auto'  a (Maybe b)
 
 -- | An 'Auto' that produces an interval that always "off" ('Nothing'),
@@ -474,24 +476,9 @@ between = mkState f False
 -- >>> res1
 -- [Nothing, Nothing, Just 3, Just 3, Just 3]
 --
--- You can make this behave as an @'Auto' m ('Blip' a) b@ (no possible
--- 'Nothing's) by providing a "default" value, to be used when the input
--- stream has not yet emitted, in one of two ways:
---
--- The first, using '<|!>':
---
--- >>> let a2        = (hold . inB 3 . count) <|!> pure 100
--- >>> let (res2, _) = stepAutoN' 5 a2 ()
--- >>> res2
--- [100, 100, 3, 3, 3]
---
--- The second, using 'fromInterval':
---
--- >>> let a3        = fromInterval 100 . hold . inB 3 . count
--- >>> let (res3, _) = stepAutoN' 5 a3 ()
--- >>> res3
--- [100, 100, 3, 3, 3]
---
+-- If you want an @'Auto' m ('Blip' a) a@ (no 'Nothing'...just a "default
+-- value" before everything else), then you can use 'holdWith' from
+-- "Control.Auto.Blip"...or also just 'hold' with '<|!>' or 'fromInterval'.
 hold :: Serialize a => Interval m (Blip a) a
 hold = mkAccum f Nothing
   where

@@ -90,7 +90,10 @@ overList a (x:xs) = do
 overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
-overList' a xs = runIdentity (overList a xs)
+overList' a []     = ([], a)
+overList' a (x:xs) = let Output y a' = stepAuto' a x
+                         (ys, a'')   = overList' a' xs
+                     in  (y:ys, a'')
 
 streamAuto :: Monad m
            => Auto m a b

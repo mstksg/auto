@@ -636,6 +636,11 @@ fromBlips :: a  -- ^ the "default value" to output when the input is not
           -> Auto m (Blip a) a
 fromBlips d = mkFunc (blip d id)
 
+-- | @'holdWith' y0@ is an 'Auto' that always outputs the /most recently
+-- emitted/ value from the input /Blip/ stream.  Before anything is
+-- emitted, @y0@ is outputted as a placeholder.
+--
+-- Contrast with 'hold' from "Control.Auto.Interval".
 holdWith :: Serialize a
          => a
          -> Auto m (Blip a) a
@@ -643,6 +648,7 @@ holdWith = mkAccum f
   where
     f x = blip x id
 
+-- | A non-serializing/non-resumable version of 'holdWith'.
 holdWith_ :: a
           -> Auto m (Blip a) a
 holdWith_ = mkAccum_ f

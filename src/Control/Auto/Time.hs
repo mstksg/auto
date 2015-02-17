@@ -95,10 +95,10 @@ count_ = iterator_ (+1) 0
 -- where it is supposed to be used, it is more or less invaluable, and will
 -- be an essential part of many programs.
 --
--- Its main usage is for dealing with bindings.  If you ever are laying out
--- recursive bindings in a high-level/denotative way, you need to have at
--- least one value be able to have a "initial output" without depending on
--- anything else.  'lastVal' and 'delay' allow you to do this.
+-- Its main usage is for dealing with recursive bindings.  If you ever are
+-- laying out recursive bindings in a high-level/denotative way, you need
+-- to have at least one value be able to have a "initial output" without
+-- depending on anything else.  'lastVal' and 'delay' allow you to do this.
 --
 -- See the <https://github.com/mstksg/auto-examples/blob/master/src/Recursive.hs recursive>
 -- example for more information on the appropriate usage of 'lastVal' and
@@ -115,18 +115,24 @@ lastVal_ :: a             -- ^ initial value
 lastVal_ = mkState_ $ \x s -> (s, x)
 {-# INLINE lastVal_ #-}
 
+-- | Like 'arr', but applies the function to the /previous value/ of the
+-- input, instead of the current value.  Used for the same purposes as
+-- 'lastVal': to manage recursive bindings.  Don't use this to do
+-- imperative programming!
+--
+-- prop> arrD = lastVal id
 arrD :: Serialize b
      => (a -> b)
      -> b
      -> Auto m a b
 arrD f = mkState $ \x s -> (s, f x)
 
+-- | The non-resuming/non-serializing version of 'arrD'.
 arrD_ :: Serialize b
       => (a -> b)
       -> b
       -> Auto m a b
 arrD_ f = mkState_ $ \x s -> (s, f x)
-
 
 -- | An alias for 'lastVal'; used in contexts where "delay" is more
 -- a meaningful description than "last value".  All of the warnings for
