@@ -3,9 +3,9 @@ Auto
 
 (Working name)
 
-**Auto** is a Haskell DSL/library providing denonational, compositional
-semantics for discrete-step, locally stateful, interactive programs, games,
-and automations, with implicitly derived serialization.
+**Auto** is a Haskell DSL/library providing declarative, compositional,
+denotative semantics for discrete-step, locally stateful, interactive
+programs, games, and automations, with implicitly derived serialization.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -20,7 +20,7 @@ and automations, with implicitly derived serialization.
     honesty, it cuts the headache of large projects down --- and what you need
     to keep in your head as you develop and maintain --- by at least 90%.
 
-*   **Denotational**: It's not imperative.  That is, unlike in other
+*   **Declarative**: It's not imperative.  That is, unlike in other
     languages, you don't program your program by saying "this happens, then
     this happens...and then in case A, this happens; in case B, something else
     happens".  Instead of specifying your program/game by a series of
@@ -28,6 +28,12 @@ and automations, with implicitly derived serialization.
     "how things are".  You declare fixed or evolving relationships between
     entities and processes and interactions.  And this declaration process is
     high-level and pure.
+
+*   **Denotative**: Instead of your program being built of pieces that change
+    things and execute things sequentially, your entire program is composed of
+    meaningful semantic building blocks that "denote" constant relationships
+    and concepts.  The composition of such building blocks also denote new
+    concepts.
 
 *   **Compositional**: You build your eventually complex program/game out of
     small, simple components.  These simple components compose with eachother;
@@ -75,9 +81,10 @@ and automations, with implicitly derived serialization.
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
-You can find examples and demonstrations in the [auto-examples][] repo on
-github; they are constantly being kept up-to-date with the currently super
-unstable API.
+The current development documentation server is found at
+<https://mstksg.github.io/auto>.  You can find examples and demonstrations in
+the [auto-examples][] repo on github; they are constantly being kept
+up-to-date with the currently super unstable API.
 
 [auto-examples]: https://github.com/mstksg/auto-examples
 
