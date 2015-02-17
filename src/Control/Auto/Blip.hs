@@ -31,6 +31,8 @@ module Control.Auto.Blip (
   , emitJusts
   , onJusts
   , fromBlips
+  , holdWith
+  , holdWith_
   -- * Step/"time" based Blip streams and generators
   , never
   , immediately
@@ -46,6 +48,7 @@ module Control.Auto.Blip (
   , once
   , notYet
   , filterB
+  , mapMaybeB
   , takeB
   , takeWhileB
   , dropB
@@ -396,6 +399,14 @@ filterB p = mkFunc $ \x -> case x of
                              Blip x' | p x' -> x
                              _              -> NoBlip
 
+-- | Maps the given function onto every emission, and suppresses all those
+-- whose results are Nothing.
+mapMaybeB :: (a -> Maybe b)
+          -> Auto m (Blip a) (Blip b)
+mapMaybeB f = mkFunc $ \x -> case x of
+                               Blip x' -> maybe NoBlip Blip $ f x'
+                               _       -> NoBlip
+
 -- | Supress all emissions except for the very first.
 once :: Auto m (Blip a) (Blip a)
 once = mkState f False
@@ -624,6 +635,20 @@ fromBlips :: a  -- ^ the "default value" to output when the input is not
                 --   emitting.
           -> Auto m (Blip a) a
 fromBlips d = mkFunc (blip d id)
+
+holdWith :: Serialize a
+         => a
+         -> Auto m (Blip a) a
+holdWith = mkAccum f
+  where
+    f x = blip x id
+
+holdWith_ :: a
+          -> Auto m (Blip a) a
+holdWith_ = mkAccum_ f
+  where
+    f x = blip x id
+
 
 -- | Re-emits every emission from the input 'Blip' stream, but replaces its
 -- value with the given value.

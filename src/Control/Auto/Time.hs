@@ -41,6 +41,8 @@ module Control.Auto.Time (
   -- ** Delaying
   , lastVal
   , lastVal_
+  , arrD
+  , arrD_
   , delay
   , delay_
   , delayList
@@ -112,6 +114,19 @@ lastVal_ :: a             -- ^ initial value
          -> Auto m a a
 lastVal_ = mkState_ $ \x s -> (s, x)
 {-# INLINE lastVal_ #-}
+
+arrD :: Serialize b
+     => (a -> b)
+     -> b
+     -> Auto m a b
+arrD f = mkState $ \x s -> (s, f x)
+
+arrD_ :: Serialize b
+      => (a -> b)
+      -> b
+      -> Auto m a b
+arrD_ f = mkState_ $ \x s -> (s, f x)
+
 
 -- | An alias for 'lastVal'; used in contexts where "delay" is more
 -- a meaningful description than "last value".  All of the warnings for
