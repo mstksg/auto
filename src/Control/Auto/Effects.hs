@@ -44,6 +44,16 @@ import Prelude hiding        ((.), id)
 
 -- | "Executes" a monadic action once (and only once), and continues to
 -- echo the result forevermore.
+--
+-- Like 'execOnce', exept outputs the result of the action.
+--
+-- Useful for loading resources in IO on the "first step", like
+-- a dictionary:
+--
+-- @
+--     dictionary :: Auto IO a [String]
+--     dictionary = cache (lines <$> readFile "dictionary.txt")
+-- @
 cache :: (Serialize b, Monad m)
       => m b          -- ^ monadic action to execute and use the result of
       -> Auto m a b
@@ -52,6 +62,14 @@ cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
 -- | The non-resumable/non-serializable version of 'cache'.  Every time the
 -- 'Auto' is deserialized/reloaded, it re-executes the action to retrieve
 -- the result again.
+--
+-- Useful in cases where you want to "re-load" an expensive resource on
+-- every startup, instead of saving it to in the save states.
+--
+-- @
+--     dictionary :: Auto IO a [String]
+--     dictionary = cache_ (lines <$> readFile "dictionary.txt")
+-- @
 cache_ :: Monad m
        => m b         -- ^ monadic action to execute and use the result of
        -> Auto m a b
@@ -64,18 +82,25 @@ _cacheF _ (True , x) = return (True, x)
 
 -- | "Executes" the monadic action once, and outputs '()' forevermore.
 --
--- TODO: literally fix
+-- Pretty much like 'cache', but always outputs '()'.
+--
 execOnce :: Monad m
          => m b           -- ^ monadic action to execute; result discared
          -> Auto m a ()
-execOnce m = pure () . cache_ m
+execOnce m = mkStateM (\_ -> _execOnceF m) False
 
 -- | The non-resumable/non-serializable version of 'execOnce'.  Every time
 -- the 'Auto' is deserialized/reloaded, the action is re-executed again.
 execOnce_ :: Monad m
           => m b          -- ^ monadic action to execute; result discared
           -> Auto m a ()
-execOnce_ m = pure () . cache_ m
+execOnce_ m = mkStateM_ (\_ -> _execOnceF m) False
+
+_execOnceF :: Monad m => m a -> Bool -> m ((), Bool)
+_execOnceF m = go
+  where
+    go False = liftM (const ((), True)) m
+    go _     = return ((), True)
 
 -- | "Executes" the given monadic action at every tick/step of the 'Auto',
 -- outputting the result.  Particularly useful with the 'Reader' 'Monad'.
@@ -85,7 +110,8 @@ effect = mkConstM
 {-# INLINE effect #-}
 
 -- | "Executes" the given monadic action at every tick/step of the 'Auto',
--- but ignores the result.  Basically acts like 'id'.
+-- but ignores the result.  Basically acts like the 'id' 'Auto', with
+-- attached effects.
 exec :: Monad m
      => m b           -- ^ monadic action to contually execute.
      -> Auto m a a
@@ -99,8 +125,10 @@ exec m = mkFuncM $ \x -> m >> return x
 -- exec' m = pure () . mkConstM m
 
 -- | Lifts a "monadic function" (Kleisli arrow) into an 'Auto'.  Like
--- 'arr', but with monadic functions.  Composition works just like the
--- composition of Kleisli arrows, with '(<=<)'.
+-- 'arr', but with monadic functions.  Composition of such 'Auto's works
+-- just like the composition of Kleisli arrows, with '(<=<)':
+--
+-- prop> arrM f . arrM g == arrM (f <=< g)
 arrM :: (a -> m b)    -- ^ monadic function
      -> Auto m a b
 arrM = mkFuncM

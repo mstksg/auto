@@ -3,11 +3,15 @@ module Control.Auto (
     Output(..)
   , Output'
   , onOutput
-  -- * Blip
-  , Blip
   -- * Auto
   , Auto
   , Auto'
+  , generalizeA
+  -- * Types
+  , Blip
+  , Interval
+  , Interval'
+  -- * 
   -- ** Running
   , stepAuto
   , stepAuto'
@@ -60,11 +64,12 @@ module Control.Auto (
   ) where
 
 import Control.Applicative
-import Control.Arrow hiding (loop)
+import Control.Arrow hiding  (loop)
 import Control.Auto.Blip
 import Control.Auto.Core
+import Control.Auto.Generate
+import Control.Auto.Interval
 import Control.Auto.Run
 import Control.Auto.Time
-import Control.Auto.Generate
 import Control.Category
 import Data.Semigroup

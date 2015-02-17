@@ -23,6 +23,8 @@ module Control.Auto.Process (
   , sumFrom_
   , sumFromD
   , sumFromD_
+  , productFrom
+  , productFrom_
   , deltas
   , deltas_
   -- * Monoidal/Semigroup
@@ -33,6 +35,7 @@ module Control.Auto.Process (
   ) where
 
 import Control.Auto.Core
+import Control.Auto.Interval
 import Data.Semigroup
 import Data.Serialize
 
@@ -81,6 +84,16 @@ sumFromD_ :: Num a
           -> Auto m a a
 sumFromD_ = mkAccumD_ (+)
 
+productFrom :: (Serialize a, Num a)
+            => a
+            -> Auto m a a
+productFrom = mkAccum (*)
+
+productFrom_ :: Num a
+             => a
+             -> Auto m a a
+productFrom_ = mkAccum_ (*)
+
 -- | Returns the difference between the received input and the previous
 -- input.  The first result is 'Nothing'; if you have something you want
 -- the first result to be, you can use '<|!>' from
@@ -112,11 +125,11 @@ sumFromD_ = mkAccumD_ (+)
 -- >>> ys
 -- [100, 2, -3]
 --
-deltas :: (Serialize a, Num a) => Auto m a (Maybe a)
+deltas :: (Serialize a, Num a) => Interval m a a
 deltas = mkState _deltasF Nothing
 
 -- | The non-resuming/non-serializing version of 'deltas'.
-deltas_ :: Num a => Auto m a (Maybe a)
+deltas_ :: Num a => Interval m a a
 deltas_ = mkState_ _deltasF Nothing
 
 _deltasF :: Num a => a -> Maybe a -> (Maybe a, Maybe a)

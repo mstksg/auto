@@ -41,6 +41,8 @@ module Control.Auto.Time (
   -- ** Delaying
   , lastVal
   , lastVal_
+  , arrD
+  , arrD_
   , delay
   , delay_
   , delayList
@@ -67,6 +69,7 @@ import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Auto.Generate
+import Control.Auto.Interval
 import Control.Category
 import Control.Monad
 import Control.Monad.Loops
@@ -111,6 +114,19 @@ lastVal_ :: a             -- ^ initial value
          -> Auto m a a
 lastVal_ = mkState_ $ \x s -> (s, x)
 {-# INLINE lastVal_ #-}
+
+arrD :: Serialize b
+     => (a -> b)
+     -> b
+     -> Auto m a b
+arrD f = mkState $ \x s -> (s, f x)
+
+arrD_ :: Serialize b
+      => (a -> b)
+      -> b
+      -> Auto m a b
+arrD_ f = mkState_ $ \x s -> (s, f x)
+
 
 -- | An alias for 'lastVal'; used in contexts where "delay" is more
 -- a meaningful description than "last value".  All of the warnings for
@@ -403,8 +419,8 @@ skipTo x0 = go
 -- -5         -- went from -4 (Nothing) to -5 (Just (-5))
 --
 fastForward :: Monad m
-            => a                      -- ^ default input
-            -> Auto m a (Maybe b)     -- ^ 'Auto' to fastforward (past each 'Nothing')
+            => a                  -- ^ default input
+            -> Interval m a b     -- ^ 'Auto' to fastforward (past each 'Nothing')
             -> Auto m a b
 fastForward x0 = go
   where

@@ -51,6 +51,7 @@ import Control.Arrow
 import Control.Auto.Blip
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Category
 import Data.Maybe
 import Data.Serialize
@@ -114,9 +115,9 @@ infixr 1 -?>
 -- off ('Nothing')...then runs /only/ the second 'Auto'.  This transition is
 -- one-way, as well.
 (-->) :: Monad m
-      => Auto m a (Maybe b)   -- ^ initial behavior
-      -> Auto m a b           -- ^ final behavior, when the initial
-                              --   behavior turns off.
+      => Interval m a b     -- ^ initial behavior
+      -> Auto m a b         -- ^ final behavior, when the initial
+                            --   behavior turns off.
       -> Auto m a b
 a1 --> a2 = fmap fromJust (a1 -?> fmap Just a2)
 
@@ -124,10 +125,10 @@ a1 --> a2 = fmap fromJust (a1 -?> fmap Just a2)
 -- interval/'Maybe'.  The entire result is, then, a 'Maybe'.  Probably less
 -- useful than '-->' in most situations.
 (-?>) :: Monad m
-      => Auto m a (Maybe b)   -- ^ initial behavior
-      -> Auto m a (Maybe b)   -- ^ final behavior, when the initial
-                              --   behavior turns off.
-      -> Auto m a (Maybe b)
+      => Interval m a b   -- ^ initial behavior
+      -> Interval m a b   -- ^ final behavior, when the initial
+                          --   behavior turns off.
+      -> Interval m a b
 a1 -?> a2 = mkAutoM l s t
   where
     l = do

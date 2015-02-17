@@ -22,12 +22,15 @@
 
 module Control.Auto.Run (
   -- * Special 'stepAuto' versions.
-    overList
+    streamAuto
+  , streamAuto'
+  , overList
   , overList'
   , stepAutoN
   , stepAutoN'
   -- * Running "interactively"
   , interact
+  , interactReadShow
   , interactM
   -- ** Helpers
   , duringRead
@@ -48,7 +51,7 @@ import Control.Auto.Interval
 import Control.Monad hiding       (mapM, mapM_)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
-import Data.Foldable hiding (concatMap)
+import Data.Foldable hiding       (concatMap)
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Traversable
@@ -88,6 +91,20 @@ overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
 overList' a xs = runIdentity (overList a xs)
+
+streamAuto :: Monad m
+           => Auto m a b
+           -> [a]
+           -> m [b]
+streamAuto a = liftM fst . overList a
+
+streamAuto' :: Auto' a b
+            -> [a]
+            -> [b]
+streamAuto' a [] = []
+streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
+                           ys          = streamAuto' a' xs
+                       in  y:ys
 
 -- | Repeatedly steps an 'Auto' with the same input a given number of
 -- times.
@@ -141,19 +158,19 @@ stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
 run :: Monad m
     => a
     -> (b -> m (Maybe a))
-    -> Auto m a (Maybe b)
-    -> m (Auto m a (Maybe b))
+    -> Interval m a b
+    -> m (Interval m a b)
 run x0 f = runM x0 f id
 
 -- | A generalized version of 'run' where the 'Monad' you are "running" the
 -- 'Auto' in is different than the 'Monad' underneath the 'Auto'.  You just
 -- need to provide the natural transformation.
 runM :: (Monad m, Monad m')
-     => a                        -- ^ Starting input
-     -> (b -> m (Maybe a))       -- ^ Handling output and next input in @m@
-     -> (forall c. m' c -> m c)  -- ^ Natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
-     -> Auto m' a (Maybe b)      -- ^ Auto in monad @m'@
-     -> m (Auto m' a (Maybe b))  -- ^ Return the resulting/run Auto in @m@
+     => a                         -- ^ Starting input
+     -> (b -> m (Maybe a))        -- ^ Handling output and next input in @m@
+     -> (forall c. m' c -> m c)   -- ^ Natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
+     -> Interval m' a b           -- ^ Auto in monad @m'@
+     -> m (Interval m' a b)       -- ^ Return the resulting/run Auto in @m@
 runM x0 f nt a = do
     Output my a' <- nt $ stepAuto a x0
     case my of
@@ -184,9 +201,15 @@ runM x0 f nt a = do
 -- the 'a'...but if the 'read' fails, the whole 'Auto' returns 'Nothing'.
 -- When used with 'interact', that means that a failed 'read' terminates
 -- the loop.
-interact :: Auto' String (Maybe String)       -- ^ 'Auto' to run interactively
-         -> IO (Auto' String (Maybe String))
+interact :: Interval' String String         -- ^ 'Auto' to run interactively
+         -> IO (Interval' String String)
 interact = interactM putStrLn (return . runIdentity)
+
+interactReadShow :: (Read a, Show b)
+                 => Auto' a b
+                 -> IO (Interval' String String)
+interactReadShow = interact . duringRead . fmap show
+
 
 -- | Like 'interact', but much more general.  You can run it with an 'Auto'
 -- of any underlying 'Monad', as long as you provide the natural
@@ -198,8 +221,8 @@ interact = interactM putStrLn (return . runIdentity)
 interactM :: Monad m
           => (b -> IO ())             -- ^ function to "handle" each succesful 'Auto' output
           -> (forall c. m c -> IO c)  -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
-          -> Auto m String (Maybe b)  -- ^ 'Auto' to run "interactively"
-          -> IO (Auto m String (Maybe b))
+          -> Interval m String b      -- ^ 'Auto' to run "interactively"
+          -> IO (Interval m String b)
 interactM f nt a = do
     x <- getLine
     runM x f' nt a
@@ -228,7 +251,7 @@ interactM f nt a = do
 -- See 'interact' for neat use cases.
 duringRead :: (Monad m, Read a)
            => Auto m a b                -- ^ 'Auto' taking in a readable @a@, outputting @b@
-           -> Auto m String (Maybe b)   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
+           -> Interval m String b       -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 duringRead a = during a <<^ readMaybe
 
 -- | Like 'duringRead', but the original 'Auto' would output a @'Maybe' b@
@@ -238,8 +261,8 @@ duringRead a = during a <<^ readMaybe
 --
 -- See 'interact' for neat use cases.
 bindRead :: (Monad m, Read a)
-         => Auto m a (Maybe b)        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
-         -> Auto m String (Maybe b)   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
+         => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
+         -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 bindRead a = bindI a <<^ readMaybe
 
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that

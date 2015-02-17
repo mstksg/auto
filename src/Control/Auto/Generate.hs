@@ -53,6 +53,7 @@ module Control.Auto.Generate (
   ) where
 
 import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Category
 import Data.Serialize
 import Prelude hiding                 ((.), id)
@@ -60,6 +61,10 @@ import Prelude hiding                 ((.), id)
 -- | Construct an 'Auto' that ignores its input and just continually emits
 -- elements from the given list.  Ouputs 'Nothing' forever after reaching
 -- the end of the list.
+--
+-- Outputs an 'Interval'ed output, which is "on" ('Just') as long as the
+-- list still has elements to output, and is "off" ('Nothing') after it
+-- runs out.
 --
 -- Serializes itself by storing the entire rest of the list in binary, so
 -- if your list is long, it might take up a lot of space upon
@@ -72,7 +77,7 @@ import Prelude hiding                 ((.), id)
 --
 fromList :: Serialize b
          => [b]                 -- ^ list to output element-by-element
-         -> Auto m a (Maybe b)
+         -> Interval m a b
 fromList = mkState (const _uncons)
 
 -- | A version of 'fromList' that is safe for long or infinite lists, or
@@ -87,7 +92,7 @@ fromList = mkState (const _uncons)
 --   * Loading: O(n) time on the number of times the 'Auto' has been
 --   stepped, maxing out at O(n) on the length of the entire input list.
 fromLongList :: [b]                 -- ^ list to output element-by-element
-             -> Auto m a (Maybe b)
+             -> Interval m a b
 fromLongList xs = go 0 xs
   where
     loader = do
@@ -108,44 +113,45 @@ fromLongList xs = go 0 xs
 
 -- | The non-resuming/non-serializing version of 'fromList'.
 fromList_ :: [b]                -- ^ list to output element-by-element
-          -> Auto m a (Maybe b)
+          -> Interval m a b
 fromList_ = mkState_ (const _uncons)
 
 _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
 
--- | Analogous to 'unfoldr' from "Prelude".  "unfold" out the outputs of an
--- 'Auto'; maintains an accumulator of type @c@, and at every step, applies
--- the unfolding function to the accumulator.  If the result is 'Nothing',
--- then the rest of the Auto will be 'Nothing' forever.  If the result is
--- @'Just' (y, acc)@, outputs @y@ and stores @acc@ as the new accumulator.
+-- | Analogous to 'unfoldr' from "Prelude".  Creates a generating
+-- 'Interval' by maintaining an internal accumulator of type @c@ and, at
+-- every stpe, applying to the unfolding function to the accumulator.  If
+-- the result is 'Nothing', then the 'Interval' will turn "off" forever
+-- (output 'Nothing' forever); if the result is @'Just' (y, acc)@, then it
+-- will output @y@ and store @acc@ as the new accumulator.
 --
 -- Given an initial accumulator.
 unfold :: Serialize c
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
-       -> Auto m a (Maybe b)
+       -> Interval m a b
 unfold f = mkState (_unfoldF f) . Just
 
 -- | Like 'unfold', but the unfolding function is monadic.
 unfoldM :: (Serialize c, Monad m)
         => (c -> m (Maybe (b, c)))     -- ^ unfolding function
         -> c                           -- ^ initial accumulator
-        -> Auto m a (Maybe b)
+        -> Interval m a b
 unfoldM f = mkStateM (_unfoldMF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfold'.
 unfold_ :: (c -> Maybe (b, c))     -- ^ unfolding function
         -> c                       -- ^ initial accumulator
-        -> Auto m a (Maybe b)
+        -> Interval m a b
 unfold_ f = mkState_ (_unfoldF f) . Just
 
 -- | The non-resuming & non-serializing version of 'unfoldM'.
 unfoldM_ :: Monad m
          => (c -> m (Maybe (b, c)))     -- ^ unfolding function
          -> c                           -- ^ initial accumulator
-         -> Auto m a (Maybe b)
+         -> Interval m a b
 unfoldM_ f = mkStateM_ (_unfoldMF f) . Just
 
 _unfoldF :: (c -> Maybe (b, c))

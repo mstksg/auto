@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Module      : Control.Auto.Interval
@@ -13,19 +14,22 @@
 -- This module provides combinators and utilities for working with the
 -- semantic concept of "intervals": 'Auto's producing values that can
 -- either be "on" or "off"...typically for contiguous chunks at a time.
+--
 
 module Control.Auto.Interval (
   -- * Intervals
   -- $intervals
-  -- * Static intervals
-    off
+    Interval
+  , Interval'
+  -- * Static 'Interval's
+  , off
   , toOn
   , fromInterval
   , fromIntervalWith
   , onFor
   , offFor
   -- , window
-  -- * Filter intervals
+  -- * Filter 'Interval's
   , when
   , unless
   -- * Choice
@@ -33,7 +37,7 @@ module Control.Auto.Interval (
   , (<|?>)
   , chooseInterval
   , choose
-  -- * Blip-based intervals
+  -- * Blip-based 'Interval's
   , after
   , before
   , between
@@ -41,8 +45,9 @@ module Control.Auto.Interval (
   , hold_
   , holdFor
   , holdFor_
-  -- * Composition with intervals
+  -- * Composition with 'Interval'
   , during
+  , compI
   , bindI
   ) where
 
@@ -51,17 +56,16 @@ import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
 import Control.Monad (join)
-import Data.Foldable (asum)
+import Data.Foldable (asum, foldr)
 import Data.Traversable (sequenceA)
 import Data.Maybe
 import Data.Serialize
-import Prelude hiding             ((.), id)
+import Prelude hiding             ((.), id, mapM, foldr)
 
 -- $intervals
 --
--- In practice, and for convenience, this "on or offness" is represented by
--- the very handy common type, 'Maybe'.  An "interval-producing" 'Auto'
--- looks like this:
+-- This concept of "on or offness" is represented as an "interval-producing
+-- 'Auto'" using 'Maybe':
 --
 -- @
 --     'Auto' m a ('Maybe' b)
@@ -69,17 +73,31 @@ import Prelude hiding             ((.), id)
 --
 -- (In contrast to the "normal", "always-on" 'Auto', @'Auto' m a b@)
 --
--- We say that the above 'Auto' takes in a stream of @a@s and produces
--- an "interval stream" of @b@s.  When it outputs a 'Nothing', the stream
--- is interpreted as "off".  When it outputs a 'Just', the stream is
--- interpreted as "on", with the value inside the 'Just'.
+-- Which from now on, we will be referring to with the equivalent /type
+-- synonym/:
 --
--- For example, we can look at @'onFor' :: 'Int' -> 'Auto' m a ('Maybe' a)@
--- in action. @'onFor' n@ is "on", and lets all values through, for @n@
+-- @
+--     type 'Interval' m a b = 'Auto' m a ('Maybe' b)
+-- @
+--
+-- So, conceptually, an @'Interval' m a b@ is the same (from the
+-- compiler's point of view) as an @'Auto' m a ('Maybe' b)@.  If you see
+-- it, you can substitute it in your head if it makes it easier.
+--
+-- Normally, an @'Auto' m a b@ takes in a stream of @a@s and produces
+-- a stream of @b@s.  So an @'Interval' m a b@ takes in a stream of @a@s
+-- and produces an /intervaled/ stream of @b@'s --- a stream that is on or
+-- off for contiguous chunks at a time.
+--
+-- When it outputs 'Nothing', it's interpreted as "off"; when it outputs
+-- @'Just' x@, it's interpreted as "on" with a value of @x@.
+--
+-- For example, take @'onFor' :: 'Int' -> 'Interval' m a a@.
+-- @'onFor' n@ is "on", and lets all values pass through through, for @n@
 -- steps; then it turns "off" forever.
 --
--- >>> let a = onFor 2 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = onFor 2 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
@@ -99,7 +117,7 @@ import Prelude hiding             ((.), id)
 -- like @'pure' 0@ for three steps, and then like 'count' for the rest:
 --
 -- >>> let a1 = (onFor 3 . pure 0) --> count
--- >>> let Output res1 _ = stepAutoN' 8 a1 ()
+-- >>> let (res1, _) = stepAutoN' 8 a1 ()
 -- >>> res1
 -- [0, 0, 0, 1, 2, 3, 4, 5]
 --
@@ -110,7 +128,7 @@ import Prelude hiding             ((.), id)
 -- above 3, then switches to @'pure' 0@
 --
 -- >>> let a2 = (when (<= 3) . count) --> pure 0
--- >>> let Output res2 _ = stepAutoN' 8 a2 ()
+-- >>> let (res2, _) = stepAutoN' 8 a2 ()
 -- >>> res2
 -- [1, 2, 3, 0, 0, 0, 0, 0]
 --
@@ -121,14 +139,46 @@ import Prelude hiding             ((.), id)
 -- Another neat motivation is that intervals work pretty well with the
 -- 'Blip' semantic tool, as well.
 --
--- The following 'Auto' will be "off" and suppress all of its input (from
--- 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
+-- The following 'Interval' will be "off" and suppress all of its input
+-- (from 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
 -- something, then it'll allow 'count' to pass.
 --
--- >>> let a3 = after . (count &&& inB 3)
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = after . (count &&& inB 3)
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
+--
+-- == The Contract
+--
+-- So, why have an 'Interval' type, and not always just use 'Auto'?
+--
+-- You can say that, if you are given an 'Interval', then it comes with
+-- a "contract" (by documentation) that the 'Auto' will obey /interval
+-- semantics/.
+--
+-- @'Auto' m a ('Maybe' b)@ can mean a lot of things and represent a lot of
+-- things.
+--
+-- However, if you offer something of an 'Interval' type, or if you find
+-- something of an 'Interval' type, it comes with some sort of assurance
+-- that that 'Auto' will /behave/ like an interval: on and off for
+-- contiguous periods of time.
+--
+-- In addition, this allows us to further clarify /what our functions
+-- expect/.  By saying that a function expects an 'Interval':
+--
+-- @
+--     chooseInterval :: [Interval m a b]
+--                    -> Interval m a b
+-- @
+--
+-- 'chooseInterval' has the ability to "state" that it /expects/ things
+-- that follow interval semantics in order to "function" properly and in
+-- order to properly "return" an 'Interval'.
+--
+-- Of course, this is not enforced by the compiler.  However, it's useful
+-- to create a way to clearly state that what you are offering or what you
+-- are expecting does indeed follow this useful pattern.
 --
 -- == Combinators
 --
@@ -138,8 +188,8 @@ import Prelude hiding             ((.), id)
 -- 'fromInterval' and 'fromIntervalWith', analogous to 'fromMaybe' and
 -- 'maybe' from "Data.Maybe", respectively:
 --
--- >>> let a = fromIntervalWith "off" show . onFor 2 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = fromIntervalWith "off" show . onFor 2 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- ["1", "2", "off", "off", "off"]
 --
@@ -151,7 +201,7 @@ import Prelude hiding             ((.), id)
 -- >>> let a = onFor 2 . pure "hello"
 --        <|!> onFor 4 . pure "world"
 --        <|!> pure "goodbye!"
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
@@ -164,32 +214,60 @@ import Prelude hiding             ((.), id)
 --
 -- === Composition
 --
--- You can also "compose" together 'Auto's involving intervals.
+-- Another tool that makes 'Interval's powerful is the ability to compose
+-- them.
 --
 -- If you have an @'Auto' m a b@ and an @'Auto' m b c@, then you can
--- compose them with '.'.  But if you can't compose the second if the first
--- is @'Auto' m a ('Maybe' b)@.
+-- compose them with '.'.
 --
--- You can use 'during' to turn an @'Auto' m b c@ into an @'Auto' m ('Maybe' b) ('Maybe' c)@,
--- you can compose it fine!
+-- If you have an @'Auto' m a b@ and an @'Interval' m b c@, then you can
+-- compose them by throwing in a 'toOn' in the chain, or @'fmap' 'Just'@:
 --
--- If you had an @'Auto' m b ('Maybe' c)@, like 'onFor' and literally
--- almost every 'Auto' provided in this module, you can use 'bindI' to turn
--- it into an @'Auto' m ('Maybe' b) ('Maybe' c)@.
+-- @
+--     a               :: 'Auto' m a b
+--     i               :: 'Interval' m b c
+--     i . 'toOn' . a    :: 'Interval' m a c
+--     'fmap' 'Just' a :: 'Interval' m a b
+--     i . 'fmap' 'Just' a :: 'Interval' m a c
+-- @
 --
--- >>> let a1 = bindI (onFor 4) . offFor 1 . count
--- >>> let Output res1 _ = stepAutoN' 6 a1 ()
+-- If you have an @'Interval' m a b@ and an @'Auto' m b c@, you can "lift"
+-- the second 'Auto' to be an 'Auto' that only "acts" on "on"/'Just'
+-- outputs of the 'Interval':
+--
+-- @
+--     i            :: 'Interval' m a b
+--     a            :: 'Auto' m b c
+--     'during' a     :: 'Auto' m ('Maybe' a) ('Maybe' b)
+--     'during' a . i :: 'Interval' m a c
+-- @
+--
+-- Finally, the kleisli composition: if you have an @'Interval' m a b@ and
+-- an @'Interval' m b c@, you can use 'compI': (or also 'bindI')
+--
+-- @
+--     i1            :: 'Interval' m a b
+--     i2            :: 'Interval' m b c
+--     i2 `'compI'` i1 :: 'Interval' m a b c
+-- @
+--
+-- >>> let a1        = onFor 4 `compI` offFor 1 . count
+-- >>> let (res1, _) = stepAutoN' 6 a1 ()
 -- >>> res1
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
--- >>> let a2 = bindI (when even) . bindI (onFor 4) . offFor 1 . count
--- >>> let Output res2 _ = stepAutoN' 6 a2 ()
+-- >>> let a2 = when even `compI` onFor 4 `compI` offFor 1 . count
+-- >>> let (res2, _) = stepAutoN' 6 a2 ()
 -- >>> res2
 -- [Nothing, Just 2, Nothing, Just 4, Nothing, Nothing]
 --
 -- The implementation works so that any "on"/'Just' inputs will step the
 -- lifted 'Auto' like normal, with the contents of the 'Just', and any
 -- "off"/'Nothing' inputs cause the lifted 'Auto' to be skipped and frozen.
+--
+-- 'compI' adds a lot of power to 'Interval' because now you can always
+-- work "with 'Interval's", bind them just like normal 'Auto's, and then
+-- finally "exit" them after composing and combining many.
 --
 -- == Warning: Switching
 --
@@ -206,6 +284,16 @@ import Prelude hiding             ((.), id)
 
 infixr 3 <|?>
 infixr 3 <|!>
+infixr 1 `compI`
+
+-- | An 'Interval' is "just" a type alias for @'Auto' m a ('Maybe' b)@.  If
+-- you ended up here with a link...no worries!  If you see @'Interval'
+-- m a b@, just think @'Auto' m a ('Maybe' b)@!
+--
+--
+type Interval m a b = Auto m a (Maybe b)
+
+type Interval'  a b = Auto'  a (Maybe b)
 
 -- | An 'Auto' that produces an interval that always "off" ('Nothing'),
 -- never letting anything pass.
@@ -214,14 +302,14 @@ infixr 3 <|!>
 -- 'off' are still executed, even though their result value is suppressed.
 --
 -- prop> off == arr (const Nothing)
-off :: Auto m a (Maybe b)
+off :: Interval m a b
 off = mkConst Nothing
 
 -- | An 'Auto' that takes a value stream and turns it into an "always-on"
 -- interval, with that value.  Lets every value pass through.
 --
 -- prop> toOn == arr Just
-toOn :: Auto m a (Maybe a)
+toOn :: Interval m a a
 toOn = mkFunc Just
 
 -- | An 'Auto' taking in an interval stream and transforming it into
@@ -250,7 +338,7 @@ fromIntervalWith d f = mkFunc (maybe d f)
 -- input values from passing) forevermore.
 --
 onFor :: Int      -- ^ amount of steps to stay "on" for
-      -> Auto m a (Maybe a)
+      -> Interval m a a
 onFor = mkState f . max 0
   where
     f _ 0 = (Nothing, 0    )
@@ -260,7 +348,7 @@ onFor = mkState f . max 0
 -- input values, then behaves like 'toOn' forevermore, passing through
 -- values as "on" values.
 offFor :: Int     -- ^ amount of steps to be "off" for.
-       -> Auto m a (Maybe a)
+       -> Interval m a a
 offFor = mkState f . max 0
   where
     f x 0 = (Just x , 0    )
@@ -277,8 +365,8 @@ offFor = mkState f . max 0
 -- | An 'Auto' that allows values to pass whenever the input satisfies the
 -- predicate...and is off otherwise.
 --
--- >>> let a = when (\x -> x >= 2 && x <= 4) . count
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let a        = when (\x -> x >= 2 && x <= 4) . count
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
@@ -286,7 +374,7 @@ offFor = mkState f . max 0
 -- step count at every step)
 --
 when :: (a -> Bool)   -- ^ interval predicate
-     -> Auto m a (Maybe a)
+     -> Interval m a a
 when p = mkFunc f
   where
     f x | p x       = Just x
@@ -295,8 +383,8 @@ when p = mkFunc f
 -- | Like 'when', but only allows values to pass whenever the input does
 -- not satisfy the predicate.  Blocks whenever the predicate is true.
 --
--- >>> let a = unless (\x -> x < 2 &&& x > 4) . count
--- >>> let Output res _ = stepAutoN' 6 a ()
+-- >>> let a        = unless (\x -> x < 2 &&& x > 4) . count
+-- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
@@ -304,7 +392,7 @@ when p = mkFunc f
 -- step count at every step)
 --
 unless :: (a -> Bool)   -- ^ interval predicate
-       -> Auto m a (Maybe a)
+       -> Interval m a a
 unless p = mkFunc f
   where
     f x | p x       = Nothing
@@ -314,8 +402,8 @@ unless p = mkFunc f
 -- in at first, until the 'Blip' stream emits.  Then, allows all values
 -- through as "on" forevermore.
 --
--- >>> let a = after . (count &&& inB 3)
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = after . (count &&& inB 3)
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
 --
@@ -329,7 +417,7 @@ unless p = mkFunc f
 -- still be executed).  It just isn't allowed to pass through 'after' until
 -- the 'Blip' stream emits.
 --
-after :: Auto m (a, Blip b) (Maybe a)
+after :: Interval m (a, Blip b) a
 after = mkState f False
   where
     f (x, _     ) True  = (Just x , True )
@@ -340,8 +428,8 @@ after = mkState f False
 -- through, as "on", until the 'Blip' stream emits...then doesn't let
 -- anything pass after that.
 --
--- >>> let a = before . (count &&& inB 3)
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = before . (count &&& inB 3)
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
@@ -354,7 +442,7 @@ after = mkState f False
 -- were an 'Auto' with monad effects, they would still be executed).  It's
 -- just that the values are suppressed.
 --
-before :: Auto m (a, Blip b) (Maybe a)
+before :: Interval m (a, Blip b) a
 before = mkState f False
   where
     f _           True  = (Nothing, True )
@@ -366,11 +454,11 @@ before = mkState f False
 -- toggles onto the "on" state and lets everything pass; when the second
 -- 'Blip' stream emits, it toggles back onto the "off" state.
 --
--- >>> let a = before . (count &&& (inB 3 &&& inB 5))
--- >>> let Output res _ = stepAutoN' 7 a ()
+-- >>> let a        = before . (count &&& (inB 3 &&& inB 5))
+-- >>> let (res, _) = stepAutoN' 7 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
-between :: Auto m (a, (Blip b, Blip c)) (Maybe a)
+between :: Interval m (a, (Blip b, Blip c)) a
 between = mkState f False
   where
     f (_, (_, Blip _)) _     = (Nothing, False)
@@ -381,8 +469,8 @@ between = mkState f False
 -- | Takes in a 'Blip' stream and constantly outputs the last emitted
 -- value.  Starts off as 'Nothing'.
 --
--- >>> let a1 = hold . inB 3 . count
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = hold . inB 3 . count
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- [Nothing, Nothing, Just 3, Just 3, Just 3]
 --
@@ -392,25 +480,25 @@ between = mkState f False
 --
 -- The first, using '<|!>':
 --
--- >>> let a2 = (hold . inB 3 . count) <|!> pure 100
--- >>> let Output res2 _ = stepAutoN' 5 a2 ()
+-- >>> let a2        = (hold . inB 3 . count) <|!> pure 100
+-- >>> let (res2, _) = stepAutoN' 5 a2 ()
 -- >>> res2
 -- [100, 100, 3, 3, 3]
 --
 -- The second, using 'fromInterval':
 --
--- >>> let a3 = fromInterval 100 . hold . inB 3 . count
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = fromInterval 100 . hold . inB 3 . count
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [100, 100, 3, 3, 3]
 --
-hold :: Serialize a => Auto m (Blip a) (Maybe a)
+hold :: Serialize a => Interval m (Blip a) a
 hold = mkAccum f Nothing
   where
     f x = blip x Just
 
 -- | The non-serializing/non-resuming version of 'hold'.
-hold_ :: Auto m (Blip a) (Maybe a)
+hold_ :: Interval m (Blip a) a
 hold_ = mkAccum_ f Nothing
   where
     f x = blip x Just
@@ -418,19 +506,19 @@ hold_ = mkAccum_ f Nothing
 -- | Like 'hold', but it only "holds" the last emitted value for the given
 -- number of steps.
 --
--- >>> let a = holdFor 2 . inB 3 . count
--- >>> let Output res _ = stepAutoN' 7 a ()
+-- >>> let a        = holdFor 2 . inB 3 . count
+-- >>> let (res, _) = stepAutoN' 7 a ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
 --
 holdFor :: Serialize a
         => Int      -- ^ number of steps to hold the last emitted value for
-        -> Auto m (Blip a) (Maybe a)
+        -> Interval m (Blip a) a
 holdFor n = mkState (_holdForF n) (Nothing, max 0 n)
 
 -- | The non-serializing/non-resuming version of 'holdFor'.
 holdFor_ :: Int   -- ^ number of steps to hold the last emitted value for
-         -> Auto m (Blip a) (Maybe a)
+         -> Interval m (Blip a) a
 holdFor_ n = mkState_ (_holdForF n) (Nothing, max 0 n)
 
 _holdForF :: Int -> Blip a -> (Maybe a, Int) -> (Maybe a, (Maybe a, Int))
@@ -446,8 +534,8 @@ _holdForF n = f   -- n should be >= 0
 -- | This "chooses" between two interval-producing 'Auto's; behaves like
 -- the first 'Auto' if it is "on"; otherwise, behaves like the second.
 --
--- >>> let a = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let a        = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Just "hello", Just "hello", Just "world", Just "world", Nothing]
 --
@@ -465,17 +553,17 @@ _holdForF n = f   -- n should be >= 0
 -- the end of it all.
 --
 (<|?>) :: Monad m
-       => Auto m a (Maybe b)    -- ^ choice 1
-       -> Auto m a (Maybe b)    -- ^ choice 2
-       -> Auto m a (Maybe b)
+       => Interval m a b    -- ^ choice 1
+       -> Interval m a b    -- ^ choice 2
+       -> Interval m a b
 (<|?>) = liftA2 (<|>)
 
 -- | "Chooses" between an interval-producing 'Auto' and an "normal" value,
 -- "always on" 'Auto'.  Behaves like the "on" value of the first 'Auto' if
 -- it is on; otherwise, behaves like the second.
 --
--- >>> let a1 = (onFor 2 . pure "hello") <|!> pure "world"
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = (onFor 2 . pure "hello") <|!> pure "world"
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- ["hello", "hello", "world", "world", "world"]
 --
@@ -485,13 +573,15 @@ _holdForF n = f   -- n should be >= 0
 -- >>> let a2 = onFor 2 . pure "hello"
 --         <|!> onFor 4 . pure "world"
 --         <|!> pure "goodbye!"
--- >>> let Output res2 _ = stepAutoN' 6 a2 ()
+-- >>> let (res2, _) = stepAutoN' 6 a2 ()
 -- >>> res2
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
--- TODO: Formatting here
+-- >  a <|!> b <!|> c
 --
--- @a <|!> b <|!> c@ associates as @a <|!> (b <|!> c)@
+-- associates as
+--
+-- >  a <|!> (b <|!> c)
 --
 -- So using this, you can "chain" a bunch of choices between intervals, and
 -- then at the right-most, "final" one, provide the default behavior.
@@ -500,8 +590,8 @@ _holdForF n = f   -- n should be >= 0
 -- 'Auto's are run at every step, along with any monadic effects,
 -- regardless of whether they are "on" or "off".
 (<|!>) :: Monad m
-       => Auto m a (Maybe b)      -- ^ interval 'Auto'
-       -> Auto m a b              -- ^ "normal" 'Auto'
+       => Interval m a b        -- ^ interval 'Auto'
+       -> Auto m a b            -- ^ "normal" 'Auto'
        -> Auto m a b
 (<|!>) = liftA2 (flip fromMaybe)
 
@@ -511,9 +601,9 @@ _holdForF n = f   -- n should be >= 0
 --
 -- prop> chooseInterval == foldr (<|?>) off
 chooseInterval :: Monad m
-               => [Auto m a (Maybe b)]    -- ^ the 'Auto's to run and
-                                          --   choose from
-               -> Auto m a (Maybe b)
+               => [Interval m a b]    -- ^ the 'Auto's to run and
+                                      --   choose from
+               -> Interval m a b
 chooseInterval = fmap asum . sequenceA
 
 -- | Run all 'Auto's from the same input, and return the behavior of the
@@ -522,26 +612,27 @@ chooseInterval = fmap asum . sequenceA
 --
 -- prop> choose == foldr (<|!>)
 choose :: Monad m
-       => Auto m a b            -- ^ the 'Auto' to behave like if all
-                                --   others are 'Nothing'
-       -> [Auto m a (Maybe b)]  -- ^ 'Auto's to run and choose from
+       => Auto m a b          -- ^ the 'Auto' to behave like if all
+                              --   others are 'Nothing'
+       -> [Interval m a b]    -- ^ 'Auto's to run and choose from
        -> Auto m a b
 choose = foldr (<|!>)
 
 
 -- | "Lifts" an @'Auto' m a b@ (transforming @a@s into @b@s) into an
--- @'Auto' m ('Maybe' a) ('Maybe' b)@, transforming /intervals/ of @a@s
--- into /intervals/ of @b@.
+-- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,
+-- transforming /intervals/ of @a@s into /intervals/ of @b@.
 --
 -- It does this by "running" the given 'Auto' whenever it receives a 'Just'
 -- value, and skipping/pausing it whenever it receives a 'Nothing' value.
 --
--- >>> let a1 = during (sumFrom 0) . onFor 2 . pure 1
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
+-- >>> let a1        = during (sumFrom 0) . onFor 2 . pure 1
+-- >>> let (res1, _) = stepAutoN' 5 a1 ()
 -- >>> res1
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
--- >>> let a2 = during (sumFrom 0) . offFor 2 . pure 1
--- >>> let Output res2 _ = stepAutoN' 5 a2 ()
+--
+-- >>> let a2       = during (sumFrom 0) . offFor 2 . pure 1
+-- >>> let (res2, _) = stepAutoN' 5 a2 ()
 -- >>> res2
 -- [Nothing, Nothing, Just 1, Just 2, Just 3]
 --
@@ -552,8 +643,8 @@ choose = foldr (<|!>)
 -- 'offFor' in the chain with 'during' (like the previous example)
 -- and putting the 'sumFrom' "before":
 --
--- >>> let a3 = offFor 2 . sumFrom 0 . pure 1
--- >>> let Output res3 _ = stepAutoN' 5 a3 ()
+-- >>> let a3        = offFor 2 . sumFrom 0 . pure 1
+-- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 5]
 --
@@ -579,8 +670,8 @@ during a = a_
                            Nothing ->
                              return (Output Nothing  a_         )
 
--- | "Lifts" (more technically, "binds") an @'Auto' m a ('Maybe' b)@ into
--- an @'Auto' m ('Maybe' a) ('Maybe' b)@
+-- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
+-- an @'Auto' m ('Maybe' a) ('Maybe' b)@ (or an @'Interval' m ('Maybe' a) b@)
 --
 -- The given 'Auto' is "run" only on the 'Just' inputs, and paused on
 -- 'Nothing' inputs.
@@ -590,16 +681,40 @@ during a = a_
 --
 -- prop> bindI a == fmap join (during a)
 --
--- This very important combinator allows you to properly "chain" ("bind")
--- together series of inhibiting 'Auto's.  If you have an @'Auto'
--- m a ('Maybe' b)@ and an @'Auto' m b ('Maybe' c)@, you can chain them
--- into an @'Auto' m a ('Maybe' c)@.
+-- This is really an alternative formulation of 'compI'; typically, you
+-- will be using 'compI' more often, but this form can also be useful (and
+-- slightly more general).  Note that:
+--
+-- prop> bindI f == compI f id
+--
+-- This combinator allows you to properly "chain" ("bind") together series
+-- of inhibiting 'Auto's.  If you have an @'Interval' m a b@ and an
+-- @'Interval' m b c@, you can chain them into an @'Interval' m a c@.
 --
 -- @
---     f             :: 'Auto' m a ('Maybe' b)
---     g             :: 'Auto' m b ('Maybe' c)
---     'bindI' g . f :: 'Auto' m a ('Maybe' c)
+--     f             :: 'Interval' m a b
+--     g             :: 'Interval' m b c
+--     'bindI' g . f :: 'Interval' m a c
 -- @
+--
+-- (Users of libraries with built-in inhibition semantics like Yampa and
+-- netwire might recognize this as the "default" composition in those other
+-- libraries)
+--
+-- See 'compI' for more examples of this use case.
+--
+bindI :: Monad m => Interval m a b -> Auto m (Maybe a) (Maybe b)
+bindI = fmap join . during
+
+-- | Composes two 'Interval's, the same way that '.' composes two 'Auto's:
+--
+-- @
+--     (.)   :: Auto     m b c -> Auto     m a b -> Auto     m a c
+--     compI :: Interval m b c -> Interval m a b -> Interval m a c
+-- @
+--
+-- Basically, if any 'Interval' in the chain is "off", then the entire rest
+-- of the chain is "skipped", short-circuiting a la 'Maybe'.
 --
 -- (Users of libraries with built-in inhibition semantics like Yampa and
 -- netwire might recognize this as the "default" composition in those other
@@ -608,14 +723,14 @@ during a = a_
 -- As a contrived example, how about an 'Auto' that only allows values
 -- through during a window...between, say, the second and fourth steps:
 --
--- >>> let window start finish = bindI (onFor finish) . offFor start
--- >>> let a = window 1 4 . count
--- >>> let Output res _ = stepAutoN' 5 a ()
+-- >>> let window start finish = onFor finish `compI` offFor start
+-- >>> let a        = window 1 4 . count
+-- >>> let (res, _) = stepAutoN' 5 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
 -- (Remember that 'count' is the 'Auto' that ignores its input and displays
 -- the current step count, starting with 1)
 --
-bindI :: Monad m => Auto m a (Maybe b) -> Auto m (Maybe a) (Maybe b)
-bindI = fmap join . during
+compI :: Monad m => Interval m b c -> Interval m a b -> Interval m a c
+compI f g = fmap join (during f) . g

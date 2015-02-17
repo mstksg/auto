@@ -77,11 +77,12 @@ import Control.Applicative
 import Control.Auto.Blip
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
+import Control.Auto.Interval
 import Control.Category
-import Data.Serialize
 import Data.Bits
+import Data.Serialize
 import Data.Tuple
-import Prelude hiding               (id, (.), concat, concatMap, sum)
+import Prelude hiding             (id, (.), concat, concatMap, sum)
 import System.Random
 
 -- | Given a seed-consuming generating function of form @g -> (b, g)@
@@ -262,7 +263,7 @@ _bernoulliF p x g = (outp, g')
 randIntervals :: (Serialize g, RandomGen g)
               => Double
               -> g
-              -> Auto m a (Maybe a)
+              -> Interval m a a
 randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 
 -- | Like 'randIntervals', but specialized for 'StdGen' from
@@ -273,7 +274,7 @@ randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 --
 stdRandIntervals :: Double
                  -> StdGen
-                 -> Auto m a (Maybe a)
+                 -> Interval m a a
 stdRandIntervals l = mkState' (read <$> get)
                               (put . show)
                               (_randIntervalsF (1/l))
@@ -283,7 +284,7 @@ stdRandIntervals l = mkState' (read <$> get)
 randIntervals_ :: RandomGen g
                => Double
                -> g
-               -> Auto m a (Maybe a)
+               -> Interval m a a
 randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
 _randIntervalsF :: forall a g. RandomGen g
