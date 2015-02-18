@@ -116,10 +116,12 @@ import Prelude hiding           ((.), id)
 -- Really, you can just think of this as a fancy tuple.
 data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
                            , outAuto :: Auto m a b    -- ^ The next 'Auto'
-                           } deriving ( Functor
-                                      , Typeable
+                           } deriving ( Typeable
                                       , Generic
                                       )
+
+instance Monad m => Functor (Output m a) where
+    fmap f (Output y a) = Output (f y) (fmap f a)
 
 instance Monad m => Applicative (Output m a) where
     pure x                      = Output x (pure x)
@@ -805,9 +807,50 @@ instance Monad m => Functor (Auto m a) where
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
-    af <*> ax = mkAutoM ((<*>) <$> loadAuto af <*> loadAuto ax)
-                        (saveAuto af *> saveAuto ax)
-                        $ \x -> liftM2 (<*>) (stepAuto af x) (stepAuto ax x)
+    -- af <*> ax = uncurry ($) <$> (af &&& ax)
+    af <*> ax = case (af, ax) of
+                  (AutoFunc f, AutoFunc x)  ->
+                      AutoFunc (f <*> x)
+                  (AutoFunc f, AutoFuncM x) ->
+                      AutoFuncM $ \i -> liftM (f i) (x i)
+                  (AutoFunc f, AutoState gpx x s) -> 
+                      AutoState gpx (\i s' -> first (f i) (x i s')) s
+                  (AutoFunc f, AutoStateM gpx x s) ->
+                      AutoStateM gpx (\i s' -> liftM (first (f i)) (x i s')) s
+                  (AutoFunc f, AutoArb l s x) -> 
+                      AutoArb (fmap (af <*>) l) s $ \i -> fmap (f i) (x i)
+                  (AutoFunc f, AutoArbM l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (fmap (f i)) (x i)
+                  (AutoFuncM f, AutoFunc x) ->
+                      AutoFuncM $ \i -> liftM ($ x i) (f i)
+                  (AutoFuncM f, AutoFuncM x) ->
+                      AutoFuncM $ \i -> f i `ap` x i
+                  (AutoFuncM f, AutoState gpx x s) ->
+                      AutoStateM gpx (\i s' -> liftM (($ x i s') . first) (f i)) s
+                  (AutoFuncM f, AutoStateM gpx x s) ->
+                      AutoStateM gpx (\i s' -> liftM2 first (f i) (x i s')) s
+                  (AutoFuncM f, AutoArb l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . fmap) (f i)
+                  (AutoFuncM f, AutoArbM l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 fmap (f i) (x i)
+                  (AutoState gpf f s, AutoFunc x) ->
+                      AutoState gpf (\i s' -> first ($ x i) (f i s')) s
+                  (AutoState gpf f s, AutoFuncM x) ->
+                      AutoStateM gpf (\i s' -> liftM (\x' -> first ($ x') (f i s')) (x i)) s
+                  (AutoState gpf f sf, AutoState gpx x sx) ->
+                      AutoState (mergeStSt gpf gpx)
+                                (\i (sf', sx') -> let (f', sf'') = f i sf'
+                                                      (x', sx'') = x i sx'
+                                                  in  (f' x', (sf'', sx'')))
+                                (sf, sx)
+                  (AutoState gpf f sf, AutoStateM gpx x sx) ->
+                      AutoStateM (mergeStSt gpf gpx)
+                                 (\i (sf', sx') -> do let (f', sf'') = f i sf'
+                                                      (x', sx'') <- x i sx'
+                                                      return (f' x', (sf'', sx'')))
+                                 (sf, sx)
+                  -- i give up!
+                  _ -> uncurry ($) <$> (af &&& ax)
     {-# INLINE (<*>) #-}
 
 -- Should this even be here?  It might be kind of dangerous/unexpected.
@@ -993,9 +1036,14 @@ instance Monad m => Category (Auto m) where
                                  Output y af' <- f x
                                  Output z ag' <- g y
                                  return (Output z (ag' . af'))
-      where
-        mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
+      -- where
+      --   mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
     {-# INLINE (.) #-}
+
+mergeStSt :: (Get s, s -> Put)
+          -> (Get s', s' -> Put)
+          -> (Get (s, s'), (s, s') -> Put)
+mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
 
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
@@ -1064,19 +1112,25 @@ instance MonadFix m => Costrong (Auto m) where
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
     first a = case a of
-                AutoFunc f         -> AutoFunc (first f)
-                AutoFuncM f        -> AutoFuncM (firstM f)
-                AutoState gp fa s  -> AutoState gp (\(x, z) -> first (,z) . fa x) s
-                AutoStateM gp fa s -> AutoStateM gp (\(x, z) -> liftM (first (,z)) . fa x) s
-                AutoArb l s f      -> AutoArb (first <$> l)
-                                              s
-                                            $ \(x, z) -> let Output y a' = f x
-                                                         in  Output (y, z) (first a')
-                AutoArbM l s f     -> AutoArbM (first <$> l)
-                                               s
-                                             $ \(x, z) -> do
-                                                 Output y a' <- f x
-                                                 return (Output (y, z) (first a'))
+                AutoFunc f         ->
+                    AutoFunc (first f)
+                AutoFuncM f        ->
+                    AutoFuncM (firstM f)
+                AutoState gp fa s  ->
+                    AutoState gp (\(x, z) -> first (,z) . fa x) s
+                AutoStateM gp fa s ->
+                    AutoStateM gp (\(x, z) -> liftM (first (,z)) . fa x) s
+                AutoArb l s f      ->
+                    AutoArb (first <$> l)
+                            s
+                          $ \(x, z) -> let Output y a' = f x
+                                       in  Output (y, z) (first a')
+                AutoArbM l s f     ->
+                    AutoArbM (first <$> l)
+                             s
+                           $ \(x, z) -> do
+                               Output y a' <- f x
+                               return (Output (y, z) (first a'))
 
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
