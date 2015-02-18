@@ -52,14 +52,16 @@ module Control.Auto.Interval (
   ) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
-import Control.Monad (join)
-import Data.Foldable (asum, foldr)
-import Data.Traversable (sequenceA)
+import Control.Monad              (join)
+import Data.Foldable              (asum, foldr)
 import Data.Maybe
+import Data.Profunctor
 import Data.Serialize
+import Data.Traversable           (sequenceA)
 import Prelude hiding             ((.), id, mapM, foldr)
 
 -- $intervals
@@ -605,7 +607,6 @@ choose :: Monad m
        -> Auto m a b
 choose = foldr (<|!>)
 
-
 -- | "Lifts" an @'Auto' m a b@ (transforming @a@s into @b@s) into an
 -- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,
 -- transforming /intervals/ of @a@s into /intervals/ of @b@.
@@ -646,16 +647,7 @@ choose = foldr (<|!>)
 -- is suppressed at the end with @'offFor' 2@.
 --
 during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
-during a = a_
-  where
-    a_ = mkAutoM (during <$> loadAuto a)
-                 (saveAuto a)
-                 $ \x -> case x of
-                           Just x' -> do
-                             Output y a' <- stepAuto a x'
-                             return (Output (Just y) (during a'))
-                           Nothing ->
-                             return (Output Nothing  a_         )
+during = dimap (maybe (Left ()) Right) (either (const Nothing) Just) . right
 
 -- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
 -- an @'Auto' m ('Maybe' a) ('Maybe' b)@ (or an @'Interval' m ('Maybe' a) b@)

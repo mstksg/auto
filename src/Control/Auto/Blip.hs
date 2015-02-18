@@ -76,12 +76,14 @@ module Control.Auto.Blip (
   ) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
 import Data.Monoid
+import Data.Profunctor
 import Data.Serialize
-import Prelude hiding                     ((.), id, sequence)
+import Prelude hiding             ((.), id, sequence)
 
 infixl 5 <&
 infixl 5 &>
@@ -688,16 +690,7 @@ modifyBlips f = mkFunc (fmap f)
 -- >>> ares
 -- [NoBlip, Blip 1, NoBlip, Blip 6, NoBlip, Blip 8, NoBlip, NoBlip]
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)
-perBlip a = a_
-  where
-    a_ = mkAutoM (perBlip <$> loadAuto a)
-                 (saveAuto a)
-                 $ \x -> case x of
-                           Blip x' -> do
-                             Output y a' <- stepAuto a x'
-                             return (Output (Blip y) (perBlip a'))
-                           NoBlip  ->
-                             return (Output NoBlip   a_           )
+perBlip = dimap (blip (Left ()) Right) (either (const NoBlip) Blip) . right
 
 -- -- | Why is this even here
 -- hm i think it is for cases where 'Maybe's are used as 'Blip's or

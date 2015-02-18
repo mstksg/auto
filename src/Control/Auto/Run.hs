@@ -104,7 +104,7 @@ streamAuto a = liftM fst . overList a
 streamAuto' :: Auto' a b
             -> [a]
             -> [b]
-streamAuto' a [] = []
+streamAuto' _ [] = []
 streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
                            ys          = streamAuto' a' xs
                        in  y:ys

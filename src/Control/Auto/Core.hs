@@ -93,16 +93,17 @@ import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.DeepSeq
-import Control.Monad
+import Control.Monad hiding   (sequence)
 import Control.Monad.Fix
-import Data.ByteString hiding   (empty)
+import Data.ByteString hiding (empty)
 import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
+import Data.Traversable
 import Data.Typeable
 import GHC.Generics
-import Prelude hiding           ((.), id)
+import Prelude hiding         ((.), id, sequence)
 
 -- TODO: provde combinators/ability to map over the result or use the
 -- result of stepAuto, without ruining the internal constructor structure
@@ -799,7 +800,6 @@ mkAccumMD_ :: Monad m
 mkAccumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
 {-# INLINE mkAccumMD_ #-}
 
-
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
     {-# INLINE fmap #-}
@@ -813,14 +813,10 @@ instance Monad m => Applicative (Auto m a) where
                       AutoFunc (f <*> x)
                   (AutoFunc f, AutoFuncM x) ->
                       AutoFuncM $ \i -> liftM (f i) (x i)
-                  (AutoFunc f, AutoState gpx x s) -> 
+                  (AutoFunc f, AutoState gpx x s) ->
                       AutoState gpx (\i s' -> first (f i) (x i s')) s
                   (AutoFunc f, AutoStateM gpx x s) ->
                       AutoStateM gpx (\i s' -> liftM (first (f i)) (x i s')) s
-                  (AutoFunc f, AutoArb l s x) -> 
-                      AutoArb (fmap (af <*>) l) s $ \i -> fmap (f i) (x i)
-                  (AutoFunc f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (fmap (f i)) (x i)
                   (AutoFuncM f, AutoFunc x) ->
                       AutoFuncM $ \i -> liftM ($ x i) (f i)
                   (AutoFuncM f, AutoFuncM x) ->
@@ -829,10 +825,6 @@ instance Monad m => Applicative (Auto m a) where
                       AutoStateM gpx (\i s' -> liftM (($ x i s') . first) (f i)) s
                   (AutoFuncM f, AutoStateM gpx x s) ->
                       AutoStateM gpx (\i s' -> liftM2 first (f i) (x i s')) s
-                  (AutoFuncM f, AutoArb l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . fmap) (f i)
-                  (AutoFuncM f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 fmap (f i) (x i)
                   (AutoState gpf f s, AutoFunc x) ->
                       AutoState gpf (\i s' -> first ($ x i) (f i s')) s
                   (AutoState gpf f s, AutoFuncM x) ->
@@ -1140,29 +1132,61 @@ instance Monad m => ArrowChoice (Auto m) where
                   AutoFunc (left f)
               AutoFuncM f       ->
                   AutoFuncM (\x -> case x of
-                               Left y  -> liftM Left (f y)
-                               Right y -> return (Right y))
+                               Right y -> return (Right y)
+                               Left y  -> liftM Left (f y))
               AutoState gp f s  ->
                   AutoState gp (\x s' -> case x of
+                                  Right y -> (Right y, s')
                                   Left y  -> first Left (f y s')
-                                  Right y -> (Right y, s')) s
+                               ) s
               AutoStateM gp f s ->
                   AutoStateM gp (\x s' -> case x of
+                                   Right y -> return (Right y, s')
                                    Left y  -> liftM (first Left) (f y s')
-                                   Right y -> return (Right y, s')) s
+                                ) s
               AutoArb l s f     ->
                   AutoArb (left <$> l)
                           s
                         $ \x -> case x of
-                                  Left y  -> onOutput Left left (f y)
                                   Right y -> Output (Right y) a
+                                  Left y  -> onOutput Left left (f y)
               AutoArbM l s f    ->
                   AutoArbM (left <$> l)
                            s
                          $ \x -> case x of
-                                   Left y  -> liftM (onOutput Left left) (f y)
                                    Right y -> return (Output (Right y) a)
+                                   Left y  -> liftM (onOutput Left left) (f y)
     {-# INLINE left #-}
+    right a0 = a
+      where
+        a = case a0 of
+              AutoFunc f ->
+                  AutoFunc (fmap f)
+              AutoFuncM f ->
+                  AutoFuncM (sequence . fmap f)
+              AutoState gp f s  ->
+                  AutoState gp (\x s' -> case x of
+                                  Left y  -> (Left y, s')
+                                  Right y -> first Right (f y s')
+                               ) s
+              AutoStateM gp f s ->
+                  AutoStateM gp (\x s' -> case x of
+                                   Left y  -> return (Left y, s')
+                                   Right y -> liftM (first Right) (f y s')
+                                ) s
+              AutoArb l s f     ->
+                  AutoArb (right <$> l)
+                          s
+                        $ \x -> case x of
+                                  Left y  -> Output (Left y) a
+                                  Right y -> onOutput Right right (f y)
+              AutoArbM l s f    ->
+                  AutoArbM (right <$> l)
+                           s
+                         $ \x -> case x of
+                                   Left y  -> return (Output (Left y) a)
+                                   Right y -> liftM (onOutput Right right) (f y)
+    {-# INLINE right #-}
 
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
