@@ -222,13 +222,13 @@ iteratorM_ f = mkAccumMD_ (\x _ -> f x)
 
 -- | Continually enumerate from the starting value, using `succ`.
 enumFromA :: (Serialize b, Enum b)
-          => b
+          => b                -- ^ initial value
           -> Auto m a b
 enumFromA = iterator succ
 
 -- | The non-serializing/non-resuming version of `enumFromA`.
 enumFromA_ :: Enum b
-           => b
+           => b               -- ^ initial value
            -> Auto m a b
 enumFromA_ = iterator_ succ
 
@@ -237,18 +237,18 @@ enumFromA_ = iterator_ succ
 --
 -- Still thinking of a good name for this...
 --
--- >>> take 10 $ streamAuto' (fN (^2) 0) (repeat ())
+-- >>> take 10 . streamAuto' (discreteF (^2) 0) $ repeat ()
 -- [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 discreteF :: (Enum c, Serialize c)
-          => (c -> b)
-          -> c
+          => (c -> b)       -- ^ discrete function
+          -> c              -- ^ initial input
           -> Auto m a b
 discreteF f = mkState $ \_ x -> (f x, succ x)
 
 -- | The non-resuming/non-serializing version of `discreteF`.
 discreteF_ :: Enum c
-           => (c -> b)
-           -> c
+           => (c -> b)      -- ^ discrete function
+           -> c             -- ^ initial input
            -> Auto m a b
 discreteF_ f = mkState_ $ \_ x -> (f x, succ x)
 

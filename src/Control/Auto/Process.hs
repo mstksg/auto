@@ -85,12 +85,12 @@ sumFromD_ :: Num a
 sumFromD_ = mkAccumD_ (+)
 
 productFrom :: (Serialize a, Num a)
-            => a
+            => a            -- ^ initial product
             -> Auto m a a
 productFrom = mkAccum (*)
 
 productFrom_ :: Num a
-             => a
+             => a           -- ^ initial product
              -> Auto m a a
 productFrom_ = mkAccum_ (*)
 
@@ -170,9 +170,13 @@ mappender_ = mkAccum_ mappend mempty
 -- Max 3
 --
 -- prop> mappendFrom m0 = mkAccum (<>) m0
-mappendFrom :: (Serialize a, Semigroup a) => a -> Auto m a a
+mappendFrom :: (Serialize a, Semigroup a)
+            => a            -- ^ initial value
+            -> Auto m a a
 mappendFrom = mkAccum (<>)
 
 -- | The non-resuming/non-serializing version of 'mappender'.
-mappendFrom_ :: Semigroup a => a -> Auto m a a
+mappendFrom_ :: Semigroup a
+             => a           -- ^ initial value
+             -> Auto m a a
 mappendFrom_ = mkAccum_ (<>)

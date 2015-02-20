@@ -22,15 +22,19 @@
 
 module Control.Auto.Run (
   -- * Special 'stepAuto' versions.
+  -- ** Streaming over lists
     streamAuto
   , streamAuto'
   , overList
   , overList'
+  -- ** Running over one item repetitively
   , stepAutoN
   , stepAutoN'
+  , evalAutoN
+  , evalAutoN'
   -- * Running "interactively"
   , interact
-  , interactReadShow
+  , interactRS
   , interactM
   -- ** Helpers
   , duringRead
@@ -95,16 +99,31 @@ overList' a (x:xs) = let Output y a' = stepAuto' a x
                          (ys, a'')   = overList' a' xs
                      in  (y:ys, a'')
 
+-- | Stream an 'Auto' over a list, returning the list of results.  Does
+-- this "lazily" (over the Monad), so with most Monads, this should work
+-- fine with infinite lists.
+--
+-- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
+-- m [b]@.
 streamAuto :: Monad m
            => Auto m a b
            -> [a]
            -> m [b]
-streamAuto a = liftM fst . overList a
+streamAuto _ []     = return []
+streamAuto a (x:xs) = do
+    Output y a' <- stepAuto a x
+    ys <- streamAuto a' xs
+    return (y:ys)
 
+-- | Stream an 'Auto'' over a list, returning the list of results.  Does
+-- this lazily, so this should work fine with (and is actually somewhat
+-- designed for) infinite lists.
+--
+-- Note that conceptually this turns an @'Auto'' a b@ into an @[a] -> [b]@
 streamAuto' :: Auto' a b
             -> [a]
             -> [b]
-streamAuto' _ [] = []
+streamAuto' _ []     = []
 streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
                            ys          = streamAuto' a' xs
                        in  y:ys
@@ -146,6 +165,38 @@ stepAutoN n a0 x = go (max n 0) a0
 -- 256
 stepAutoN' :: Int -> Auto' a b -> a -> ([b], Auto' a b)
 stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
+
+-- | Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
+-- of results.
+evalAutoN :: Monad m
+          => Int
+          -> Auto m a b
+          -> a
+          -> m [b]
+evalAutoN n a0 = liftM fst . stepAutoN n a0
+
+-- | Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the
+-- list of results.
+--
+-- 'evalAutoN' for 'Auto''.
+evalAutoN' :: Int
+           -> Auto' a b
+           -> a
+           -> [b]
+evalAutoN' n a0 = fst . stepAutoN' n a0
+
+-- execAutoN :: Monad m
+--           => Int
+--           -> Auto m a b
+--           -> a
+--           -> m (Auto m a b)
+-- execAutoN n a0 = liftM snd . stepAutoN n a0
+
+-- execAutoN' :: Int
+--            -> Auto' a b
+--            -> a
+--            -> Auto' a b
+-- execAutoN' n a0 = snd . stepAutoN' n a0
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
 -- input and a function from an output to the next input to feed in, and
@@ -198,20 +249,26 @@ runM x0 f nt a = do
 -- a function to convert the input 'String' to whatever intput your 'Auto'
 -- expects.
 --
--- Useful helper functions 'duringRead' and 'bindRead' are provided for
--- this case.   'duringRead' turns an @'Auto' m a b@ (with @'Read' a@) into
--- an @'Auto' m 'String' ('Maybe' b)@, where it "reads" the 'String' into
--- the 'a'...but if the 'read' fails, the whole 'Auto' returns 'Nothing'.
--- When used with 'interact', that means that a failed 'read' terminates
--- the loop.
-interact :: Interval' String String         -- ^ 'Auto' to run interactively
+-- You can use 'duringRead' or 'bindRead' if you have an 'Auto'' or
+-- 'Interval'' that takes something 'read'able, to chug along until you
+-- find something non-readable.
+--
+-- Outputs the final 'Auto'' when the interaction terminates.
+interact :: Interval' String String         -- ^ 'Interval'' to run interactively
          -> IO (Interval' String String)
 interact = interactM putStrLn (return . runIdentity)
 
-interactReadShow :: (Read a, Show b)
-                 => Auto' a b
-                 -> IO (Interval' String String)
-interactReadShow = interact . duringRead . fmap show
+-- Like 'interact', but instead of taking @'Interval'' 'String' 'String'@,
+-- takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@ is 'Show'.
+--
+-- Will "stop" if either (1) the input is not 'read'-able or (2) the
+-- 'Interval'' turns off.
+--
+-- Outputs the final 'Auto'' when the interaction terminates.
+interactRS :: (Read a, Show b)
+           => Interval' a b                 -- ^ 'Interval'' to run interactively
+           -> IO (Interval' String String)
+interactRS = interact . bindRead . fmap (fmap show)
 
 
 -- | Like 'interact', but much more general.  You can run it with an 'Auto'
