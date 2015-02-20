@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -39,6 +38,10 @@ module Control.Auto.Core (
   -- ** Running
   , stepAuto
   , stepAuto'
+  , evalAuto
+  , evalAuto'
+  , execAuto
+  , execAuto'
   -- ** Serializing
   -- $serializing
   , encodeAuto
@@ -460,28 +463,35 @@ stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
 stepAuto' a = runIdentity . stepAuto a
 {-# INLINE stepAuto' #-}
 
+-- | Like 'stepAuto', but drops the "next 'Auto'" and just gives the
+-- result.
 evalAuto :: Monad m
          => Auto m a b
          -> a
          -> m b
 evalAuto a = liftM outRes . stepAuto a
 
+-- | Like 'stepAuto'', but drops the "next 'Auto''" and just gives the
+-- result.  'evalAuto' for 'Auto''.
 evalAuto' :: Auto' a b
           -> a
           -> b
 evalAuto' a = outRes . stepAuto' a
 
+-- | Like 'stepAuto', but drops the result and just gives the "next
+-- 'Auto'".
 execAuto :: Monad m
          => Auto m a b
          -> a
          -> m (Auto m a b)
 execAuto a = liftM outAuto . stepAuto a
 
+-- | Like 'stepAuto'', but drops the result and just gives the "next
+-- 'Auto''".  'execAuto' for 'Auto''.
 execAuto' :: Auto' a b
           -> a
           -> Auto' a b
 execAuto' a = outAuto . stepAuto' a
-
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
@@ -813,22 +823,30 @@ instance Monad m => Applicative (Auto m a) where
                       AutoFunc (f <*> x)
                   (AutoFunc f, AutoFuncM x) ->
                       AutoFuncM $ \i -> liftM (f i) (x i)
-                  (AutoFunc f, AutoState gpx x s) ->
-                      AutoState gpx (\i s' -> first (f i) (x i s')) s
-                  (AutoFunc f, AutoStateM gpx x s) ->
-                      AutoStateM gpx (\i s' -> liftM (first (f i)) (x i s')) s
+                  (AutoFunc f, AutoState gp x s) ->
+                      AutoState gp (\i s' -> first (f i) (x i s')) s
+                  (AutoFunc f, AutoStateM gp x s) ->
+                      AutoStateM gp (\i s' -> liftM (first (f i)) (x i s')) s
+                  (AutoFunc f, AutoArb l s x) ->
+                      AutoArb (fmap (af <*>) l) s $ \i -> onOutput (f i) (af <*>) $ x i
+                  (AutoFunc f, AutoArbM l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (onOutput (f i) (af <*>)) (x i)
                   (AutoFuncM f, AutoFunc x) ->
                       AutoFuncM $ \i -> liftM ($ x i) (f i)
                   (AutoFuncM f, AutoFuncM x) ->
                       AutoFuncM $ \i -> f i `ap` x i
-                  (AutoFuncM f, AutoState gpx x s) ->
-                      AutoStateM gpx (\i s' -> liftM (($ x i s') . first) (f i)) s
-                  (AutoFuncM f, AutoStateM gpx x s) ->
-                      AutoStateM gpx (\i s' -> liftM2 first (f i) (x i s')) s
-                  (AutoState gpf f s, AutoFunc x) ->
-                      AutoState gpf (\i s' -> first ($ x i) (f i s')) s
-                  (AutoState gpf f s, AutoFuncM x) ->
-                      AutoStateM gpf (\i s' -> liftM (\x' -> first ($ x') (f i s')) (x i)) s
+                  (AutoFuncM f, AutoState gp x s) ->
+                      AutoStateM gp (\i s' -> liftM (($ x i s') . first) (f i)) s
+                  (AutoFuncM f, AutoStateM gp x s) ->
+                      AutoStateM gp (\i s' -> liftM2 first (f i) (x i s')) s
+                  (AutoFuncM f, AutoArb l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . (`onOutput` (af <*>))) (f i)
+                  (AutoFuncM f, AutoArbM l s x) ->
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 (\f' -> onOutput f' (af <*>)) (f i) (x i)
+                  (AutoState gp f s, AutoFunc x) ->
+                      AutoState gp (\i s' -> first ($ x i) (f i s')) s
+                  (AutoState gp f s, AutoFuncM x) ->
+                      AutoStateM gp (\i s' -> liftM (\x' -> first ($ x') (f i s')) (x i)) s
                   (AutoState gpf f sf, AutoState gpx x sx) ->
                       AutoState (mergeStSt gpf gpx)
                                 (\i (sf', sx') -> let (f', sf'') = f i sf'
@@ -841,6 +859,25 @@ instance Monad m => Applicative (Auto m a) where
                                                       (x', sx'') <- x i sx'
                                                       return (f' x', (sf'', sx'')))
                                  (sf, sx)
+                  (AutoStateM gp f s, AutoFunc x) ->
+                      AutoStateM gp (\i s' -> liftM (first ($ x i)) (f i s')) s
+                  (AutoStateM gp f s, AutoFuncM x) ->
+                      AutoStateM gp (\i s' -> do (f', s'') <- f i s'
+                                                 x' <- x i
+                                                 return (f' x', s'')
+                                    ) s
+                  (AutoStateM gpf f sf, AutoState gpx x sx) ->
+                      AutoStateM (mergeStSt gpf gpx)
+                                 (\i (sf', sx') -> do (f', sf'') <- f i sf'
+                                                      let (x', sx'') = x i sx'
+                                                      return (f' x', (sf'', sx''))
+                                 ) (sf, sx)
+                  (AutoStateM gpf f sf, AutoStateM gpx x sx) ->
+                      AutoStateM (mergeStSt gpf gpx)
+                                 (\i (sf', sx') -> do (f', sf'') <- f i sf'
+                                                      (x', sx'') <- x i sx'
+                                                      return (f' x', (sf'', sx''))
+                                 ) (sf, sx)
                   -- i give up!
                   _ -> uncurry ($) <$> (af &&& ax)
     {-# INLINE (<*>) #-}
