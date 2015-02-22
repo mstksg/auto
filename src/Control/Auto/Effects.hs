@@ -31,6 +31,11 @@ module Control.Auto.Effects (
   , execOnce
   , cache_
   , execOnce_
+  -- * "Sealing off" monadic 'Auto's
+  , sealState
+  , sealState_
+  , sealReader
+  , sealReader_
   ) where
 
 import Control.Applicative
@@ -39,8 +44,10 @@ import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
 import Control.Monad
+import Control.Monad.Trans.State           (StateT, runStateT)
+import Control.Monad.Trans.Reader           (ReaderT, runReaderT)
 import Data.Serialize
-import Prelude hiding        ((.), id)
+import Prelude hiding                      ((.), id)
 
 -- | "Executes" a monadic action once (and only once), and continues to
 -- echo the result forevermore.
@@ -51,8 +58,8 @@ import Prelude hiding        ((.), id)
 -- a dictionary:
 --
 -- @
---     dictionary :: Auto IO a [String]
---     dictionary = cache (lines <$> readFile "dictionary.txt")
+-- dictionary :: Auto IO a [String]
+-- dictionary = cache (lines <$> readFile "dictionary.txt")
 -- @
 cache :: (Serialize b, Monad m)
       => m b          -- ^ monadic action to execute and use the result of
@@ -67,8 +74,8 @@ cache m = snd <$> iteratorM (_cacheF m) (False, undefined)
 -- every startup, instead of saving it to in the save states.
 --
 -- @
---     dictionary :: Auto IO a [String]
---     dictionary = cache_ (lines <$> readFile "dictionary.txt")
+-- dictionary :: Auto IO a [String]
+-- dictionary = cache_ (lines <$> readFile "dictionary.txt")
 -- @
 cache_ :: Monad m
        => m b         -- ^ monadic action to execute and use the result of
@@ -103,7 +110,15 @@ _execOnceF m = go
     go _     = return ((), True)
 
 -- | "Executes" the given monadic action at every tick/step of the 'Auto',
--- outputting the result.  Particularly useful with the 'Reader' 'Monad'.
+-- outputting the result.  Particularly useful with 'Reader' as the
+-- underlying 'Monad'.
+--
+-- >>> let a = effect ask     :: Auto (Reader b) a b
+-- >>> let r = evalAuto a ()  :: Reader b b
+-- >>> runReader r "hello"
+-- "hello"
+-- >>> runReader r 123
+-- 123
 effect :: m b           -- ^ monadic action to contually execute.
        -> Auto m a b
 effect = mkConstM
@@ -117,12 +132,6 @@ exec :: Monad m
      -> Auto m a a
 exec m = mkFuncM $ \x -> m >> return x
 {-# INLINE exec #-}
-
--- -- | Like 'exec', but the 'Auto' just always outputs '()'.
--- exec' :: Monad m
---       => m b            -- ^ monadic action to contually execute.
---       -> Auto m a ()
--- exec' m = pure () . mkConstM m
 
 -- | Lifts a "monadic function" (Kleisli arrow) into an 'Auto'.  Like
 -- 'arr', but with monadic functions.  Composition of such 'Auto's works
@@ -159,14 +168,42 @@ execB :: Monad m
 execB = perBlip . exec
 {-# INLINE execB #-}
 
--- -- | Executes a monadic action with every incoming 'Blip', returning back
--- -- a unit 'Blip'.
--- execB' :: Monad m
---        => m b
---        -> Auto m (Blip a) (Blip ())
--- execB' = perBlip . exec'
+sealState :: (Monad m, Serialize s)
+          => Auto (StateT s m) a b
+          -> s
+          -> Auto m a b
+sealState a s0 = mkAutoM (sealState <$> loadAuto a <*> get)
+                         (saveAuto a *> put s0)
+                         $ \x -> do
+                             (Output y a', s1) <- runStateT (stepAuto a x) s0
+                             return $ Output y (sealState a' s1)
 
--- runStateA
--- runReaderA
--- runListA
+sealState_ :: Monad m
+           => Auto (StateT s m) a b
+           -> s
+           -> Auto m a b
+sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
+                          (saveAuto a)
+                          $ \x -> do
+                              (Output y a', s1) <- runStateT (stepAuto a x) s0
+                              return $ Output y (sealState_ a' s1)
 
+sealReader :: (Monad m, Serialize r)
+           => Auto (ReaderT r m) a b
+           -> r
+           -> Auto m a b
+sealReader a r = mkAutoM (sealReader <$> loadAuto a <*> get)
+                         (saveAuto a *> put r)
+                         $ \x -> do
+                             Output y a' <- runReaderT (stepAuto a x) r
+                             return $ Output y (sealReader a' r)
+
+sealReader_ :: Monad m
+            => Auto (ReaderT r m) a b
+            -> r
+            -> Auto m a b
+sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
+                          (saveAuto a)
+                          $ \x -> do
+                              Output y a' <- runReaderT (stepAuto a x) r
+                              return $ Output y (sealReader_ a' r)

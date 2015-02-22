@@ -388,3 +388,4 @@ runTraversableA = go . return
                               y  = liftM outRes o
                               a' = liftM outAuto o
                           in  Output y (go a')
+
