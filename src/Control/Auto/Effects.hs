@@ -119,6 +119,9 @@ _execOnceF m = go
 -- "hello"
 -- >>> runReader r 123
 -- 123
+--
+-- Basically like `pure`, but instead of `pure :: b -> Auto m a b`, you
+-- have `effect :: m b -> Auto m a b`.
 effect :: m b           -- ^ monadic action to contually execute.
        -> Auto m a b
 effect = mkConstM

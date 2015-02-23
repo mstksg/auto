@@ -103,321 +103,303 @@ What's in a type?
 Enough handwaving!  What do these types even mean?  What are the type
 parameters?
 
-An `Auto m a b` describes *a relationship* between a stream of inputs `a` and
-a stream of outputs `b` that is maintained over several steps of inputs.  The
-`m` is an underlying monadic context in which it maintains those
-relationships.
-
-One way to look at it is that with `streamAuto`, an `Auto m a b` gives you an
-`[a] -> m [b]`.
-
-From an operational standpoint, you can think of a `Auto m a b` as a function
-with internal state that gives you an output `b` and an "updated `Auto`"...but
-does so in a monadic context.  With `stepAuto`, an `Auto m a b` gives you an
-`a -> m (b, Auto m a b)`.  So, an `Auto m a b` is basically an `a -> m b` with
-"internal state".
-
-An `Auto' a b` is just an `Auto Identity a b`, for convenience.  There is
-really no "monadic context".  So an `Auto' a b` describes a relationship
-between a stream of inputs `a` and a stream of inputs `b` that is maintained
-over several steps of inputs.
-
-With `streamAuto'`, and `Auto' a b` gives you an `[a] -> [b]`.
-
-From an operational standpoint, an `Auto' a b` is a function with internal
-state that takes an `a` and outputs `b` with a "next/updated `Auto'`".  With
-`stepAuto'`, an `Auto' a b` gives you an `a -> (b, Auto' a b)`.  So, an `Auto'
-a b` is basically an `a -> b` with "internal state".
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<!-- An `Auto` is like a stateful function.  You can feed it values, and -->
-<!-- it'll return an output and a "next Auto". -->
-
-<!-- ~~~haskell -->
-<!-- -- sumFrom 0 :: Auto' Int Int -->
-<!-- -- ("function" from Int to Int) -->
-<!-- ghci> let Output x a2 = stepAuto' (sumFrom 0) 5 -->
-<!-- ghci> x -->
-<!-- 5 -->
-<!-- ~~~ -->
-
-<!-- Here, we just stepped the `sumFrom 0` Auto, feeding it with an input -->
-<!-- of 5.  The result (`x`) is the running total of the inputs --- in this -->
-<!-- case, 5.  Neat!  We named our "next `Auto`" `a2`.  Let's try it again: -->
-
-<!-- ~~~haskell -->
-<!-- -- a2 :: Auto' Int Int -->
-<!-- ghci> let Output y _ = stepAuto' a2 3 -->
-<!-- ghci> y -->
-<!-- 8 -->
-<!-- ~~~ -->
-
-<!-- We feed now an 3 to our next `Auto`, `a2`, and get that the result -->
-<!-- `y` is now 8! -->
-
-<!-- Now, normally we don't really often step our `Auto`s manually...if we -->
-<!-- have an input stream (like a list), we can streamingly run them all -->
-<!-- through our `Auto`s one at a time, for example: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> take 10 $ streamAuto' (sumFrom 0) [1..] -->
-<!-- [1, 3, 6, 10, 15, 21, 28, 36, 45, 55] -->
-<!-- ~~~ -->
-
-<!-- Or even make it run in an IO loop: -->
-
-<!-- ~~~haskell -->
-<!-- -- mappender          :: Auto' String String -->
-<!-- -- Just <$> mappender :: Auto' String (Maybe String) -->
-<!-- ghci> interact (Just <$> mappender) -->
-<!-- > hello -->
-<!-- hello -->
-<!-- > world -->
-<!-- helloworld -->
-<!-- > goodbye -->
-<!-- helloworldgoodbye -->
-<!-- ~~~ -->
-
-<!-- (`mappender` is the `Auto` that is much like `sumFrom`, but it returns -->
-<!-- the `mconcat` of all of its inputs so far; we fmap `Just` -->
-<!-- because as soon as `interact` sees a `Nothing`, it stops looping) -->
-
-<!-- `Auto`s can also be effectful, because why not? -->
-
-<!-- ~~~haskell -->
-<!-- -- print      :: Show a => a -> IO () -->
-<!-- -- arrM print :: Show a => Auto IO a () -->
-<!-- -- streamAuto (arrM print) :: IO [()] -->
-<!-- ghci> streamAuto (arrM print) [1..5] -->
-<!-- 1 -->
-<!-- 2 -->
-<!-- 3 -->
-<!-- 4 -->
-<!-- 5 -->
-<!-- ~~~ -->
-
-<!-- ### What's in a type? -->
-
-<!-- The most important type in this library is `Auto m a b` (well, also its -->
-<!-- variant, `Auto' a b`). -->
-
-<!-- An `Auto' a b` is, conceptually, in english, read as an *auto* (stateful -->
-<!-- function) that *turns `a`s into `b`s* (takes `a`s, returns `b`s).  Feed in -->
-<!-- `a`s, `b`s come out. -->
-
-<!-- An `Auto m a b` is like an `Auto' a b`, except the process of popping the `b` -->
-<!-- out (and updating the internal state of the `Auto`) happens in the context of -->
-<!-- a `Monad` `m`.  (Note that `Auto' a b` is just `Auto Identity a b`). -->
-
-<!-- So, if `Auto'` is a fancy internally-stateful function `a -> b`, `Auto m a b` -->
-<!-- is a fancy internally-stateful function `a -> m b`. -->
-
-<!-- For the most part, your things will be fine with just `Auto'`...however, there -->
-<!-- are useful `Auto`s with effects, so it's best to leave your functions -->
-<!-- parameterized over `Monad m => Auto m a b`, so you can use them as both an -->
-<!-- `Auto' a b` *and* as an `Auto m a b`, if you wanted to, without any explicit -->
-<!-- conversions. -->
-
-<!-- Another important type you see is `Output m a b`, which is just a glorified -->
-<!-- tuple with a `b` and an `Auto m a b`.  As you can see above, when you "step" -->
-<!-- an `Auto` (feed it an `a` manually), you get, as a result, a `b` and a "next -->
-<!-- `Auto`".  An `Output` type is a tuple containing these two.  There is also an -->
-<!-- `Output' a b`, which you get when you step an `Auto' a b`, which contains a -->
-<!-- `b` and a next `Auto'`. -->
-
-<!-- ~~~haskell -->
-<!-- data Output m a b = Output { a :: outRes, Auto m a b :: outAuto } -->
-
-<!-- type Output' = Output Identity -->
-<!-- ~~~ -->
-
-<!-- There are also two more types, `Interval` (a type synonym) and `Blip`, that -->
-<!-- will show up later. -->
-
-<!-- Composing and creating -->
-<!-- ---------------------- -->
-
-<!-- `Auto`s are useful because complex `Auto`s with complex "internal state" can -->
-<!-- be created through various interfaces. -->
-
-<!-- ### Functor, Profunctor -->
-
-<!-- The `Functor` interface allows you to apply normal functions on the output of -->
-<!-- an `Auto`: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' (sumFrom 0) [1..5] -->
-<!-- [1,3,6,10,15] -->
-<!-- ghci> streamAuto' (show <$> sumFrom 0) [1..5] -->
-<!-- ["1","3","6","10","15"] -->
-<!-- ~~~ -->
-
-<!-- The `Profunctor` interface gives the same power, and also allows you to apply -->
-<!-- functions "before" the input of an `Auto`: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> let repln x = replicate x x -->
-<!-- ghci> streamAuto' (lmap repln mappender) [5,2,3] -->
-<!-- [[5,5,5,5,5], [5,5,5,5,5,2,2], [5,5,5,5,5,2,2,3,3,3]] -->
-<!-- ghci> streamAuto' (dimap repln (concatMap show) mappender) [5,2,3] -->
-<!-- ["55555", "5555522", "5555522333"] -->
-<!-- ~~~ -->
-
-<!-- ### Applicative -->
-
-<!-- The `Applicative` interface allows you create `Auto`s that "always produce" a -->
-<!-- certain value: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> take 10 $ streamAuto' (pure 4) [1..] -->
-<!-- [4, 4, 4, 4, 4, 4, 4, 4, 4, 4] -->
-<!-- ~~~ -->
-
-<!-- It also allows you to "fork" an input to two `Auto`s and then combine their -->
-<!-- outputs later: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' (sumFrom 0) [1..5] -->
-<!-- [ 1, 3,  6, 10,  15] -->
-<!-- ghci> streamAuto' (productFrom 1) [1..5] -->
-<!-- [ 1, 2,  6, 24, 120] -->
-<!-- ghci> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5] -->
-<!-- [ 2, 5, 12, 34, 135] -->
-<!-- ~~~ -->
-
-<!-- ### Category -->
-
-<!-- The `Category` instance lets you compose `Auto`s by feeding their inputs one -->
-<!-- through the other, updating their states together. -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' (sumFrom 0) [1..5] -->
-<!-- [1,3,6,10,15] -->
-<!-- ghci> streamAuto' (productFrom 1) [1,3,6,10,15] -->
-<!-- [1,3,18,180,2700] -->
-<!-- ghci> streamAuto' (productFrom 1 . sumFrom 0) [1..5] -->
-<!-- [1,3,18,180,2700] -->
-<!-- ~~~ -->
-
-<!-- It also gives you an identity to this composition, `id`: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' id [1..5] -->
-<!-- [1,2,3,4,5] -->
-<!-- ghci> streamAuto' (productFrom 1 . id . sumFrom 0) [1..5] -->
-<!-- [1,3,18,180,2700] -->
-<!-- ~~~ -->
-
-<!-- (Remember to use `(.)` and `id` from `Control.Category`) -->
-
-<!-- ### Arrow -->
-
-<!-- The Arrow instance gives you (among other things) a way to turn "pure" `a -> b` -->
-<!-- functions into `Auto m a b`'s, Autos from `a` to `b`: -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' (arr (*2)) [1..5] -->
-<!-- [2,4,6,8,10] -->
-<!-- ~~~ -->
-
-<!-- But most importantly, it gives you the ability to compose complex Autos using -->
-<!-- *proc* notation: -->
-
-<!-- ~~~haskell -->
-<!-- foo :: Auto' Int (Int, Maybe Int) -->
-<!-- foo = proc x -> do -->
-<!--     sumX     <- sumFrom 0          -< x -->
-<!--     prodX    <- productFrom 1      -< x + sumX -->
-<!--     lastEven <- hold . emitOn even -< x -->
-<!--     id -< (prodX, lastEven) -->
-<!-- ~~~ -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' foo [4,7,3,6,5,1] -->
-<!-- [ (    4, Just 4), (    144, Just 4), (    2448, Just 4) -->
-<!-- , (63648, Just 6), (1909440, Just 6), (51554880, Just 6) ] -->
-<!-- ~~~ -->
-
-<!-- `emitOn even` produces a "Blip" stream that emits whenever the input (`x`) is -->
-<!-- even, and `hold` is a `Maybe` that holds the value of the most recent received -->
-<!-- emitted value. -->
-
-<!-- Most of what was just done could be written with the `Applicative` -->
-<!-- instance as well, but seeing it laid out almost like a dependency graph yields -->
-<!-- powerful expressiveness. -->
-
-<!-- The syntax for proc blocks is that each line is of the form: -->
-
-<!-- ~~~haskell -->
-<!-- auto -< input -->
-<!-- ~~~ -->
-
-<!-- And, if you want to "bind" and name the result for later: -->
-
-<!-- ~~~haskell -->
-<!-- output <- auto -< intput -->
-<!-- ~~~ -->
-
-<!-- Kind of like a little ASCII art arrow!  Cute, huh? -->
-
-<!-- The result of the entire block is the output of the final line, just like in -->
-<!-- monadic do blocks. -->
-
-<!-- You can actually get pretty fancy with `proc` blocks, and use conditions and -->
-<!-- even recursive bindings: -->
-
-<!-- ~~~haskell -->
-<!-- foo :: Auto' Int (Int, String) -->
-<!-- foo = proc goal -> do -->
-<!--     rec let goUp = curr < goal -->
-<!--         curr <- sumFromD 0 -< if goUp -->
-<!--                                 then 4 -->
-<!--                                 else -1 -->
-<!--     mesg <- if goUp -->
-<!--               then -->
-<!--                 id -< "went up from " ++ show curr -->
-<!--               else do -->
-<!--                 numUps <- sumFrom 0 -< 1 :: Int -->
-<!--                 id -< "went down, #" ++ show numUps -->
-
-<!--     id -< (curr, mesg) -->
-<!-- ~~~ -->
-
-<!-- ~~~haskell -->
-<!-- ghci> streamAuto' foo (replicate 10 6) -->
-<!-- [ (0, "went up from 0"), (4, "went up from 4"), (8, "went down, #1") -->
-<!-- , (7, "went down, #2"), (6, "went down, #3"), (5, "went up from 5") ] -->
-<!-- ~~~ -->
-
-<!-- `sumFromD` is like `sumFrom`, but always outputs the accumulator *before -->
-<!-- adding the input*, isntead of after adding it; sort of like `c++` instead of -->
-<!-- `++c`.  Put in another way, it ouputs a running sum excluding for the most -->
-<!-- recent input. -->
-
-<!-- What happens here?  Well, the auto receives an input --- a "goal number" that -->
-<!-- it tries to get `curr` to.  If `curr` is too low, then it is increased by 4; -->
-<!-- if it is too high, it is decreased by 1.  Note that `curr`'s increase/decrease -->
-<!-- depends on `goUp`, and `goUp` depends on `curr`, so we have a cyclic -->
-<!-- relationship.  Luckily, the library handles this for us. -->
-
-<!-- There's also a message that gets popped out too; if the thing is to be -->
-<!-- increased, then output a mesasge "went up to"; if it decreased, output "went -->
-<!-- down", and keep track of how many times it has been decreased (using `sumFrom -->
-<!-- 0`), and output that. -->
-
-<!-- And that's proc notation, and the Arrow instance! -->
-
+An `Auto' a b` describes *a relationship* between a stream of inputs `a` and a
+stream of outputs `b` that is maintained over several steps of inputs.
+
+One way to look at it is that, with `streamAuto'` an `Auto' a b` gives you an
+`[a] -> [b]`.
+
+From an operational perspective, you can think of an `Auto' a b` as a function
+with internal state that, when fed an `a`, gives you a `b` and a "next/updated
+`Auto`".  With `stepAuto'`, an `Auto' a b` gives you an `a -> (b, Auto' a b)`.
+An `Auto' a b` is basically a `a -> b` with "internal state".
+
+The more general type is actually `Auto m a b` --- an `Auto' a b` is actaully
+just a type alias for `Auto Identity a b`.
+
+An `Auto m a b` describes *a relationship*, again, between a stream of inputs
+`a` and a stream of outputs `b` maintained over several steps of inputs...and
+maintains this relationship with within an underlying monadic context `m`.
+
+If `streamAuto'` from an `Auto' a b` gives you an `[a] -> [b]`, then
+`streamAuto` from an `Auto m a b` gives you an `[a] -> m [b]`.
+
+Operationally, if `Auto' a b` is a `a -> b` with internal state, then `Auto m
+a b` is a `a -> m b` with internal state.  If you feed it an `a`, it'll return
+a `b` and a "next/updated `Auto`" in a monadic context --- with `stepAuto`,
+you get a `a -> m (b, Auto m a b)`.
+
+This monadic context means that in the process of "stepping" or "running" the
+`Auto`, you can perform effects and get input from an outside world.
+
+For the most part, real-life `Auto`s will be written parameterized over
+`Monad` or some `Monad` typeclass:
+
+~~~haskell
+myAuto :: Monad m => Auto m Int Bool
+~~~
+
+`Auto'` etc. are just useful when you want to "run" things that you know can
+be `Identity`.
+
+You probably also already know about `Output m a b`, which is a glorified `(a,
+Auto m a b)` tuple, and `Output' a b`, which is a glorified `(a, Auto' a b)`
+tuple.  You can pattern match on it using the `Output` constructor, or just
+access them using `outRes` and `outAuto`.
+
+While we're on the subject, there is another type alias for `Auto`s: an
+`Interval m a b` is an `Auto m a (Maybe b)` (they're just type aliases).
+Semantically, it represents an `Auto` that is "on" or "off" for durations of
+steps.  Similarly, `Interval' a b` is an `Auto' a (Maybe b)`.  You get the
+picture, I hope!  We'll learn more about `Interval` later.
+
+Building up Autos
+-----------------
+
+So of course, having simple `Auto`s like this being your whole program isn't
+very reasonable...do you think I have a `chatBot` or `chessEngine` `Auto` in
+the library? :)
+
+The "magic" of this library is that you have the ability to build up complex
+and intricate relationships and behaviors (and programs) by composing small
+"primitive" `Auto`s.  These combinators are exposed both through familiar
+typeclasses we know and love, and also through functions in this library.
+
+### Modifying and combining `Auto`s
+
+For example, with the `Functor` instance, you can apply functions to the
+"output" of an `Auto`:
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0) [1..5]
+[ 1 , 3 , 6 , 10 , 15 ]
+ghci> streamAuto' (show <$> sumFrom 0) [1..5]
+["1","3","6","10","15"]
+~~~
+
+`lmap` from `Profunctor` lets you apply functions "before" the input of the
+`Auto`:
+
+~~~haskell
+ghci> streamAuto' mappender ["1","2","3"]
+["1","12","123"]
+ghci> streamAuto' (lmap show mappender) [1,2,3]
+["1","12","123"]
+~~~
+
+The `Applicative` instance gives you a "constant `Auto`", which ignores its
+input and whose output is always a constant value:
+
+~~~haskell
+ghci> take 10 $ streamAuto' (pure 4) [1..]
+[4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
+~~~
+
+The `Applicative` instance also gives you the ability to "fork" the input
+streams of two `Auto`s and then re-combine their output streams later:
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0) [1..5]
+[ 1, 3,  6, 10,  15]
+ghci> streamAuto' (productFrom 1) [1..5]
+[ 1, 2,  6, 24, 120]
+ghci> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
+[ 2, 5, 12, 34, 135]
+~~~
+
+Now, the `Category` instance is probably the most powerful tool at your
+disposal.  As a first treat, it gives you `id :: Auto m a a`, an `Auto` whose
+output is always exactly the corresponding input.
+
+But more importantly, you can "chain together" `Auto`s end-to-end.  Compose
+them as if they were functions:
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0) [1..5]
+[1,3,6,10,15]
+ghci> streamAuto' (productFrom 1) [1,3,6,10,15]
+[1,3,18,180,2700]
+ghci> streamAuto' (productFrom 1 . sumFrom 0) [1..5]
+[1,3,18,180,2700]
+~~~
+
+`sumFrom 0`'s output stream is the cumulative sum of the inputs.  `productFrom
+1` is the cumulative product of the inputs.  So `productFrom 1 . sumFrom 0`'s
+output stream is the result of using the output stream of `sumFrom 0` as the
+input stream to `productFrom 1`:
+
+~~~haskell
+(.) :: Auto m b c -> Auto m a b -> Auto m a c
+~~~
+
+Operationally, at every "step", it passes in each input to the first `Auto`,
+and gets the output of that and passes it into the second `Auto`, and updates
+*each* internal state.
+
+Another example, here we have an `Auto` that takes an input stream and and
+outputs a `Blip` stream (more on that later) that emits whenever there is a
+multiple of 5:
+
+~~~haskell
+       -- emitOn5s :: Auto' Int (Blip Int)
+ghci> let emitOn5s = emitOn (\x -> x `mod` 5 == 0)
+ghci> streamAuto' emitOn5s [1,5,9,3,10,2]
+[NoBlip, Blip 5, NoBlip, NoBlip, Blip 10, NoBlip]
+ghci> streamAuto' (hold . emitOn5s) [1,5,9,3,10,2]
+[Nothing, Just 5, Just 5, Just 5, Just 10, Just 10]
+~~~
+
+`hold :: Auto' (Blip a) (Maybe a)` takes a stream of `Blip`s and returns a
+stream that is `Maybe a`, where it is `Nothing` until the first emitted `Blip`
+value, and `Just x` as the last received `Blip` value.
+
+So here, we "chain" `hold` onto `emitOn5s`.  `emitOn5s` emits on everything
+that is a multiple of `5`, and `hold` "holds on" to all of the emitted values.
+Neat!
+
+This can be used in conjunction with the `Applicative` instance for great
+power.  In the end, your programs will really just be `(.)`-composed `Auto`s
+with forks and re-cominings from `Applicative` and `Arrow` methods.
+
+Speaing of `Arrow`, we also have a neat interface exposed by `Arrow`,
+`ArrowPlus`, and `ArrowLoop`.  First of all, we get `arr :: (a -> b) -> Auto m
+a b`, which basically an `Auto` that is a constant, pure function (the output
+is the corresponding input applied to the given function).  But more
+importantly, we get proc notation!
+
+~~~haskell
+foo :: Auto' Int (Int, Maybe Int)
+foo = proc x -> do
+    sumX     <- sumFrom 0          -< x
+    prodX    <- productFrom 1      -< x + sumX
+    lastEven <- hold . emitOn even -< x
+    id -< (prodX, lastEven)
+~~~
+
+~~~haskell
+ghci> streamAuto' foo [4,7,3,6,5,1]
+[ (    4, Just 4), (    144, Just 4), (    2448, Just 4)
+, (63648, Just 6), (1909440, Just 6), (51554880, Just 6) ]
+~~~
+
+Most of what was just done could be written with the `Applicative`
+instance as well...but in this way, the entire thing looks a lot like a
+dependency graph, and it's pretty expressive and powerful.
+
+An explanation on the syntax; when you see:
+
+~~~haskell
+sumX <- sumFrom 0 -< x
+~~~
+
+This reads as you are defining a binding `sumX`, and *the relationship between
+sumX and x* is that `sumX` is the *cumulative sum* of `x`.
+
+(from the first line, `foo = proc x -> do`, `x` is the input of the entire
+`Auto`)
+
+When we see:
+
+~~~haskell
+prodX <- productFrom 1 -< x + sumX
+~~~
+
+This reads as you are defining a binding `prodX`, and `prodX` is maintained as
+the cumulative product of `x + sumX`.
+
+The result of the last line of the proc block is the result of the entire
+block:
+
+~~~haskell
+id -< (prodX, lastEven)
+~~~
+
+Means that the output of the entire block is just echoing the tuple `(prodX,
+lastEven)`.
+
+(Operationally, you can imagine that, at every step, `x` is "fed into"
+`sumFrom 0`, and the result is named `sumX`; `x + sumX` is "fed into"
+`productFrom 1`, etc.)
+
+The power here is that it really reads like a straight-up dependency graph...a
+graph of relationships to names.  Lay out your relationships explicitly and
+declaratively, and the library takes care of the rest!  The semantic model of
+an `Auto` representing a maintained relationship is made very clear in `proc`
+notation.
+
+Later on you can see that `proc` blocks can be pretty expressive --- using
+if/then's and case statements, and also recursive bindings (so you can even
+declare recursive graphs of concepts, and the library will figure out how to
+solve it for you).
+
+Those are the primary typeclass based interfaces; explore the library for
+more!
+
+TODO: What else to put here?
+
+### From scratch
+
+Creating `Auto`s from scratch, we have:
+
+~~~haskell
+pure   :: b          -> Auto m a b
+effect :: m b        -> Auto m a b
+arr    :: (a -> b)   -> Auto m a b
+arrM   :: (a -> m b) -> Auto m a b
+~~~
+
+`pure` and `effect` give you "constant-producing `Auto`"s that ignore their
+input; `pure x` is an `Auto` that ignores its input and always outputs `x`;
+`effect m` is an `Auto` that ignores its input and executes/sequences `m` at
+every "step", and outputs the result.  `arr` is an `Auto` that maps every
+input to an output by running a pure function (`streamAuto' (arr f) == map
+f`), and `arrM` is an `Auto` that does the same but with a "monadic" function
+(`streaAuto (arrM f) == mapM f`).
+
+None of these `Auto`s have "internal state"; however, we can make our own from
+scratch:
+
+~~~haskell
+iterator  :: (b -> b)             -> b -> Auto m a b
+iteratorM :: (b -> m b)           -> b -> Auto m a b
+mkAccum   :: (b -> a -> b)        -> b -> Auto m a b
+mkAccumM  :: (b -> a -> m b)      -> b -> Auto m a b
+mkState   :: (a -> s -> (b, s))   -> s -> Auto m a b
+mkStateM  :: (a -> s -> m (b, s)) -> s -> Auto m a b
+mkAuto_   :: (a -> Output m a b)       -> Auto m a b
+mkAutoM_  :: (a -> m (Output m a b))   -> Auto m a b
+~~~
+
+You can look at the documentation for all of these, but these all basically
+work with "internal state" --- `iterator` ignores its input and repeatedly
+applies a function to a value and pops it out at every step.  `mkAccum`
+maintains that the *output* is always the result of "folding together" (a la
+`foldl`) all of the inputs so far, with a starting value.  `mkState` is
+like a more powerful `mkAccum`, which keeps an internal state that is updated
+at every step.  `mkAuto_` lets you describe an `Auto` by its behavior under
+`stepAuto'`.
+
+~~~haskell
+ghci> take 10 . streamAuto' (iterator (+1) 0) $ repeat ()
+[0,1,2,3,4,5,6,7,8,9]
+ghci> take 10 . streamAuto' (mkAccum (+) 0)   $ [1..]
+[1,3,6,10,15,21,28,36,45,55]
+~~~
+
+It is recommended to only use `mkAccum`, `mkState`, `mkAuto` only when
+absolutely necessary; usually you can make what you want from combining
+smaller, simple, pre-made `Auto`s.  But sometimes the case does arrive.
+
+Semantic Tools
+--------------
+
+So semantically, an `Auto` represents a relationship between a stream of
+inputs and a stream of outputs that is maintained over several "steps".
+
+In order to build more expressive programs, this library also comes with more
+semantic tools to work with in characterizing your streams with "meaning", and
+tools to manipulate them and compose them in powerful ways (within this
+framework of meaning) to express your programs.
+
+The two main ones are `Blip` and `Interval`.
 
