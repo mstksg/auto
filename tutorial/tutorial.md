@@ -23,9 +23,12 @@ In a way, you can think about `Auto`s as *stream transformers*.  A stream of
 sequential inputs come in one at a time, and a stream of outputs pop out one
 at a time as well.
 
-A trivial exmple is just a static stateless function:
+A trivial exmple is just a static stateless function --- here we have the
+`Auto` `arr (*2)`, which always maps every input value to an output value that
+is the input value, doubled:
 
 ~~~haskell
+-- streamAuto' :: Auto' a b -> [a] -> [b]
 -- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...    -- the inputs
 ghci> take 10 $ streamAuto' (arr (*2)) [1..]
    [ 2, 4, 6, 8,10,12,14,16,18,20]      -- the outputs
@@ -33,8 +36,8 @@ ghci> take 10 $ streamAuto' (arr (*2)) [1..]
 
 For a more interesting example, you can have an `Auto` where the output
 corresponding to an input depends on the "history", as well.  A "stateful"
-function.  For example, we have `sumFrom n`, whose output is always the
-cumulative sum of all items received so far.
+function.  For example, we have the `Auto` `sumFrom n`, whose output is always
+the cumulative sum of all items received so far.
 
 ~~~haskell
 -- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...    -- the inputs
@@ -56,13 +59,14 @@ Operationally, an `Auto` does this by acting as a "stateful function" that we
 can "run" with `stepAuto`.  A function with "internal state".
 
 ~~~haskell
-ghci> let Output x a' = stepAuto' (sumFrom 0) 5
+-- stepAuto' :: Auto' a b -> a -> Output' a b
+ghci> let Output x nextAuto  = stepAuto' (sumFrom 0) 5
 ghci> x
 5
-ghci> let Output y a'' = stepAuto' a' 3
+ghci> let Output y nextAuto2 = stepAuto' nextAuto 3
 ghci> y
 8
-ghci> evalAuto' a'' 4
+ghci> evalAuto' nextAuto2 4
 12
 ~~~
 
@@ -139,8 +143,10 @@ For the most part, real-life `Auto`s will be written parameterized over
 myAuto :: Monad m => Auto m Int Bool
 ~~~
 
-`Auto'` etc. are just useful when you want to "run" things that you know can
-be `Identity`.
+Working with `Monad m => Auto m a b` is practically identical to working with
+`Auto' a b`, so there really isn't ever a real point to actually *write* an
+`Auto'`.  However, specializing to `Auto'` lets us use simple "running"
+functions like `streamAuto'` and `stepAuto'`.
 
 You probably also already know about `Output m a b`, which is a glorified `(a,
 Auto m a b)` tuple, and `Output' a b`, which is a glorified `(a, Auto' a b)`
@@ -181,11 +187,15 @@ ghci> streamAuto' (show <$> sumFrom 0) [1..5]
 `Auto`:
 
 ~~~haskell
+-- mappender :: Monoid m => Auto' m m
 ghci> streamAuto' mappender ["1","2","3"]
 ["1","12","123"]
 ghci> streamAuto' (lmap show mappender) [1,2,3]
 ["1","12","123"]
 ~~~
+
+(`mappender` is an `Auto` where the output is always the cumulative `mconcat`
+of all of the inputs so far)
 
 The `Applicative` instance gives you a "constant `Auto`", which ignores its
 input and whose output is always a constant value:
@@ -233,8 +243,8 @@ input stream to `productFrom 1`:
 ~~~
 
 Operationally, at every "step", it passes in each input to the first `Auto`,
-and gets the output of that and passes it into the second `Auto`, and updates
-*each* internal state.
+and gets the output of that and passes it into the second `Auto`, and uses the
+output of the second `Auto` as the result, updating *each* internal state.
 
 Another example, here we have an `Auto` that takes an input stream and and
 outputs a `Blip` stream (more on that later) that emits whenever there is a
@@ -261,7 +271,7 @@ This can be used in conjunction with the `Applicative` instance for great
 power.  In the end, your programs will really just be `(.)`-composed `Auto`s
 with forks and re-cominings from `Applicative` and `Arrow` methods.
 
-Speaing of `Arrow`, we also have a neat interface exposed by `Arrow`,
+Speaking of `Arrow`, we also have a neat interface exposed by `Arrow`,
 `ArrowPlus`, and `ArrowLoop`.  First of all, we get `arr :: (a -> b) -> Auto m
 a b`, which basically an `Auto` that is a constant, pure function (the output
 is the corresponding input applied to the given function).  But more
@@ -349,12 +359,20 @@ arrM   :: (a -> m b) -> Auto m a b
 ~~~
 
 `pure` and `effect` give you "constant-producing `Auto`"s that ignore their
-input; `pure x` is an `Auto` that ignores its input and always outputs `x`;
+input; `pure x` is an `Auto` that ignores its input and always outputs `x`.
 `effect m` is an `Auto` that ignores its input and executes/sequences `m` at
-every "step", and outputs the result.  `arr` is an `Auto` that maps every
-input to an output by running a pure function (`streamAuto' (arr f) == map
-f`), and `arrM` is an `Auto` that does the same but with a "monadic" function
-(`streaAuto (arrM f) == mapM f`).
+every "step", and outputs the result at every step.  `arr` is an `Auto` that
+maps every input to an output by running a pure function, and `arrM` is an
+`Auto` that does the same but with a "monadic" function.
+
+Here is a handy little summary!
+
+~~~haskell
+streamAuto' (pure x)  == map (const x)
+streamAuto (effect m) == mapM (const m)
+streamAuto' (arr f)   == map f
+streamauto (arrM f)   == mapM f
+~~~
 
 None of these `Auto`s have "internal state"; however, we can make our own from
 scratch:
