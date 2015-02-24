@@ -374,8 +374,8 @@ streamAuto' (arr f)   == map f
 streamauto (arrM f)   == mapM f
 ~~~
 
-None of these `Auto`s have "internal state"; however, we can make our own from
-scratch:
+None of these `Auto`s have "internal state"; however, we can make our own
+internally stateful `Auto`s from scratch:
 
 ~~~haskell
 iterator  :: (b -> b)             -> b -> Auto m a b
@@ -408,16 +408,88 @@ It is recommended to only use `mkAccum`, `mkState`, `mkAuto` only when
 absolutely necessary; usually you can make what you want from combining
 smaller, simple, pre-made `Auto`s.  But sometimes the case does arrive.
 
+The Big Picture
+---------------
+
+So, at this point, let's look at the "big picture".  A program written with
+`Auto` will involve, at every "step", gathering input, feeding into the
+"master program `Auto`", getting the output, rendering it somehow, and
+repeating.  But how do we build our `Auto`?  What is the advantage of using
+`Auto` instead of `State`, etc.?
+
+`Auto` lets you compose little meaning-bits into more complex meaning bits, by
+specifying *invariant relationships* between *items of streams*.  These are
+"forever-relationships" --- they don't just describe step-by-step, iterative,
+stateful actions --- they describe invariant relationships.  And you can
+create your own by composing, modifying, chaining, etc. all of the primitives.
+
+Building a program in `Auto` is basically specifying relationships that are
+maintained "forever"...and thinking about your program in that manner.
+
+For example:
+
+~~~haskell
+sumAndProd :: Auto' Int Int
+sumAndProd = proc x -> do
+    sumX  <- sumFrom 0     -< x
+    prodX <- productFrom 1 -< x
+    id -< sumX + prodX
+
+-- sumAndProd = liftA2 (+) (sumFrom 0) (productFrom 1)
+~~~
+
+`sumX` is a "forever" quantity...and so is `x`.  We say that the relationship
+between `sumX` and `x` is that `sumX` is the cumulative sum (`sumFrom 0`) of
+`x`.  The relationship between `prodX` and `x` is that `prodX` is the
+cumulative product...and the relationship between `x` and the output is that
+the output is the sum of `sumX` and `prodX` at every point in time.
+
+Operationally, you also have a huge advantage here over using something like
+`State` in that each `Auto` really contains its own "internal state" that is
+inaccessible by the world.  For example, in that last example, `sumFrom 0`
+works by maintaining its own internal state.  `productFrom 1` also maintains
+its own internal state.
+
+Nobody can ever "touch" or "inspect" the internal state of `sumFrom 0` and
+`prudctFrom 1`.  It maintains it on its own.  This is in big contrast to
+`State`-based solutions, which necessarily work on "global state", and
+managing global vs. local state with monad morphisms.
+
+Note that this "composes"; we can use `sumAndProd` in another `Auto`:
+
+~~~haskell
+foo :: Auto' Int String
+foo = proc x -> do
+    sp <- sumAndProd -< x
+    y  <- blah blah  -< sp + x
+    id -< show y
+~~~
+
+And `sumAndProd` now is its own "internally stateful" thing...you can take it
+and pop it onto any other chain.  In `State`, you'd open yourself up to having
+to create new sum types for extra state...whenever you combined any two
+stateful operations on different states.
+
+This locally stateful property truly allows us to "compose" ideas together and
+relationships together and think of them as fixed invariants in a big picture.
+Because each `Auto` "denotes" a relationship, and we build up bigger `Auto`s
+by combining small denotative promitives to create bigger things that denote
+more complex relationships, it really allows us to create a denotative
+"language", where we declare relationships by building up smaller units of
+meaning into bigger units of meaning.
+
+Now...how do we actually implement the behavior that we want?  This is a job
+for the primitive `Auto`s, but also really much a big job for ... the semantic
+tools that come with the library!
+
 Semantic Tools
 --------------
 
-So semantically, an `Auto` represents a relationship between a stream of
-inputs and a stream of outputs that is maintained over several "steps".
-
-In order to build more expressive programs, this library also comes with more
-semantic tools to work with in characterizing your streams with "meaning", and
-tools to manipulate them and compose them in powerful ways (within this
-framework of meaning) to express your programs.
+An `Auto` represents a relationship between an input stream and an output
+stream, but in order to build more expressive programs, this library also
+comes with more semantic tools to work with in characterizing your streams
+with "meaning", and tools to manipulate them and compose them in powerful ways
+(within this framework of meaning) to express your programs.
 
 The two main ones are `Blip` and `Interval`.
 
