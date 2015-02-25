@@ -106,9 +106,9 @@ overList' a (x:xs) = let Output y a' = stepAuto' a x
 -- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
 -- m [b]@.
 streamAuto :: Monad m
-           => Auto m a b
-           -> [a]
-           -> m [b]
+           => Auto m a b        -- ^ 'Auto' to stream
+           -> [a]               -- ^ input stream
+           -> m [b]             -- ^ output stream
 streamAuto _ []     = return []
 streamAuto a (x:xs) = do
     Output y a' <- stepAuto a x
@@ -120,9 +120,9 @@ streamAuto a (x:xs) = do
 -- designed for) infinite lists.
 --
 -- Note that conceptually this turns an @'Auto'' a b@ into an @[a] -> [b]@
-streamAuto' :: Auto' a b
-            -> [a]
-            -> [b]
+streamAuto' :: Auto' a b        -- ^ 'Auto'' to stream
+            -> [a]              -- ^ input stream
+            -> [b]              -- ^ output stream
 streamAuto' _ []     = []
 streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
                            ys          = streamAuto' a' xs
@@ -144,7 +144,7 @@ stepAutoN :: Monad m
           => Int                  -- ^ number of times to step the 'Auto'
           -> Auto m a b           -- ^ the 'Auto' to run
           -> a                    -- ^ the repeated input
-          -> m ([b], Auto m a b)  -- ^ list of outputs and the updated 'Auto''
+          -> m ([b], Auto m a b)  -- ^ list of outputs and the updated 'Auto'
 stepAutoN n a0 x = go (max n 0) a0
   where
     go 0 a = return ([], a)
@@ -163,26 +163,29 @@ stepAutoN n a0 x = go (max n 0) a0
 -- >>> let Output y _ = stepAuto a ()
 -- >>> y
 -- 256
-stepAutoN' :: Int -> Auto' a b -> a -> ([b], Auto' a b)
+stepAutoN' :: Int                 -- ^ number of times to step the 'Auto''
+           -> Auto' a b           -- ^ the 'Auto'' to run
+           -> a                   -- ^ the repeated input
+           -> ([b], Auto' a b)    -- ^ list of outputs and the updated 'Auto''
 stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
 
 -- | Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
 -- of results.
 evalAutoN :: Monad m
-          => Int
-          -> Auto m a b
-          -> a
-          -> m [b]
+          => Int                  -- ^ number of times to step the 'Auto'
+          -> Auto m a b           -- ^ the 'Auto' to run
+          -> a                    -- ^ the repeated input
+          -> m [b]                -- ^ list of outputs
 evalAutoN n a0 = liftM fst . stepAutoN n a0
 
 -- | Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the
 -- list of results.
 --
 -- 'evalAutoN' for 'Auto''.
-evalAutoN' :: Int
-           -> Auto' a b
-           -> a
-           -> [b]
+evalAutoN' :: Int                 -- ^ number of times to step the 'Auto''
+           -> Auto' a b           -- ^ the 'Auto'' to run
+           -> a                   -- ^ the repeated input
+           -> [b]                 -- ^ list of outputs and the updated 'Auto''
 evalAutoN' n a0 = fst . stepAutoN' n a0
 
 -- execAutoN :: Monad m
@@ -255,11 +258,12 @@ runM x0 f nt a = do
 --
 -- Outputs the final 'Auto'' when the interaction terminates.
 interact :: Interval' String String         -- ^ 'Interval'' to run interactively
-         -> IO (Interval' String String)
+         -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
 interact = interactM putStrLn (return . runIdentity)
 
--- Like 'interact', but instead of taking @'Interval'' 'String' 'String'@,
--- takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@ is 'Show'.
+-- | Like 'interact', but instead of taking @'Interval'' 'String'
+-- 'String'@, takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@
+-- is 'Show'.
 --
 -- Will "stop" if either (1) the input is not 'read'-able or (2) the
 -- 'Interval'' turns off.
@@ -267,7 +271,7 @@ interact = interactM putStrLn (return . runIdentity)
 -- Outputs the final 'Auto'' when the interaction terminates.
 interactRS :: (Read a, Show b)
            => Interval' a b                 -- ^ 'Interval'' to run interactively
-           -> IO (Interval' String String)
+           -> IO (Interval' String String)  -- ^ final 'Interval'' after it all
 interactRS = interact . bindRead . fmap (fmap show)
 
 
@@ -282,7 +286,7 @@ interactM :: Monad m
           => (b -> IO ())             -- ^ function to "handle" each succesful 'Auto' output
           -> (forall c. m c -> IO c)  -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
           -> Interval m String b      -- ^ 'Auto' to run "interactively"
-          -> IO (Interval m String b)
+          -> IO (Interval m String b) -- ^ final 'Auto' after it all
 interactM f nt a = do
     x <- getLine
     runM x f' nt a
@@ -339,8 +343,8 @@ bindRead a = bindI a <<^ readMaybe
 -- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
 -- @'Auto'' (a, s) (b, s)@.
 runStateA :: Monad m
-          => Auto (StateT s m) a b
-          -> Auto m (a, s) (b, s)
+          => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
+          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
 runStateA a = mkAutoM (runStateA <$> loadAuto a)
                       (saveAuto a)
                       $ \(x, s) -> do
@@ -361,8 +365,8 @@ runStateA a = mkAutoM (runStateA <$> loadAuto a)
 -- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
 -- an @'Auto'' (a, r) b@.
 runReaderA :: Monad m
-           => Auto (ReaderT r m) a b
-           -> Auto m (a, r) b
+           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
+           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
 runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
                        (saveAuto a)
                        $ \(x, r) -> do
@@ -378,8 +382,8 @@ runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
 --
 -- If you find a good use for this, let me know :)
 runTraversableA :: (Monad f, Traversable f)
-                => Auto f a b
-                -> Auto m a (f b)
+                => Auto f a b           -- ^ 'Auto' run over traversable structure
+                -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
 runTraversableA = go . return
   where
     go a = mkAuto (go <$> mapM loadAuto a)

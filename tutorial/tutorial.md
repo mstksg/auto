@@ -148,8 +148,8 @@ Working with `Monad m => Auto m a b` is practically identical to working with
 `Auto'`.  However, specializing to `Auto'` lets us use simple "running"
 functions like `streamAuto'` and `stepAuto'`.
 
-You probably also already know about `Output m a b`, which is a glorified `(a,
-Auto m a b)` tuple, and `Output' a b`, which is a glorified `(a, Auto' a b)`
+You probably also already know about `Output m a b`, which is a glorified `(b,
+Auto m a b)` tuple, and `Output' a b`, which is a glorified `(b, Auto' a b)`
 tuple.  You can pattern match on it using the `Output` constructor, or just
 access them using `outRes` and `outAuto`.
 

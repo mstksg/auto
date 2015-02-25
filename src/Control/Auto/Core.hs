@@ -396,18 +396,18 @@ saveAuto a = case a of
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
--- does this even do anything?
---
--- probably should profile this to see
-unserialize :: Monad m => Auto m a b -> Auto m a b
-unserialize a =
-    case a of
-        AutoFunc _       -> a
-        AutoFuncM _      -> a
-        AutoState _ f s  -> AutoState (pure s, const (put ())) f s
-        AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
-        AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
-        AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
+-- -- does this even do anything?
+-- --
+-- -- probably should profile this to see
+-- unserialize :: Monad m => Auto m a b -> Auto m a b
+-- unserialize a =
+--     case a of
+--         AutoFunc _       -> a
+--         AutoFuncM _      -> a
+--         AutoState _ f s  -> AutoState (pure s, const (put ())) f s
+--         AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
+--         AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
+--         AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
 
 -- | "Runs" the 'Auto' through one step.
 --
