@@ -35,6 +35,7 @@ module Control.Auto.Core (
   , Auto'
   , autoConstr
   , toArb
+  , purifyAuto
   -- ** Running
   , stepAuto
   , stepAuto'
@@ -472,8 +473,36 @@ stepAuto a x = case a of
 stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
           -> Output' a b      -- ^ the output, and the updated 'Auto''
-stepAuto' a = runIdentity . stepAuto a
+-- stepAuto' a = runIdentity . stepAuto a
+stepAuto' a x = case a of
+                  AutoFunc f        -> Output (f x) a
+                  AutoFuncM f       -> Output (runIdentity (f x)) a
+                  AutoState gp f s  -> let (y, s') = f x s
+                                           a'      = AutoState gp f s'
+                                       in  Output y a'
+                  AutoStateM gp f s -> let (y, s') = runIdentity (f x s)
+                                           a'      = AutoStateM gp f s'
+                                       in  Output y a'
+                  AutoArb _ _ f     -> f x
+                  AutoArbM _ _ f    -> runIdentity (f x)
 {-# INLINE stepAuto' #-}
+
+-- | Playing around with an optimization hack.  If you have an 'Auto'', run
+-- 'purifyAuto' on it before you "step" or "stream" it...you might get
+-- performance benefits.  Benchmarks to be written!
+purifyAuto :: Auto' a b -> Auto' a b
+purifyAuto a@(AutoFunc {})     = a
+purifyAuto (AutoFuncM f)       = AutoFunc (runIdentity . f)
+purifyAuto a@(AutoState {})    = a
+purifyAuto (AutoStateM gp f s) = AutoState gp (\x s' -> runIdentity (f x s')) s
+purifyAuto (AutoArb g p f)     = AutoArb (purifyAuto <$> g)
+                                         p
+                                       $ \x -> let Output y a' = f x
+                                               in  Output y (purifyAuto a')
+purifyAuto (AutoArbM g p f)    = AutoArb (purifyAuto <$> g)
+                                         p
+                                       $ \x -> let Output y a' = runIdentity (f x)
+                                               in  Output y (purifyAuto a')
 
 -- | Like 'stepAuto', but drops the "next 'Auto'" and just gives the
 -- result.

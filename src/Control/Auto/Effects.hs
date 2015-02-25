@@ -22,6 +22,8 @@ module Control.Auto.Effects (
     arrM
   , effect
   , exec
+  -- ** From inputs
+  , effects
   -- ** On 'Blip's
   , arrMB
   , effectB
@@ -135,6 +137,11 @@ exec :: Monad m
      -> Auto m a a
 exec m = mkFuncM $ \x -> m >> return x
 {-# INLINE exec #-}
+
+-- | Gets an input stream of monadic actions, executes them, and returns an
+-- output stream of their values.
+effects :: Monad m => Auto m (m a) a
+effects = arrM id
 
 -- | Lifts a "monadic function" (Kleisli arrow) into an 'Auto'.  Like
 -- 'arr', but with monadic functions.  Composition of such 'Auto's works

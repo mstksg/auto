@@ -222,7 +222,11 @@ disposal.  As a first treat, it gives you `id :: Auto m a a`, an `Auto` whose
 output is always exactly the corresponding input.
 
 But more importantly, you can "chain together" `Auto`s end-to-end.  Compose
-them as if they were functions:
+them as if they were functions.
+
+You know how an `Auto` takes a stream and outputs a stream?  Well,
+"chaining"/"composing" two `Auto`s will "pipe together" the streams.  `a2 .
+a1` will be a new `Auto` that runs an input stream through both `a1` and `a2`.
 
 ~~~haskell
 ghci> streamAuto' (sumFrom 0) [1..5]
@@ -233,14 +237,31 @@ ghci> streamAuto' (productFrom 1 . sumFrom 0) [1..5]
 [1,3,18,180,2700]
 ~~~
 
-`sumFrom 0`'s output stream is the cumulative sum of the inputs.  `productFrom
-1` is the cumulative product of the inputs.  So `productFrom 1 . sumFrom 0`'s
-output stream is the result of using the output stream of `sumFrom 0` as the
-input stream to `productFrom 1`:
+`sumFrom 0`'s output stream is the cumulative sum of the input stream.
+`productFrom 1`'s output stream is the cumulative product of the input stream.
+So their chaining/piping/composition is the cumulative product of the
+cumulative sum.
 
 ~~~haskell
 (.) :: Auto m b c -> Auto m a b -> Auto m a c
 ~~~
+
+If you imagine an `Auto'` as an `[a] -> [b]`, then you can think of this as
+"composing" the `[a] -> [b]` functions:
+
+~~~haskell
+-- streamAuto' gives us an [Int] -> [Int], so we can compose them using normal
+-- function composition:
+ghci> streamAuto' (productFrom 1) . streamAuto' (sumFrom 0) $ [1..5]
+[1,3,18,180,2700]
+-- composing `Auto`s is like composing their resulting `[a] -> [b]`s
+ghci> streamAuto' (productFrom 1 . sumFrom 0) $ [1..5]
+[1,3,18,180,2700]
+~~~
+
+(Math nuts might recognize this as saying that `streamAuto'` is a "category
+homomorphism"...aka, a functor :)  Seeing that `streamAuto' (id :: Auto' a a)
+== (id :: [a] -> [a])`, of course!)
 
 Operationally, at every "step", it passes in each input to the first `Auto`,
 and gets the output of that and passes it into the second `Auto`, and uses the
@@ -345,11 +366,11 @@ solve it for you).
 Those are the primary typeclass based interfaces; explore the library for
 more!
 
-TODO: What else to put here?
+<!-- TODO: What else to put here? -->
 
 ### From scratch
 
-Creating `Auto`s from scratch, we have:
+If you have to, when creating `Auto`s from scratch, we have:
 
 ~~~haskell
 pure   :: b          -> Auto m a b
@@ -398,9 +419,9 @@ at every step.  `mkAuto_` lets you describe an `Auto` by its behavior under
 `stepAuto'`.
 
 ~~~haskell
-ghci> take 10 . streamAuto' (iterator (+1) 0) $ repeat ()
+ghci> take 10 $ streamAuto' (iterator (+1) 0) (repeat ())
 [0,1,2,3,4,5,6,7,8,9]
-ghci> take 10 . streamAuto' (mkAccum (+) 0)   $ [1..]
+ghci> take 10 $ streamAuto' (mkAccum (+) 0)   [1..]
 [1,3,6,10,15,21,28,36,45,55]
 ~~~
 
@@ -493,3 +514,235 @@ with "meaning", and tools to manipulate them and compose them in powerful ways
 
 The two main ones are `Blip` and `Interval`.
 
+### Blip
+
+We say that, in the context of inputs/outputs of `Auto`, a `Blip a` represents
+a "blip stream" that occasionally, in isolated incidents, emits a value of
+type `a`.
+
+For example, `Auto' a (Blip b)` is an `Auto'` that a stream of `a`'s as input
+and outputs a *blip stream* that occasionally emits with a `b`.  An `Auto'
+(Blip a) b` is an `Auto'` that takes a *blip stream* that occasionally emits
+with a `a` and outputs a stream of `b`'s.
+
+If an `Auto` takes or outputs a "blip stream", it comes with some "semantic"
+contracts on to how the stream behaves.  The main contract is that your `Blip`
+stream should only output on (meaningfully) "isolated" incidents, and never on
+continuous regions of the input stream.
+
+This isn't enforced by the type system, but almost all of the `Auto`s offered
+in this library will preserve this property!  And we encourage any that you
+make to also preserve this property, in order to make "blip streams" *useful
+in the first place*.
+
+We saw an example earlier,
+
+~~~haskell
+ghci> let emitOn5s = emitOn (\x -> x `mod` 5 == 0)
+ghci> streamAuto' emitOn5s [1,5,9,3,10,2]
+[NoBlip, Blip 5, NoBlip, NoBlip, Blip 10, NoBlip]
+~~~
+
+Let's see if we can play around with it!  Well, we can "tag" blip emissions:
+
+~~~haskell
+ghci> streamAuto' (tagBlips "hey" . emitOn5s) [1,5,9,3,10,2]
+[NoBlip, Blip "hey", NoBlip, NoBlip, Blip "hey", NoBlip]
+~~~
+
+And with proc blocks, we can even "name" blip streams and manipulate them as
+streams!  Oh, also, `Blip` is a `Functor`, so you can use `fmap` and `(<$)`.
+
+~~~haskell
+blippy :: Monad m => Auto m Int String
+blippy = proc x -> do
+    on3s  <- tagBlips "3!" . emitOn3s -< x
+    on5s' <- emitOn5s    -< x
+    let on5s  = "5!" <$ on5s        -- from Data.Functor: replace all emitted
+                                    -- values with the string "5!"
+        on35s = on3s `mergeL` on5s  -- merge the streams, favoring the left
+    intro  <- immediately -< "hello!"
+    middle <- inB 6       -< "#6!"
+    wut    <- never       -< "this should never happen!"
+    id -< mergeLs [never, intro, middle, on35s] -- merge all, favoring firsts
+~~~
+
+~~~haskell
+ghci> streamAuto' blippy [5,7,15,10,13,15,2]
+[Blip "hello!", NoBlip, Blip "3!", Blip "5!", NoBlip, Blip "#6!", NoBlip]
+--    ^ intro             ^ on3s     ^ on5s            ^ middle
+~~~
+
+Blip streams and "blip contracts"/"blip semantics" are useful because a lot of
+the other semantic abstractions in `Auto` (like switches, and `Interval`) all
+work with the "idea" of a "discrete", occasional, conceptually
+"non-contiguous" blip stream.
+
+Check out all of the built-in blip stream combinators at `Control.Auto.Blip`.
+
+### Interval
+
+The "opposite" of `Blip` and blip streams are "intervaled" `Auto`s: `Auto`s
+that are "on" or "off" for (conceptually) contiguous chunks of steps.
+
+An `Interval' a b` represents an `Auto` that takes a stream of `a`s as input,
+and outputs a stream of `b`s that is "on" or "off", at contiguous swaths.
+
+In truth, `Interval' a b` is just a type synonym for `Auto' a (Maybe b)`, and
+`Interval m a b` is just a type synonym for `Auto m a (Maybe b)`.  But, if you
+see a library auto with type `Interval`, or if you make an auto with type
+`Interval`, it comes with "contracts".  These contracts help us really use
+`Interval`s in a meaningful way --- that they are supposed to represent
+`Auto`s that output things that are "on" or "off" for contiguous steps.
+
+`Blip`s are "blippy", `Interval`s are "chunky".
+
+We've already seen an `Interval` earlier:
+
+~~~haskell
+ghci> streamAuto' (hold . emitOn5s) [1,5,9,3,10,2]
+[Nothing, Just 5, Just 5, Just 5, Just 10, Just 10]
+~~~
+
+`hold :: Interval' (Blip a) a`, so it turns a blip stream into a stream of
+`a`s that are on and off.  In this case, it starts off "off", and is "on"
+after the first emitted value, with the last emitted value.
+
+`Interval`s are nice because you can have "choices" between two "on-off"
+`Auto`s:
+
+~~~haskell
+ghci> let a1 = (onFor 3 . arr (+ 100)) <|!> whenI (> 6) <|!> arr (+ 200)
+ghci> take 10 $ streamAuto' a1 [1..]
+[101, 102, 203, 204, 205, 206, 7, 8, 9, 10]
+ghci> let a2 = chooseInterval [offFor 8, onFor 3 . arr (+ 100)]
+ghci> take 10 $ streamAuto' a2 [1..]
+[Just 101, Just 102, Just 103, Nothing, Nothing, Just 6, Just 7]
+~~~
+
+(`<|!>`) forks the input into both `Interval`s, and the outputted one is the
+first one that is "on".  You can chain them as long as the "final" `Auto` is
+an `Auto`, and not an `Interval`:
+
+~~~haskell
+(<|!>) :: Interval m a b -> Auto m a b -> Auto m a b
+~~~
+
+`onFor n` lets the input pass for `n` steps.  `whenI` lets the input "pass
+through" when the predicate is true (being sure to pick a meaningful predicate
+based on the expected input for "chunky" output)
+
+Intervals are also used for things that want their `Auto`s to "signal" when
+they are "off".  `Interval` is the universal language for, "you can be done
+with me", when it is needed.  For example, the `interact` loop takes an
+`Interval String String`, and "turns off" on the first `Nothing` or "off"
+value.
+
+~~~haskell
+ghci> interact (onFor 4 . (++ "!!!"))
+> hello
+hello!!!
+> how
+how!!!
+> are
+are!!!
+> you
+you!!!
+> today
+--- (end of output)
+~~~
+
+Like with blip streams, intervals are used to great effect with switches, like
+the useful `(-->)` combinator:
+
+~~~haskell
+ghci> let a1 = whileI (< 4) --> pure 0
+ghci> streamAuto' a1 [1..10]
+[1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
+               -- look, recursion!
+ghci> let a2 = (onFor 3 . pure "hi") --> (onFor 2 . pure "bye") --> a2
+ghci> take 10 $ streamAuto' a2 (repeat ())
+["hi", "hi", "hi", "bye", "bye", "hi", "hi", "hi", "bye", "bye"]
+~~~
+
+You can see all of the built-in `Interval` combinators in
+`Control.Auto.Interval`.
+
+### More Tools
+
+<!-- TODO: More tools, like switching?  How much to put here? -->
+
+Serialization
+-------------
+
+One of this library's features is that the `Auto` type offers an interface in
+which you can serialize ("freeze") and "resume" an Auto, in `ByteString`
+(binary) form.
+
+You can "freeze" any `Auto` into a `ByteString` using `encodeAuto`, and you
+can "resume" any `Auto` from a `ByteString` using `decodeAuto`.
+
+Note `decodeAuto` and `loadAuto` "resume" a *given `Auto`*.  That is, if
+you call `decodeAuto` on a "fresh `Auto`", it'll decode a `ByteString`
+into *that `Auto`, but "resumed"*.  That is, it'll "fast forward" that
+`Auto` into the state it was when it was saved.
+
+For example, let's look at `sumFrom 0`.  If it is fed 3 and 10, it'll have its
+internal accumulator as 13, keeping track of all the numbers it has seen so
+far.
+
+~~~haskell
+ghci> let a             = sumFrom 0
+ghci> let Output _ a'   = stepAuto' a  3
+ghci> let Output _ a''  = stepAuto' a' 10
+~~~
+
+`encodeAuto` can be used to "freeze"/"save" the `Auto` into the `ByteString`
+`bs`:
+
+~~~haskell
+ghci> let bs            = encodeAuto a''
+~~~
+
+`decodeAuto` can be used to "resume" from the *original* `a`.  Remember, `a`
+was the original `Auto`, the summer `Auto` with a starting accumulator of 0.
+`decodeAuto` will "resume" it, with and resume it with its internal
+accumulator at 13.
+
+~~~haskell
+ghci> let Right resumed = decodeAuto a bs
+ghci> let Output y _    = stepAuto' resumed 0
+13
+~~~
+
+Note that not all `Auto`s in this library can be resumed.  By default, you can
+assume that they *are*...however, those that aren't will by naming convention
+be suffixed with a `_`:  `sumFrom` vs. `sumFrom_`, for example.  This means
+that when you "save" the `Auto`, you don't really save any state...and when
+you "resume" it, nothing is really resumed, and resuming is a no-op:
+
+~~~haskell
+-- sumFrom_ can't be saved/resumed, so it "goes nowhere" when resumed.
+decodeAuto (sumFrom_ 0) bs = Right (sumFrom_ 0)
+~~~
+
+This feature is useful for "save states" of certain `Auto`s, or just for
+serialization and resuming in general.
+
+You can play some fun tricks with the `Control.Auto.Serialize` module...for
+example, `saving "foo.dat"` will turn any `Auto` into an `Auto` that
+serializes itself at every step to "foo.dat"
+
+~~~haskell
+ghci> let a1 = saving "foo.dat" (sumFrom 0) :: Auto IO Int Int
+ghci> streamAuto a1 [1..10]      -- saves the Auto as it goes along
+[ 1, 3, 6,10,15,21,28,36, 45, 55]
+ghci> a2 <- readAutoErr "foo.dat" a1 :: Auto IO Int Int
+ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last
+[56,58,61,65,70,76,83,91,100,110]
+~~~
+
+Final partings
+--------------
+
+<!-- TODO: Blah blah -->

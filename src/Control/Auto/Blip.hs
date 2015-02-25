@@ -23,13 +23,20 @@ module Control.Auto.Blip (
   -- $blip
   -- * The Blip type
     Blip
+  , perBlip
+  -- ** Merging
   , merge
   , mergeL
   , mergeR
-  , perBlip
+  , mergeLs
+  , mergeRs
+  , foldrB
+  , foldlB'
+  -- ** Blip stream creation (dangerous!)
   , emitOn
   , emitJusts
   , onJusts
+  -- ** Blip stream collapse
   , fromBlips
   , holdWith
   , holdWith_
@@ -82,11 +89,14 @@ import Control.Auto.Core
 import Control.Category
 import Data.Monoid
 import Data.Profunctor
+import Data.List
 import Data.Serialize
 import Prelude hiding             ((.), id, sequence)
 
-infixl 5 <&
+infixr 5 <&
 infixl 5 &>
+infixr 5 `mergeL`
+infixl 5 `mergeR`
 
 -- $blip
 --
@@ -193,7 +203,7 @@ infixl 5 &>
 -- * 'onChange', when the input value isn't ever expected to stay the same
 -- between steps.
 -- * 'emitOn', 'emitJusts', 'onJusts', in the cases mentioned in the
--- documentation for 'emitOn'
+-- documentation for 'emitOn'.
 --
 --
 -- == Practical examples
@@ -238,13 +248,28 @@ infixl 5 &>
 -- /either/ of the original 'Blip' streams emit.  If both emit at the same
 -- time, the left (first) one is favored.
 mergeL :: Blip a -> Blip a -> Blip a
-mergeL = merge const
+mergeL b1@(Blip _) _  = b1
+mergeL _           b2 = b2
 
 -- | Merges two 'Blip' streams together into one, which emits
 -- /either/ of the original 'Blip' streams emit.  If both emit at the same
 -- time, the right (second) one is favored.
 mergeR :: Blip a -> Blip a -> Blip a
-mergeR = merge (flip const)
+mergeR _  b2@(Blip _) = b2
+mergeR b1 _           = b1
+
+mergeLs :: [Blip a] -> Blip a
+mergeLs = foldr mergeL NoBlip
+
+mergeRs :: [Blip a] -> Blip a
+mergeRs = foldl' mergeR NoBlip
+
+foldrB :: (a -> a -> a) -> a -> [Blip a] -> Blip a
+foldrB f b0 = foldr (merge f) (Blip b0)
+
+foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
+foldlB' f b0 = foldl' (merge f) (Blip b0)
+
 
 -- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
@@ -255,7 +280,7 @@ mergeR = merge (flip const)
      => Auto m a (Blip b)
      -> Auto m a (Blip b)
      -> Auto m a (Blip b)
-(<&) = liftA2 (merge const)
+(<&) = liftA2 mergeL
 
 -- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
@@ -266,7 +291,7 @@ mergeR = merge (flip const)
      => Auto m a (Blip b)
      -> Auto m a (Blip b)
      -> Auto m a (Blip b)
-(&>) = liftA2 (merge (flip const))
+(&>) = liftA2 mergeR
 
 
 -- | An 'Auto' that ignores its input and produces a 'Blip' stream that
@@ -293,11 +318,10 @@ immediately = mkState f False
     f _ True  = (NoBlip, True)
     f x False = (Blip x, True)
 
--- | An 'Auto' that produces a 'Blip' stream that only emits once, after
--- waiting the given number of ticks.  It emits the input after /waiting/
--- that many steps.
+-- | An 'Auto' that produces a 'Blip' stream that only emits once, on the
+-- given number step.  It emits the input /on/ that many steps.
 --
--- prop> immediately == inB 0
+-- prop> immediately == inB 1
 inB :: Int                -- ^ number of steps before value is emitted.
     -> Auto m a (Blip a)
 inB n = mkState f (n, False)
