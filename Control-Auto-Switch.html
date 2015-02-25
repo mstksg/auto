@@ -120,16 +120,16 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
  <code>f</code> is applied to the <code>c</code> that the stream emits, and that new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is
  placed into the box and is immediately run on that same step.</p><p>In the following example we are using just <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-List.html#v:iterate">iterate</a></code> (+1)</code> for our
  &quot;next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot; function, and triggering it with a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream that
- counts up from 0.</p><pre>    nextAuto :: Int -&gt; Auto' () Int
-    nextAuto = iterator (+1)
+ counts up from 0.</p><pre>nextAuto :: Int -&gt; Auto' () Int
+nextAuto = iterator (+1)
 
-    triggerer :: Auto' () (Blip Int)
-    triggerer = stretchB 3 (iterator (+10) 0)
+triggerer :: Auto' () (Blip Int)
+triggerer = stretchB 3 (iterator (+10) 0)
 
-    a :: Auto' () Int
-    a = proc _ -&gt; do
-        triggers &lt;- triggerer -&lt; ()
-        switchOnF nextAuto (nextAuto 0) -&lt; ((), triggers)
+a :: Auto' () Int
+a = proc _ -&gt; do
+    triggers &lt;- triggerer -&lt; ()
+    switchOnF nextAuto (nextAuto 0) -&lt; ((), triggers)
 </pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 10 a ()
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
 </code></strong>[0,1,2,10,11,12,20,21,22,30,31]
