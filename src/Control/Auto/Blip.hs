@@ -258,15 +258,23 @@ mergeR :: Blip a -> Blip a -> Blip a
 mergeR _  b2@(Blip _) = b2
 mergeR b1 _           = b1
 
+-- | Merge all the blip streams together into one, favoring the first
+-- emitted value.
 mergeLs :: [Blip a] -> Blip a
 mergeLs = foldr mergeL NoBlip
 
+-- | Merge all the blip streams together into one, favoring the last
+-- emitted value.
 mergeRs :: [Blip a] -> Blip a
 mergeRs = foldl' mergeR NoBlip
 
+-- | Merge all of the blip streams together, using the given merging
+-- function associating from the right.
 foldrB :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldrB f b0 = foldr (merge f) (Blip b0)
 
+-- | Merge all of the blip streams together, using the given merging
+-- function associating from the left.
 foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldlB' f b0 = foldl' (merge f) (Blip b0)
 
