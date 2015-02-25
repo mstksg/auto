@@ -60,11 +60,14 @@ module Control.Auto (
   , iterator_
   , iteratorM
   , iteratorM_
-  -- * Common processes
+  -- * Common 'Auto's and combinators
+  -- ** Processes
   , sumFrom
   , productFrom
   , mappender
   , mappendFrom
+  -- ** Switches
+  , (-->)
   -- * Running
   , interactAuto
   , interactRS
@@ -88,3 +91,4 @@ import Control.Auto.Serialize
 import Control.Auto.Time
 import Control.Category
 import Data.Semigroup
+import Control.Auto.Switch

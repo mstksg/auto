@@ -681,12 +681,44 @@ You can see all of the built-in `Interval` combinators in
 
 #### Switching
 
-A powerful grab-bag of tools that can be used with intervals is the idea of
-"switching", as mentioned earlier.  `Auto`s that behave like one `Auto` for a
-while, and then another afterwards.
+A powerful grab-bag of tools that can be used with intervals and blip streams
+is the idea of "switching", as mentioned earlier.  `Auto`s that behave like
+one `Auto` for a while, and then another afterwards.
+
+For example, `switchOn_` and `switchOnF` lets you have an `Auto` that behaves
+like one `Auto`, until the blip stream it is receiving emits something ---
+then, it behaves like a totally new one, based on the emitted value.
+
+`switchFrom_` and `switchFromF` also gives you an `Auto` that behaves like one
+`Auto`...except that `Auto` has the ability to "replace itself" by having its
+output blip stream emit a value.  The value determines what it wants to
+replace itself with.
+
+See the documentation for thise at the `Control.Auto.Swtich` module for more
+information!
 
 #### Collections
 
+In `Control.Auto.Collection`, we have a bunch of "`Auto` boxes" and "`Auto`
+collections", which maintain `Auto`s that are dynamic collections of `Auto`s.
+
+For example, you have `zipAuto`, which takes a list of `Auto`s and returns an
+`Auto` taking in a list, that feeds each item in the input list into each
+corresponding `Auto`.  It's like running multiple `Auto`s in parallel on
+different inputs.
+
+For example, you have `mux f :: Auto m (k, a) b`, which stores a bunch of
+`Auto m a b`s indexed by a key `k`.  At every step, it takes a `(k, a)`,
+looks up the `Auto` at that `k`, feeds in the `a`, and outputs that output
+`b`.  You can use this to store several `Auto`s in parallel and really just
+run the one you want at any given time.
+
+There's also `gather f :: Auto m (k, a) (Map k b)`, which again stores a bunch
+of `Auto m a b`s indexed by a key `k`.  At every step, it *updates* only the
+`Auto` at that key `k`, but outputs a `Map` of all the outputs so far by all
+of the internal `Auto`s.
+
+See the documentation at `Control.Auto.Collection` for more!
 
 Serialization
 -------------
