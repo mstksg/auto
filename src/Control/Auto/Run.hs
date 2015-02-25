@@ -33,7 +33,7 @@ module Control.Auto.Run (
   , evalAutoN
   , evalAutoN'
   -- * Running "interactively"
-  , interact
+  , interactAuto
   , interactRS
   , interactM
   -- ** Helpers
@@ -257,9 +257,9 @@ runM x0 f nt a = do
 -- find something non-readable.
 --
 -- Outputs the final 'Auto'' when the interaction terminates.
-interact :: Interval' String String         -- ^ 'Interval'' to run interactively
-         -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
-interact = interactM putStrLn (return . runIdentity)
+interactAuto :: Interval' String String         -- ^ 'Interval'' to run interactively
+             -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
+interactAuto = interactM putStrLn (return . runIdentity)
 
 -- | Like 'interact', but instead of taking @'Interval'' 'String'
 -- 'String'@, takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@
@@ -272,7 +272,7 @@ interact = interactM putStrLn (return . runIdentity)
 interactRS :: (Read a, Show b)
            => Interval' a b                 -- ^ 'Interval'' to run interactively
            -> IO (Interval' String String)  -- ^ final 'Interval'' after it all
-interactRS = interact . bindRead . fmap (fmap show)
+interactRS = interactAuto . bindRead . fmap (fmap show)
 
 
 -- | Like 'interact', but much more general.  You can run it with an 'Auto'

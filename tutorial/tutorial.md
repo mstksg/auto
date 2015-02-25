@@ -98,7 +98,7 @@ In practice, this is usually going to be your "main loop", or "game loop":
 `stepAutoN` with `()`, or `streamAuto'` with an infinite list.)
 
 There are some built-in "loops" like this in the `Control.Auto.Run` module,
-for running in `IO` by reading and showing inputs and ouputs (`interact`,
+for running in `IO` by reading and showing inputs and ouputs (`interactAuto`,
 `interactRS`) if you want to try these out!
 
 What's in a type?
@@ -632,14 +632,23 @@ an `Auto`, and not an `Interval`:
 through" when the predicate is true (being sure to pick a meaningful predicate
 based on the expected input for "chunky" output)
 
+You can also "chain" `Interval`s with `bindI` and `compI`:
+
+~~~haskell
+ghci> streamAuto' (whenI (< 3) `compI` whenI (> 6)) [1..8]
+[Just 1, Just 2, Nothing, Nothing, Nothing, Just 6, Just 7, Just 8]
+ghci> streamAuto' (bindI (whenI (< 3)) . whenI (> 6)) [1..8]
+[Just 1, Just 2, Nothing, Nothing, Nothing, Just 6, Just 7, Just 8]
+~~~
+
 Intervals are also used for things that want their `Auto`s to "signal" when
 they are "off".  `Interval` is the universal language for, "you can be done
-with me", when it is needed.  For example, the `interact` loop takes an
+with me", when it is needed.  For example, the `interactAuto` loop takes an
 `Interval String String`, and "turns off" on the first `Nothing` or "off"
 value.
 
 ~~~haskell
-ghci> interact (onFor 4 . (++ "!!!"))
+ghci> interactAuto (onFor 4 . (++ "!!!"))
 > hello
 hello!!!
 > how
@@ -670,7 +679,14 @@ You can see all of the built-in `Interval` combinators in
 
 ### More Tools
 
-<!-- TODO: More tools, like switching?  How much to put here? -->
+#### Switching
+
+A powerful grab-bag of tools that can be used with intervals is the idea of
+"switching", as mentioned earlier.  `Auto`s that behave like one `Auto` for a
+while, and then another afterwards.
+
+#### Collections
+
 
 Serialization
 -------------
@@ -745,4 +761,23 @@ ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last
 Final partings
 --------------
 
-<!-- TODO: Blah blah -->
+I recommend just looking over the combinators available to you in the various
+modules, like `Control.Auto.Blip`, `Control.Auto.Interval`, and
+`Control.Auto.Switch`.  We didn't go over anything close to all of them in
+this tutorial, so it's nice for getting a good overview.
+
+A good next step too wouild be also just looking at the [auto-examples][]
+directory and peruse over the examples, which each highlight a different
+aspect of the library, so you can see how all of these ideas work together.
+There will also be writeups on [my blog][blog] coming up too!
+
+Help is always available on the *#auto* channel on freenode IRC; you can also
+email me at <justin@jle.im>, or find me on twitter as [mstk][twitter].  There
+is no mailing list or message board yet, but for now, feel free to abuse the
+[github issue tracker][issues].
+
+[twitter]: https://twitter.com/mstk
+[issues]: https://github.com/mstksg/auto/issues
+
+Now go forth and make locally stateful, denotative, declarative programs!
+
