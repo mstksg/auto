@@ -109,9 +109,6 @@ import Data.Typeable
 import GHC.Generics
 import Prelude hiding         ((.), id, sequence)
 
--- TODO: provde combinators/ability to map over the result or use the
--- result of stepAuto, without ruining the internal constructor structure
-
 -- | The output of a 'stepAuto'.  Contains the "result" value of the
 -- stepping ('outRes'), and the "next 'Auto'", 'outAuto'.
 --
@@ -136,6 +133,9 @@ instance Monad m => Applicative (Output m a) where
 --
 -- If you want to map an @a -> b@ onto both fields (the result and the
 -- result of the next Auto), you can use the 'Functor' instance instead.
+--
+-- Really only useful for obfuscatingly point-free code.  I mean like,
+-- really.
 onOutput :: (b -> b')                     -- ^ function over the result
          -> (Auto m a b -> Auto m a' b')  -- ^ function over the resulting 'Auto'
          -> Output m a b

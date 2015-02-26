@@ -6,43 +6,51 @@ Welcome to the tutorial for getting started with Auto!
 This is actually just a basic overview of the library and some basic programs,
 enough to get started, hopefully; for further information, check out
 [auto-examples][] for more real-world examples, and some of my writeups on [my
-blog][blog].
+blog][blog].  Up-to-date documentation is, at the moment, hosted [on
+github][docs]...and the latest version of this tutorial itself can be found on
+[the development branch][tutorial], normally!
 
 [auto-examples]: https://github.com/mstksg/auto-examples
 [blog]: http://blog.jle.im
+[docs]: https://mstksg.github.io/auto/
+[tutorial]: https://github.com/mstksg/auto/blob/develop/tutorial/tutorial.md
 
 Auto
 ----
 
 ### Semantic Picture
 
-Semantically, a `Auto` describes a relationship between an input and an
+Semantically, a `Auto` describes *a relationship* between an input and an
 output that is preserved over multiple steps.
 
 In a way, you can think about `Auto`s as *stream transformers*.  A stream of
 sequential inputs come in one at a time, and a stream of outputs pop out one
-at a time as well.
+at a time as well.  You can think of `streamAuto'` as taking an `Auto' a b`
+and "unwrapping" its internal `[a] -> [b]`.
 
-A trivial exmple is just a static stateless function --- here we have the
-`Auto` `arr (*2)`, which always maps every input value to an output value that
-is the input value, doubled:
+An `Auto` is a relationship; the simplest relationship is probably a straight
+up apply-a-function-to-each-input-to-get-each-output relationship.  For that,
+check out the `Auto` `arr (*2)`, where the outputs are the doubles of the
+inputs:
 
 ~~~haskell
 -- streamAuto' :: Auto' a b -> [a] -> [b]
--- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...    -- the inputs
+-- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...        -- the inputs
 ghci> take 10 $ streamAuto' (arr (*2)) [1..]
-   [ 2, 4, 6, 8,10,12,14,16,18,20]      -- the outputs
+   [ 2, 4, 6, 8,10,12,14,16,18,20]          -- the outputs
 ~~~
 
-For a more interesting example, you can have an `Auto` where the output
-corresponding to an input depends on the "history", as well.  A "stateful"
-function.  For example, we have the `Auto` `sumFrom n`, whose output is always
-the cumulative sum of all items received so far.
+`streamAuto' (arr f)` is just `map f`, as you can see!
+
+In general, the input-output relationship is allowed to depend on the history
+of the inputs, as well.  For example, we have the `Auto` `sumFrom 0` --- the
+relationship is that the output is always the cumulative sum of the inputs
+received so far:
 
 ~~~haskell
--- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...    -- the inputs
+-- [ 1, 2, 3, 4, 5, 6, 7, 8, 9,10...        -- the inputs
 ghci> take 10 $ streamAuto' (sumFrom 0) [1..]
-   [ 1, 3, 6,10,15,21,28,36,45,55]      -- the outputs
+   [ 1, 3, 6,10,15,21,28,36,45,55]          -- the outputs
 ~~~
 
 A bit on types --- `sumFrom n` is `Num a => Auto m a a` ... or, if
@@ -51,7 +59,13 @@ between two `Int`s fixed over the stream", or "a one-by-one mapping of an
 `Int` stream to another `Int` stream".  For `sumFrom n`, the relationship is
 that the output is always the cumulative sum of the inputs.
 
-That's what they are semantically, and that's what an `Auto` would denote.
+Note that these relationships are always *causual*; the nth item of the output
+can only depend on the first n items of the input.  We say that they are
+"real-time" stream transformers in that every time you get an input, exactly
+one output pops out.
+
+That's what they are semantically, and an `Auto` denotes exactly such an
+input-output relationship that is maintained over several steps.
 
 ### Operational picture
 
@@ -97,9 +111,9 @@ In practice, this is usually going to be your "main loop", or "game loop":
 (If your program doesn't need any outside input, then you can just use
 `stepAutoN` with `()`, or `streamAuto'` with an infinite list.)
 
-There are some built-in "loops" like this in the `Control.Auto.Run` module,
-for running in `IO` by reading and showing inputs and ouputs (`interactAuto`,
-`interactRS`) if you want to try these out!
+There are some built-in "loops" like this in the `[Control.Auto.Run][]`
+module, for running in `IO` by reading and showing inputs and ouputs
+(`interactAuto`, `interactRS`) if you want to try these out!
 
 What's in a type?
 -----------------
@@ -110,8 +124,8 @@ parameters?
 An `Auto' a b` describes *a relationship* between a stream of inputs `a` and a
 stream of outputs `b` that is maintained over several steps of inputs.
 
-One way to look at it is that, with `streamAuto'` an `Auto' a b` gives you an
-`[a] -> [b]`.
+One way to look at it is that, with `streamAuto'` an `Auto' a b` gives you the
+"unwrapped" `[a] -> [b]`.
 
 From an operational perspective, you can think of an `Auto' a b` as a function
 with internal state that, when fed an `a`, gives you a `b` and a "next/updated
@@ -126,7 +140,7 @@ An `Auto m a b` describes *a relationship*, again, between a stream of inputs
 maintains this relationship with within an underlying monadic context `m`.
 
 If `streamAuto'` from an `Auto' a b` gives you an `[a] -> [b]`, then
-`streamAuto` from an `Auto m a b` gives you an `[a] -> m [b]`.
+`streamAuto` from an `Auto m a b` gives you the "unwrapped" `[a] -> m [b]`.
 
 Operationally, if `Auto' a b` is a `a -> b` with internal state, then `Auto m
 a b` is a `a -> m b` with internal state.  If you feed it an `a`, it'll return
@@ -137,7 +151,7 @@ This monadic context means that in the process of "stepping" or "running" the
 `Auto`, you can perform effects and get input from an outside world.
 
 For the most part, real-life `Auto`s will be written parameterized over
-`Monad` or some `Monad` typeclass:
+`Monad` or some `Monad`-based typeclass:
 
 ~~~haskell
 myAuto :: Monad m => Auto m Int Bool
@@ -217,6 +231,43 @@ ghci> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
 [ 2, 5, 12, 34, 135]
 ~~~
 
+Heck, you can even `sequenceA` several!
+
+~~~haskell
+sequenceA :: [Auto m a b] -> Auto m a [b]
+~~~
+
+It will take a list of `Auto`s and return an `Auto` that "forks" the input
+stream into *all* of the original `Auto`s and aggregates together all of the
+output streams.  A multi-way fork.
+
+We also have the Applicative-derived instances like `Monoid`, so any `Auto m
+a b` is a `Monoid` if `b` is a `Monoid`.
+
+~~~haskell
+mconcat :: Monoid m => [Auto m a b] -> Auto m a b
+~~~
+
+A lot of times you'll have a lot of things handling the same input in
+different ways, and you'll want to recombine them all at the end.  Well,
+`mconcat`, `sequence`, etc. are at your service!
+
+Of course there the Applicative-derived `Num` (and assorted numerical
+instances) too:
+
+~~~haskell
+ghci> streamAuto' (0 * sumFrom 0) [1..5]
+[0, 0, 0, 0, 0,]
+ghci> streamAuto' (negate (sumFrom 0)) [1..5]
+[-1, -3, -6, -10, -15]
+ghci> streamAuto' (10 + sumFrom 0) [1..5]
+[11, 13, 16, 20, 25]
+ghci> streamAuto' (sumFrom 0 + productFrom 1) [1..5]
+[ 2, 5, 12, 34, 135]
+~~~
+
+Just don't go too crazy with these, okay?
+
 Now, the `Category` instance is probably the most powerful tool at your
 disposal.  As a first treat, it gives you `id :: Auto m a a`, an `Auto` whose
 output is always exactly the corresponding input.
@@ -260,7 +311,7 @@ ghci> streamAuto' (productFrom 1 . sumFrom 0) $ [1..5]
 ~~~
 
 (Math nuts might recognize this as saying that `streamAuto'` is a "category
-homomorphism"...aka, a functor :)  Seeing that `streamAuto' (id :: Auto' a a)
+homomorphism"...aka, a functr :)  Seeing that `streamAuto' (id :: Auto' a a)
 == (id :: [a] -> [a])`, of course!)
 
 Operationally, at every "step", it passes in each input to the first `Auto`,
@@ -317,6 +368,8 @@ Most of what was just done could be written with the `Applicative`
 instance as well...but in this way, the entire thing looks a lot like a
 dependency graph, and it's pretty expressive and powerful.
 
+### Brief Primer on Proc Notation
+
 An explanation on the syntax; when you see:
 
 ~~~haskell
@@ -365,8 +418,6 @@ solve it for you).
 
 Those are the primary typeclass based interfaces; explore the library for
 more!
-
-<!-- TODO: What else to put here? -->
 
 ### From scratch
 
@@ -578,7 +629,8 @@ the other semantic abstractions in `Auto` (like switches, and `Interval`) all
 work with the "idea" of a "discrete", occasional, conceptually
 "non-contiguous" blip stream.
 
-Check out all of the built-in blip stream combinators at `Control.Auto.Blip`.
+Check out all of the built-in blip stream combinators at
+`[Control.Auto.Blip][]`.
 
 ### Interval
 
@@ -675,7 +727,7 @@ ghci> take 10 $ streamAuto' a2 (repeat ())
 ~~~
 
 You can see all of the built-in `Interval` combinators in
-`Control.Auto.Interval`.
+`[Control.Auto.Interval][]`.
 
 ### More Tools
 
@@ -694,13 +746,18 @@ then, it behaves like a totally new one, based on the emitted value.
 output blip stream emit a value.  The value determines what it wants to
 replace itself with.
 
-See the documentation for thise at the `Control.Auto.Swtich` module for more
-information!
+These are really useful for implementing things like "modes" --- your program
+has different modes of behavior, which you can represet with a different
+`Auto` for each mode...and you can switch between them with these switches!
+
+See the documentation for thise at the `[Control.Auto.Swtich][]` module for
+more information!
 
 #### Collections
 
-In `Control.Auto.Collection`, we have a bunch of "`Auto` boxes" and "`Auto`
-collections", which maintain `Auto`s that are dynamic collections of `Auto`s.
+In `[Control.Auto.Collection][]`, we have a bunch of "`Auto` boxes" and
+"`Auto` collections", which maintain `Auto`s that are dynamic collections of
+`Auto`s.
 
 For example, you have `zipAuto`, which takes a list of `Auto`s and returns an
 `Auto` taking in a list, that feeds each item in the input list into each
@@ -718,7 +775,7 @@ of `Auto m a b`s indexed by a key `k`.  At every step, it *updates* only the
 `Auto` at that key `k`, but outputs a `Map` of all the outputs so far by all
 of the internal `Auto`s.
 
-See the documentation at `Control.Auto.Collection` for more!
+See the documentation at `[Control.Auto.Collection][]` for more!
 
 Serialization
 -------------
@@ -777,9 +834,9 @@ decodeAuto (sumFrom_ 0) bs = Right (sumFrom_ 0)
 This feature is useful for "save states" of certain `Auto`s, or just for
 serialization and resuming in general.
 
-You can play some fun tricks with the `Control.Auto.Serialize` module...for
-example, `saving "foo.dat"` will turn any `Auto` into an `Auto` that
-serializes itself at every step to "foo.dat"
+You can play some fun tricks with the `[Control.Auto.Serialize][]`
+module...for example, `saving "foo.dat"` will turn any `Auto` into an `Auto`
+that serializes itself at every step to "foo.dat"
 
 ~~~haskell
 ghci> let a1 = saving "foo.dat" (sumFrom 0) :: Auto IO Int Int
@@ -794,9 +851,10 @@ Final partings
 --------------
 
 I recommend just looking over the combinators available to you in the various
-modules, like `Control.Auto.Blip`, `Control.Auto.Interval`, and
-`Control.Auto.Switch`.  We didn't go over anything close to all of them in
-this tutorial, so it's nice for getting a good overview.
+modules, like `[Control.Auto.Blip][]`, `[Control.Auto.Interval][]`, and
+`[Control.Auto.Switch][]`.  We didn't go over anything close to all of them in
+this tutorial, so it's nice for getting a good overview.  The most up-to-date
+documentation at this point in time is on [the github pages][docs]
 
 A good next step too wouild be also just looking at the [auto-examples][]
 directory and peruse over the examples, which each highlight a different
@@ -813,3 +871,9 @@ is no mailing list or message board yet, but for now, feel free to abuse the
 
 Now go forth and make locally stateful, denotative, declarative programs!
 
+[Control.Auto.Blip]: http://mstksg.github.io/auto/Control-Auto-Blip.html
+[Control.Auto.Collection]: http://mstksg.github.io/auto/Control-Auto-Collection.html
+[Control.Auto.Interval]: http://mstksg.github.io/auto/Control-Auto-Interval.html
+[Control.Auto.Run]: http://mstksg.github.io/auto/Control-Auto-Run.html
+[Control.Auto.Serialize]: http://mstksg.github.io/auto/Control-Auto-Serialize.html
+[Control.Auto.Switch]: http://mstksg.github.io/auto/Control-Auto-Switch.html
