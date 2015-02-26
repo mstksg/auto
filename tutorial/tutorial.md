@@ -111,7 +111,7 @@ In practice, this is usually going to be your "main loop", or "game loop":
 (If your program doesn't need any outside input, then you can just use
 `stepAutoN` with `()`, or `streamAuto'` with an infinite list.)
 
-There are some built-in "loops" like this in the `[Control.Auto.Run][]`
+There are some built-in "loops" like this in the *[Control.Auto.Run][]*
 module, for running in `IO` by reading and showing inputs and ouputs
 (`interactAuto`, `interactRS`) if you want to try these out!
 
@@ -630,7 +630,7 @@ work with the "idea" of a "discrete", occasional, conceptually
 "non-contiguous" blip stream.
 
 Check out all of the built-in blip stream combinators at
-`[Control.Auto.Blip][]`.
+*[Control.Auto.Blip][]*.
 
 ### Interval
 
@@ -727,7 +727,7 @@ ghci> take 10 $ streamAuto' a2 (repeat ())
 ~~~
 
 You can see all of the built-in `Interval` combinators in
-`[Control.Auto.Interval][]`.
+*[Control.Auto.Interval][]*.
 
 ### More Tools
 
@@ -750,12 +750,12 @@ These are really useful for implementing things like "modes" --- your program
 has different modes of behavior, which you can represet with a different
 `Auto` for each mode...and you can switch between them with these switches!
 
-See the documentation for thise at the `[Control.Auto.Swtich][]` module for
+See the documentation for thise at the *[Control.Auto.Swtich][]* module for
 more information!
 
 #### Collections
 
-In `[Control.Auto.Collection][]`, we have a bunch of "`Auto` boxes" and
+In *[Control.Auto.Collection][]*, we have a bunch of "`Auto` boxes" and
 "`Auto` collections", which maintain `Auto`s that are dynamic collections of
 `Auto`s.
 
@@ -775,7 +775,7 @@ of `Auto m a b`s indexed by a key `k`.  At every step, it *updates* only the
 `Auto` at that key `k`, but outputs a `Map` of all the outputs so far by all
 of the internal `Auto`s.
 
-See the documentation at `[Control.Auto.Collection][]` for more!
+See the documentation at *[Control.Auto.Collection][]* for more!
 
 Serialization
 -------------
@@ -834,7 +834,7 @@ decodeAuto (sumFrom_ 0) bs = Right (sumFrom_ 0)
 This feature is useful for "save states" of certain `Auto`s, or just for
 serialization and resuming in general.
 
-You can play some fun tricks with the `[Control.Auto.Serialize][]`
+You can play some fun tricks with the *[Control.Auto.Serialize][]*
 module...for example, `saving "foo.dat"` will turn any `Auto` into an `Auto`
 that serializes itself at every step to "foo.dat"
 
@@ -851,8 +851,8 @@ Final partings
 --------------
 
 I recommend just looking over the combinators available to you in the various
-modules, like `[Control.Auto.Blip][]`, `[Control.Auto.Interval][]`, and
-`[Control.Auto.Switch][]`.  We didn't go over anything close to all of them in
+modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*, and
+*[Control.Auto.Switch][]*.  We didn't go over anything close to all of them in
 this tutorial, so it's nice for getting a good overview.  The most up-to-date
 documentation at this point in time is on [the github pages][docs]
 
