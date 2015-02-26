@@ -1,20 +1,23 @@
 module Control.Auto (
-  -- * Output
+  -- * Types
+  -- ** Output
     Output(..)
   , Output'
   , onOutput
-  -- * Auto
+  -- ** Auto
   , Auto
   , Auto'
-  , generalizeA
-  -- * Types
+  -- ** Misc
   , Blip
   , Interval
   , Interval'
-  -- * 
-  -- ** Running
+  -- * Running
   , stepAuto
   , stepAuto'
+  , evalAuto
+  , evalAuto'
+  , streamAuto
+  , streamAuto'
   , stepAutoN
   , stepAutoN'
   -- ** Serializing
@@ -22,6 +25,8 @@ module Control.Auto (
   -- for more detail on how these work.
   , encodeAuto
   , decodeAuto
+  , readAuto
+  , writeAuto
   -- ** Strictness
   , forcer
   , seqer
@@ -29,11 +34,7 @@ module Control.Auto (
   , lastVal
   , lastVal_
   -- * Auto constructors
-  -- ** from State transformers
-  , mkState
-  , mkStateM
-  , mkState_
-  , mkStateM_
+  , arrM
   -- ** from Accumulators
   -- *** Result-first
   , mkAccum
@@ -45,17 +46,31 @@ module Control.Auto (
   , mkAccumD_
   , mkAccumMD
   , mkAccumMD_
+  -- ** from State transformers
+  , mkState
+  , mkStateM
+  , mkState_
+  , mkStateM_
   -- ** Generators
+  -- *** Effects
+  , effect
+  , exec
   -- *** Iterators
   , iterator
   , iterator_
   , iteratorM
   , iteratorM_
-  -- -- *** Unfolders
-  -- , unfold
-  -- , unfoldM
-  -- , unfold_
-  -- , unfoldM_
+  -- * Common 'Auto's and combinators
+  -- ** Processes
+  , sumFrom
+  , productFrom
+  , mappender
+  , mappendFrom
+  -- ** Switches
+  , (-->)
+  -- * Running
+  , interactAuto
+  , interactRS
   -- * Re-exports
   , module Control.Category
   , module Control.Applicative
@@ -64,12 +79,16 @@ module Control.Auto (
   ) where
 
 import Control.Applicative
-import Control.Arrow hiding  (loop)
+import Control.Arrow hiding   (loop)
 import Control.Auto.Blip
 import Control.Auto.Core
+import Control.Auto.Effects
 import Control.Auto.Generate
 import Control.Auto.Interval
+import Control.Auto.Process
 import Control.Auto.Run
+import Control.Auto.Serialize
 import Control.Auto.Time
 import Control.Category
 import Data.Semigroup
+import Control.Auto.Switch

@@ -4,7 +4,33 @@
 name:                auto
 version:             0.1.0.0
 synopsis:            Locally stateful programming with denotational semantics.
--- description:         
+description:         /auto/ is a Haskell DSL/library providing declarative,
+                     compositional, denotative semantics for discrete-step,
+                     locally stateful, interactive programs, games, and
+                     automations, with implicitly derived serialization.
+                     .
+                     /auto/ works by providing a type that encapsulates
+                     "stream transformers", or locally stateful functions; by
+                     specifying your program as a (potentially cyclic) graph
+                     of relationships between streams, you create a way of
+                     "declaring" a system based simply on static relationships
+                     between quantities.
+                     .
+                     Instead of a "state monad" type solution, where all
+                     functions have access to a global state, /auto/ works by
+                     specifying relationships which each exist independently
+                     and on their own, without any global state.
+                     .
+                     A more fuller exposition is in the `README.md`, in this
+                     project directory and also online at
+                     <https://github.com/mstksg/auto/blob/master/README.md>;
+                     you can get started by reading the tutorial, which is
+                     also in this project directory in the `tutorial`
+                     directory, and also incidentally online at
+                     <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md>.
+                     .
+                     Import 'Control.Auto' to begin!
+
 license:             MIT
 license-file:        LICENSE
 author:              Justin Le
@@ -46,3 +72,4 @@ library
                      -- , vector
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -Wall

@@ -48,13 +48,13 @@ module Control.Auto.Collection (
   -- ** Multiple input, multiple output
   , muxMany
   , muxMany_
-  -- ** Function-based
-  -- *** Single input/output
-  , muxF
-  , muxF_
-  -- *** Parallel input/output
-  , muxFMany
-  , muxFMany_
+  -- -- ** Function-based
+  -- -- *** Single input/output
+  -- , muxF
+  -- , muxF_
+  -- -- *** Parallel input/output
+  -- , muxFMany
+  -- , muxFMany_
   -- * "Gathering"/accumulating collections
   -- ** Single input, multiple output
   , gather
@@ -64,13 +64,13 @@ module Control.Auto.Collection (
   , gatherMany
   , gatherMany_
   , gatherMany__
-  -- ** Function-based
-  , gatherF
-  , gatherF_
-  , gatherF__
-  , gatherFMany
-  , gatherFMany_
-  , gatherFMany__
+  -- -- ** Function-based
+  -- , gatherF
+  -- , gatherF_
+  -- , gatherF__
+  -- , gatherFMany
+  -- , gatherFMany_
+  -- , gatherFMany__
   ) where
 
 import Control.Applicative
@@ -427,71 +427,71 @@ _muxManyF f go as xs = do
     steps :: Map k (m (Output m a b))
     steps = M.intersectionWith stepAuto allas xs
 
-muxF :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
-     => (k -> Maybe c -> Auto m a (Maybe b))
-     -> Auto m (k, Either (c, a) a) (Maybe b)
-muxF f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFMany f)
+-- muxF :: forall m a b k c. (Serialize k, Serialize c, Ord k, Monad m)
+--      => (k -> Maybe c -> Auto m a (Maybe b))
+--      -> Auto m (k, Either (c, a) a) (Maybe b)
+-- muxF f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFMany f)
 
--- | The non-serializing/non-resuming version of 'muxFI'.
-muxF_ :: forall m a b k c. (Ord k, Monad m)
-      => (k -> Maybe c -> Auto m a (Maybe b))
-      -> Auto m (k, Either (c, a) a) (Maybe b)
-muxF_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFMany_ f)
+-- -- | The non-serializing/non-resuming version of 'muxFI'.
+-- muxF_ :: forall m a b k c. (Ord k, Monad m)
+--       => (k -> Maybe c -> Auto m a (Maybe b))
+--       -> Auto m (k, Either (c, a) a) (Maybe b)
+-- muxF_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxFMany_ f)
 
-muxFMany :: forall m a b c k. (Serialize k, Serialize c, Ord k, Monad m)
-         => (k -> Maybe c -> Auto m a (Maybe b))
-         -> Auto m (Map k (Either (c, a) a)) (Map k b)
-muxFMany f = go mempty
-  where
-    go :: Map k (Maybe c, Auto m a (Maybe b))
-       -> Auto m (Map k (Either (c, a) a)) (Map k b)
-    go as = mkAutoM l (s as) (t as)
-    l    = do
-      kszs <- get :: Get [(k, Maybe c)]
-      let as  = M.fromList (map (\(k, mz) -> (k, (mz, f k mz))) kszs)
-      go <$> mapM (mapM loadAuto) as
-    s as = put (zip (M.keys as) (map fst (M.elems as)))
-        *> mapM_ (saveAuto . snd) as
-    t    = _muxFManyF f go
+-- muxFMany :: forall m a b c k. (Serialize k, Serialize c, Ord k, Monad m)
+--          => (k -> Maybe c -> Auto m a (Maybe b))
+--          -> Auto m (Map k (Either (c, a) a)) (Map k b)
+-- muxFMany f = go mempty
+--   where
+--     go :: Map k (Maybe c, Auto m a (Maybe b))
+--        -> Auto m (Map k (Either (c, a) a)) (Map k b)
+--     go as = mkAutoM l (s as) (t as)
+--     l    = do
+--       kszs <- get :: Get [(k, Maybe c)]
+--       let as  = M.fromList (map (\(k, mz) -> (k, (mz, f k mz))) kszs)
+--       go <$> mapM (mapM loadAuto) as
+--     s as = put (zip (M.keys as) (map fst (M.elems as)))
+--         *> mapM_ (saveAuto . snd) as
+--     t    = _muxFManyF f go
 
--- | The non-serializing/non-resuming version of 'muxFManyI'.
-muxFMany_ :: forall m a b c k. (Ord k, Monad m)
-          => (k -> Maybe c -> Auto m a (Maybe b))
-          -> Auto m (Map k (Either (c, a) a)) (Map k b)
-muxFMany_ f = go mempty
-  where
-    go :: Map k (Maybe c, Auto m a (Maybe b))
-       -> Auto m (Map k (Either (c, a) a)) (Map k b)
-    go = mkAutoM_ . _muxFManyF f go
+-- -- | The non-serializing/non-resuming version of 'muxFManyI'.
+-- muxFMany_ :: forall m a b c k. (Ord k, Monad m)
+--           => (k -> Maybe c -> Auto m a (Maybe b))
+--           -> Auto m (Map k (Either (c, a) a)) (Map k b)
+-- muxFMany_ f = go mempty
+--   where
+--     go :: Map k (Maybe c, Auto m a (Maybe b))
+--        -> Auto m (Map k (Either (c, a) a)) (Map k b)
+--     go = mkAutoM_ . _muxFManyF f go
 
-_muxFManyF :: forall k m a b c inAuto outAuto outOut.
-               ( Ord k
-               , Monad m
-               , inAuto  ~ (Auto m a (Maybe b))
-               , outAuto ~ (Auto m (Map k (Either (c, a) a)) (Map k b))
-               , outOut  ~ (Output m (Map k (Either (c, a) a)) (Map k b))
-               )
-           => (k -> Maybe c -> inAuto)                 -- f
-           -> (Map k (Maybe c, inAuto) -> outAuto)     -- go
-           -> Map k (Maybe c, inAuto)                  -- as
-           -> Map k (Either (c, a) a)                  -- xs
-           -> m outOut
-_muxFManyF f go as xs = do
-    outs <- sequence steps
-    let (outs', rems) = M.partition (isJust . outRes . snd) outs
-        as'           = M.difference as rems
-        as''          = M.union as' (fmap (second outAuto) outs')
-        ys            = fmap (fromJust . outRes . snd) outs'
-    return (Output ys (go as''))
-  where
-    mzxs  = fmap eitherToMaybe xs
-    newas = M.mapWithKey (_muxgathermapF f) (M.difference mzxs as)
-    allas = M.union as newas
-    steps = M.intersectionWith interf allas mzxs
-    interf :: (Maybe c, Auto m a (Maybe b))
-           -> (Maybe c, a)
-           -> m (Maybe c, Output m a (Maybe b))
-    interf (mc, a) (_, x) = sequence (mc, stepAuto a x)
+-- _muxFManyF :: forall k m a b c inAuto outAuto outOut.
+--                ( Ord k
+--                , Monad m
+--                , inAuto  ~ (Auto m a (Maybe b))
+--                , outAuto ~ (Auto m (Map k (Either (c, a) a)) (Map k b))
+--                , outOut  ~ (Output m (Map k (Either (c, a) a)) (Map k b))
+--                )
+--            => (k -> Maybe c -> inAuto)                 -- f
+--            -> (Map k (Maybe c, inAuto) -> outAuto)     -- go
+--            -> Map k (Maybe c, inAuto)                  -- as
+--            -> Map k (Either (c, a) a)                  -- xs
+--            -> m outOut
+-- _muxFManyF f go as xs = do
+--     outs <- sequence steps
+--     let (outs', rems) = M.partition (isJust . outRes . snd) outs
+--         as'           = M.difference as rems
+--         as''          = M.union as' (fmap (second outAuto) outs')
+--         ys            = fmap (fromJust . outRes . snd) outs'
+--     return (Output ys (go as''))
+--   where
+--     mzxs  = fmap eitherToMaybe xs
+--     newas = M.mapWithKey (_muxgathermapF f) (M.difference mzxs as)
+--     allas = M.union as newas
+--     steps = M.intersectionWith interf allas mzxs
+--     interf :: (Maybe c, Auto m a (Maybe b))
+--            -> (Maybe c, a)
+--            -> m (Maybe c, Output m a (Maybe b))
+--     interf (mc, a) (_, x) = sequence (mc, stepAuto a x)
 
 eitherToMaybe :: Either (a, b) b -> (Maybe a, b)
 eitherToMaybe (Left (x, y)) = (Just x , y)
@@ -600,20 +600,20 @@ gatherMany__ f = lmap (fmap Right) (gatherFMany__ f')
     f' :: k -> Maybe () -> Interval m a b
     f' k _ = f k
 
-gatherF :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
-        => (k -> Maybe c -> Auto m a (Maybe b))
-        -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF = lmap (uncurry M.singleton) . gatherFMany
+-- gatherF :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)
+--         => (k -> Maybe c -> Auto m a (Maybe b))
+--         -> Auto m (k, Either (c, a) a) (Map k b)
+-- gatherF = lmap (uncurry M.singleton) . gatherFMany
 
-gatherF_ :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k)
-         => (k -> Maybe c -> Auto m a (Maybe b))
-         -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF_ = lmap (uncurry M.singleton) . gatherFMany_
+-- gatherF_ :: forall k a m b c. (Ord k, Monad m, Serialize c, Serialize k)
+--          => (k -> Maybe c -> Auto m a (Maybe b))
+--          -> Auto m (k, Either (c, a) a) (Map k b)
+-- gatherF_ = lmap (uncurry M.singleton) . gatherFMany_
 
-gatherF__ :: forall k a m b c. (Ord k, Monad m)
-          => (k -> Maybe c -> Auto m a (Maybe b))
-          -> Auto m (k, Either (c, a) a) (Map k b)
-gatherF__ = lmap (uncurry M.singleton) . gatherFMany__
+-- gatherF__ :: forall k a m b c. (Ord k, Monad m)
+--           => (k -> Maybe c -> Auto m a (Maybe b))
+--           -> Auto m (k, Either (c, a) a) (Map k b)
+-- gatherF__ = lmap (uncurry M.singleton) . gatherFMany__
 
 
 gatherFMany :: forall k m a b c. (Ord k, Monad m, Serialize c, Serialize k, Serialize b)

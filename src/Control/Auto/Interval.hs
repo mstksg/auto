@@ -30,8 +30,8 @@ module Control.Auto.Interval (
   , offFor
   -- , window
   -- * Filter 'Interval's
-  , when
-  , unless
+  , whenI
+  , unlessI
   -- * Choice
   , (<|!>)
   , (<|?>)
@@ -52,14 +52,16 @@ module Control.Auto.Interval (
   ) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Category
-import Control.Monad (join)
-import Data.Foldable (asum, foldr)
-import Data.Traversable (sequenceA)
+import Control.Monad              (join)
+import Data.Foldable              (asum, foldr)
 import Data.Maybe
+import Data.Profunctor
 import Data.Serialize
+import Data.Traversable           (sequenceA)
 import Prelude hiding             ((.), id, mapM, foldr)
 
 -- $intervals
@@ -127,7 +129,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- Or in reverse, an 'Auto' that behaves like 'count' until the count is
 -- above 3, then switches to @'pure' 0@
 --
--- >>> let a2 = (when (<= 3) . count) --> pure 0
+-- >>> let a2 = (whenI (<= 3) . count) --> pure 0
 -- >>> let (res2, _) = stepAutoN' 8 a2 ()
 -- >>> res2
 -- [1, 2, 3, 0, 0, 0, 0, 0]
@@ -147,6 +149,10 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- >>> let (res3, _) = stepAutoN' 5 a3 ()
 -- >>> res3
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
+--
+-- Finally, intervals are used whenever we want a way for an 'Auto' to
+-- "switch itself off", or to let something know that it is "done".
+-- Examples include for 'interact', 'gather', etc.
 --
 -- == The Contract
 --
@@ -256,7 +262,7 @@ import Prelude hiding             ((.), id, mapM, foldr)
 -- >>> res1
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
--- >>> let a2 = when even `compI` onFor 4 `compI` offFor 1 . count
+-- >>> let a2 = whenI even `compI` onFor 4 `compI` offFor 1 . count
 -- >>> let (res2, _) = stepAutoN' 6 a2 ()
 -- >>> res2
 -- [Nothing, Just 2, Nothing, Just 4, Nothing, Nothing]
@@ -367,7 +373,7 @@ offFor = mkState f . max 0
 -- | An 'Auto' that allows values to pass whenever the input satisfies the
 -- predicate...and is off otherwise.
 --
--- >>> let a        = when (\x -> x >= 2 && x <= 4) . count
+-- >>> let a        = whenI (\x -> x >= 2 && x <= 4) . count
 -- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
@@ -375,17 +381,17 @@ offFor = mkState f . max 0
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step)
 --
-when :: (a -> Bool)   -- ^ interval predicate
+whenI :: (a -> Bool)   -- ^ interval predicate
      -> Interval m a a
-when p = mkFunc f
+whenI p = mkFunc f
   where
     f x | p x       = Just x
         | otherwise = Nothing
 
--- | Like 'when', but only allows values to pass whenever the input does
+-- | Like 'whenI', but only allows values to pass whenever the input does
 -- not satisfy the predicate.  Blocks whenever the predicate is true.
 --
--- >>> let a        = unless (\x -> x < 2 &&& x > 4) . count
+-- >>> let a        = unlessI (\x -> x < 2 &&& x > 4) . count
 -- >>> let (res, _) = stepAutoN' 6 a ()
 -- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
@@ -393,9 +399,9 @@ when p = mkFunc f
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step)
 --
-unless :: (a -> Bool)   -- ^ interval predicate
+unlessI :: (a -> Bool)   -- ^ interval predicate
        -> Interval m a a
-unless p = mkFunc f
+unlessI p = mkFunc f
   where
     f x | p x       = Nothing
         | otherwise = Just x
@@ -564,7 +570,7 @@ _holdForF n = f   -- n should be >= 0
 -- >>> res2
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
--- >  a <|!> b <!|> c
+-- >  a <|!> b <|!> c
 --
 -- associates as
 --
@@ -604,7 +610,6 @@ choose :: Monad m
        -> [Interval m a b]    -- ^ 'Auto's to run and choose from
        -> Auto m a b
 choose = foldr (<|!>)
-
 
 -- | "Lifts" an @'Auto' m a b@ (transforming @a@s into @b@s) into an
 -- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,
@@ -646,16 +651,7 @@ choose = foldr (<|!>)
 -- is suppressed at the end with @'offFor' 2@.
 --
 during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
-during a = a_
-  where
-    a_ = mkAutoM (during <$> loadAuto a)
-                 (saveAuto a)
-                 $ \x -> case x of
-                           Just x' -> do
-                             Output y a' <- stepAuto a x'
-                             return (Output (Just y) (during a'))
-                           Nothing ->
-                             return (Output Nothing  a_         )
+during = dimap (maybe (Left ()) Right) (either (const Nothing) Just) . right
 
 -- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
 -- an @'Auto' m ('Maybe' a) ('Maybe' b)@ (or an @'Interval' m ('Maybe' a) b@)

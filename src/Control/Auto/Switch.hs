@@ -412,16 +412,16 @@ resetFrom a = switchFromF (const a') a'
 -- counts up from 0.
 --
 -- @
---     nextAuto :: Int -> Auto' () Int
---     nextAuto = iterator (+1)
+-- nextAuto :: Int -> Auto' () Int
+-- nextAuto = iterator (+1)
 --
---     triggerer :: Auto' () (Blip Int)
---     triggerer = stretchB 3 (iterator (+10) 0)
+-- triggerer :: Auto' () (Blip Int)
+-- triggerer = stretchB 3 (iterator (+10) 0)
 --
---     a :: Auto' () Int
---     a = proc _ -> do
---         triggers <- triggerer -< ()
---         switchOnF nextAuto (nextAuto 0) -< ((), triggers)
+-- a :: Auto' () Int
+-- a = proc _ -> do
+--     triggers <- triggerer -< ()
+--     switchOnF nextAuto (nextAuto 0) -< ((), triggers)
 -- @
 --
 -- >>> let (res, _) = stepAutoN' 10 a ()

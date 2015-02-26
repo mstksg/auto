@@ -2,3 +2,4 @@
 /dist
 /.cabal-sandbox
 /tutorial/Tests.hs
+/tmp
