@@ -252,6 +252,11 @@ A lot of times you'll have a lot of things handling the same input in
 different ways, and you'll want to recombine them all at the end.  Well,
 `mconcat`, `sequence`, etc. are at your service!
 
+This is the principle of "[scalable program architectures][spa]" at work!
+The `mappend` of two `Auto`s is...another `Auto`!
+
+[spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
+
 Of course there the Applicative-derived `Num` (and assorted numerical
 instances) too:
 
@@ -840,7 +845,7 @@ that serializes itself at every step to "foo.dat"
 
 ~~~haskell
 ghci> let a1 = saving "foo.dat" (sumFrom 0) :: Auto IO Int Int
-ghci> streamAuto a1 [1..10]      -- saves the Auto as it goes along
+ghci> streamAuto a1 [1..10]         -- saves the Auto as it goes along
 [ 1, 3, 6,10,15,21,28,36, 45, 55]
 ghci> a2 <- readAutoErr "foo.dat" a1 :: Auto IO Int Int
 ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last

@@ -81,12 +81,15 @@ programs, games, and automations, with implicitly derived serialization.
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
-The current development documentation server is found at
-<https://mstksg.github.io/auto>.  You can find examples and demonstrations in
-the [auto-examples][] repo on github; they are constantly being kept
-up-to-date with the currently super unstable API.
+A good place to get started is with [the tutorial][tutorial], which is a part
+of this package directory and also on github at the above link.  The current
+development documentation server is found at <https://mstksg.github.io/auto>.
+You can find examples and demonstrations in the [auto-examples][] repo on
+github; they are constantly being kept up-to-date with the currently super
+unstable API.
 
 [auto-examples]: https://github.com/mstksg/auto-examples
+[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
 
 More examples and further descriptions will appear here as development
 continues.
