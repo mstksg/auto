@@ -42,10 +42,6 @@ module Control.Auto.Run (
   -- * Generalized "self-runners"
   , run
   , runM
-  -- * Unrolling monadic 'Auto's
-  , runStateA
-  , runReaderA
-  , runTraversableA
   ) where
 
 import Control.Applicative
@@ -53,12 +49,8 @@ import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Monad hiding       (mapM, mapM_)
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.State
-import Data.Foldable hiding       (concatMap)
 import Data.Functor.Identity
 import Data.Maybe
-import Data.Traversable
 import Prelude hiding             (interact, mapM, mapM_)
 import Text.Read
 
@@ -328,68 +320,3 @@ bindRead :: (Monad m, Read a)
          => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 bindRead a = bindI a <<^ readMaybe
-
--- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
--- takes in an input state every turn (in addition to the normal input) and
--- outputs, along with the original result, the modified state.
---
--- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
--- you want to compose and create some isolated 'Auto's with access to an
--- underlying state, but not your entire program.
---
--- Also just simply useful as a convenient way to use an 'Auto' over
--- 'State' with 'stepAuto' and friends.
---
--- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
--- @'Auto'' (a, s) (b, s)@.
-runStateA :: Monad m
-          => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
-          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
-runStateA a = mkAutoM (runStateA <$> loadAuto a)
-                      (saveAuto a)
-                      $ \(x, s) -> do
-                          (Output y a', s') <- runStateT (stepAuto a x) s
-                          return (Output (y, s') (runStateA a'))
-
--- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
--- takes in the input "environment" every turn in addition to the normal
--- input.
---
--- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
--- want to compose and create some isolated 'Auto's with access to an
--- underlying environment, but not your entire program.
---
--- Also just simply useful as a convenient way to use an 'Auto' over
--- 'Reader' with 'stepAuto' and friends.
---
--- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
--- an @'Auto'' (a, r) b@.
-runReaderA :: Monad m
-           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
-           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
-runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
-                       (saveAuto a)
-                       $ \(x, r) -> do
-                           Output y a' <- runReaderT (stepAuto a x) r
-                           return (Output y (runReaderA a'))
-
--- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
--- 'Traversable' ('[]', 'Maybe', etc.).
---
--- It can turn, for example, an @'Auto' [] a b@ into an @'Auto'' a [b]@; it
--- collects all of the results together.  Or an @'Auto' 'Maybe' a b@ into
--- an @'Auto'' a ('Maybe' b)@.
---
--- If you find a good use for this, let me know :)
-runTraversableA :: (Monad f, Traversable f)
-                => Auto f a b           -- ^ 'Auto' run over traversable structure
-                -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
-runTraversableA = go . return
-  where
-    go a = mkAuto (go <$> mapM loadAuto a)
-                  (mapM_ saveAuto a)
-                  $ \x -> let o  = a >>= (`stepAuto` x)
-                              y  = liftM outRes o
-                              a' = liftM outAuto o
-                          in  Output y (go a')
-

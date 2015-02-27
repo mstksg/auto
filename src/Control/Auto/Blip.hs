@@ -706,7 +706,10 @@ modifyBlips f = mkFunc (fmap f)
 -- >>> ares
 -- [NoBlip, Blip 1, NoBlip, Blip 6, NoBlip, Blip 8, NoBlip, NoBlip]
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)
-perBlip = dimap (blip (Left ()) Right) (either (const NoBlip) Blip) . right
+perBlip = dimap to from . right
+  where
+    to   = blip (Left ()) Right
+    from = either (const NoBlip) Blip
 
 -- -- | Why is this even here
 -- hm i think it is for cases where 'Maybe's are used as 'Blip's or

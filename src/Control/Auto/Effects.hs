@@ -33,11 +33,19 @@ module Control.Auto.Effects (
   , execOnce
   , cache_
   , execOnce_
-  -- * "Sealing off" monadic 'Auto's
+  -- * Manipulating underlying monads
+  -- ** "Sealing off" monadic 'Auto's
   , sealState
   , sealState_
   , sealReader
   , sealReader_
+  -- ** "Unrolling"/"reifying" monadic 'Auto's
+  , runStateA
+  , runReaderA
+  , runTraversableA
+  -- ** Hoists
+  , hoistA
+  , generalizeA
   ) where
 
 import Control.Applicative
@@ -45,11 +53,13 @@ import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
-import Control.Monad
+import Control.Monad hiding       (mapM, mapM_)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.State  (StateT, runStateT)
+import Data.Foldable
 import Data.Serialize
-import Prelude hiding             ((.), id)
+import Data.Traversable
+import Prelude hiding             ((.), id, mapM, mapM_)
 
 -- | The very first output executes a monadic action and uses the result as
 -- the output, ignoring all input.  From then on, it persistently outputs
@@ -327,3 +337,68 @@ sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
                           $ \x -> do
                               Output y a' <- runReaderT (stepAuto a x) r
                               return $ Output y (sealReader_ a' r)
+
+-- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
+-- takes in an input state every turn (in addition to the normal input) and
+-- outputs, along with the original result, the modified state.
+--
+-- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
+-- you want to compose and create some isolated 'Auto's with access to an
+-- underlying state, but not your entire program.
+--
+-- Also just simply useful as a convenient way to use an 'Auto' over
+-- 'State' with 'stepAuto' and friends.
+--
+-- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
+-- @'Auto'' (a, s) (b, s)@.
+runStateA :: Monad m
+          => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
+          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
+runStateA a = mkAutoM (runStateA <$> loadAuto a)
+                      (saveAuto a)
+                      $ \(x, s) -> do
+                          (Output y a', s') <- runStateT (stepAuto a x) s
+                          return (Output (y, s') (runStateA a'))
+
+-- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
+-- takes in the input "environment" every turn in addition to the normal
+-- input.
+--
+-- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
+-- want to compose and create some isolated 'Auto's with access to an
+-- underlying environment, but not your entire program.
+--
+-- Also just simply useful as a convenient way to use an 'Auto' over
+-- 'Reader' with 'stepAuto' and friends.
+--
+-- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
+-- an @'Auto'' (a, r) b@.
+runReaderA :: Monad m
+           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
+           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
+runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
+                       (saveAuto a)
+                       $ \(x, r) -> do
+                           Output y a' <- runReaderT (stepAuto a x) r
+                           return (Output y (runReaderA a'))
+
+-- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
+-- 'Traversable' ('[]', 'Maybe', etc.).
+--
+-- It can turn, for example, an @'Auto' [] a b@ into an @'Auto'' a [b]@; it
+-- collects all of the results together.  Or an @'Auto' 'Maybe' a b@ into
+-- an @'Auto'' a ('Maybe' b)@.
+--
+-- If you find a good use for this, let me know :)
+runTraversableA :: (Monad f, Traversable f)
+                => Auto f a b           -- ^ 'Auto' run over traversable structure
+                -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
+runTraversableA = go . return
+  where
+    go a = mkAuto (go <$> mapM loadAuto a)
+                  (mapM_ saveAuto a)
+                  $ \x -> let o  = a >>= (`stepAuto` x)
+                              y  = liftM outRes o
+                              a' = liftM outAuto o
+                          in  Output y (go a')
+
