@@ -188,7 +188,7 @@ delayN_ n y0 = iterate (delay_ y0 .) id !! n
 -- input, repeat the same output @n@ times (ignoring input), and then take
 -- another.
 --
--- >>> let a       = stretch 2 (mkAccum (+) 0)
+-- >>> let a       = stretch 2 (accum (+) 0)
 -- >>> let (ys, _) = overList' a [1,8,5,4,3,7,2,0]
 -- >>> ys
 --    [1,1,6,6,9,9,11,11]
@@ -231,7 +231,7 @@ stretch_ n = go (1, undefined)
 --
 -- See 'stretch' for more information.
 --
--- >>> let a = stretchB 2 (mkAccum (+) 0)
+-- >>> let a = stretchB 2 (accum (+) 0)
 -- >>> let (ys, _) = overList' a [1,8,5,4,3,7,2,0]
 -- >>> ys
 -- [Blip 1, NoBlip, Blip 6, NoBlip, Blip 9, NoBlip, Blip 11, NoBlip]
@@ -257,7 +257,7 @@ stretchB (max 1 -> n) = go 1
 -- and returns a /list/ of @b@ from running that 'Auto' on all of those @a@
 -- in order.
 --
--- >>> let a = accelOverList (mkAccum (+) 0)
+-- >>> let a = accelOverList (accum (+) 0)
 -- >>> let Output ys1 a' = stepAuto' a [3,9,2]
 -- >>> ys1
 -- [3, 12, 14]
@@ -290,7 +290,7 @@ accelOverList = go
 --
 -- The same input is fed repeatedly @n@ times.
 --
--- >>> let a = accelerate 3 (mkAccum (+) 0)
+-- >>> let a = accelerate 3 (accum (+) 0)
 -- >>> let Output ys1 a' = stepAuto' a 5
 -- >>> ys1
 -- [5,10,15]
@@ -320,7 +320,7 @@ accelerate n = go
 -- instead of /repeating/ the same intput @n@ times, that input is fed
 -- once; the rest of the @n@ times, @a@ is fed @xd@, the "default" @x@.
 --
--- >>> let a = accelerateWith (-1) 3 (mkAccum (+) 0)
+-- >>> let a = accelerateWith (-1) 3 (accum (+) 0)
 -- >>> let Output ys1 a' = stepAuto' a 5
 -- >>> ys1
 -- [5,4,3]    -- fed 5, then (-1) twice
@@ -364,7 +364,7 @@ accelerateWith xd n | n <= 1    = fmap (:[])
 --
 -- >>> let a :: Auto' Int (Int, Blip String)
 --         a = proc i -> do
---                 sums <- mkAccum (+) 0 -< i
+--                 sums <- accum (+) 0 -< i
 --                 blp  <- inB 3         -< i     -- Blip at every 3 ticks.
 --                 id    -< (sums, show <$> blp)
 -- >>> let skipA :: Auto' Int ([Int], String)
@@ -412,7 +412,7 @@ skipTo x0 = go
 --
 -- >>> let a :: Auto' Int (Maybe Int)
 --         a = proc i -> do
---                 sums <- mkAccum (+) 0 -< i
+--                 sums <- accum (+) 0 -< i
 --                 id    -< if (i `mod` 5) == 0
 --                            then Just i
 --                            else Nothing

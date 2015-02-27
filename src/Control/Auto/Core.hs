@@ -73,15 +73,15 @@ module Control.Auto.Core (
   , mkStateM'
   -- ** from Accumulators
   -- *** Result-first
-  , mkAccum
-  , mkAccum_
-  , mkAccumM
-  , mkAccumM_
+  , accum
+  , accum_
+  , accumM
+  , accumM_
   -- *** Initial accumulator-first
-  , mkAccumD
-  , mkAccumD_
-  , mkAccumMD
-  , mkAccumMD_
+  , accumD
+  , accumD_
+  , accumMD
+  , accumMD_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAuto_
@@ -300,12 +300,12 @@ forceSerial a = case a of
 -- into /that 'Auto', but "resumed"/.  That is, it'll "fast forward" that
 -- 'Auto' into the state it was when it was saved.
 --
--- For example, let's say I have @a = 'mkAccum' (+) 0@, the 'Auto' that
+-- For example, let's say I have @a = 'accum' (+) 0@, the 'Auto' that
 -- returns the sum of everything it has received so far.  If I feed it
 -- 3 and 10, it'll have its internal accumulator as 13, keeping track of
 -- all the numbers it has seen so far.
 --
--- >>> let a             = mkAccum (+) 0
+-- >>> let a             = accum (+) 0
 -- >>> let Output _ a'   = stepAuto' a  3
 -- >>> let Output _ a''  = stepAuto' a' 10
 --
@@ -327,7 +327,7 @@ forceSerial a = case a of
 --
 -- >>> let Right resumed = decodeAuto a'  bs
 -- >>> let Right resumed = decodeAuto a'' bs
--- >>> let Right resumed = decodeAuto (mkAccum (+) 0) bs
+-- >>> let Right resumed = decodeAuto (accum (+) 0) bs
 --
 -- I mean, after all, if 'decodeAuto' "fast forwards" an 'Auto' to the
 -- state it was at when it was frozen...then all of these should really be
@@ -337,7 +337,7 @@ forceSerial a = case a of
 -- an 'Auto' and creates a "blueprint" from that 'Auto', on how to "load
 -- it"; the blueprint contains what the form of the internal state is, and
 -- their offets in the 'ByteString'.  So in the above, 'a', 'a'', 'a''',
--- and 'mkAccum (+) 0' all have the same "blueprint" --- their internal
+-- and 'accum (+) 0' all have the same "blueprint" --- their internal
 -- states are of the same structure.
 --
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
@@ -414,7 +414,7 @@ saveAuto a = case a of
 -- Remember that at every step for an @'Auto' m a b@, you provide an @a@
 -- input and receive a @b@ output with an "updated"/"next" 'Auto'.
 --
--- >>> let a = mkAccum (+) 0 :: Auto Identity Int Int
+-- >>> let a = accum (+) 0 :: Auto Identity Int Int
 --             -- an Auto that sums all of its input.
 -- >>> let Identity (Output y a') = stepAuto a 3
 -- >>> y      -- the result
@@ -759,7 +759,7 @@ mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 --
 -- Example: an 'Auto' that sums up all of its input.
 --
--- >>> let summer = mkAccum (+) 0
+-- >>> let summer = accum (+) 0
 -- >>> let Output sum1 summer' = stepAuto summer 3
 -- >>> sum1
 -- 3
@@ -769,13 +769,13 @@ mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'mkAccum_'.
-mkAccum :: Serialize b
+-- use 'accum_'.
+accum :: Serialize b
         => (b -> a -> b)      -- ^ accumulating function
         -> b                  -- ^ initial accumulator
         -> Auto m a b
-mkAccum f = mkState (\x s -> let y = f s x in (y, y))
-{-# INLINE mkAccum #-}
+accum f = mkState (\x s -> let y = f s x in (y, y))
+{-# INLINE accum #-}
 
 -- | Construct an 'Auto' from a "monadic" "folding" function: @b -> a ->
 -- m b@ yields an @'Auto' m a b@.  Basically acts like a 'foldM' or 'scanM'
@@ -785,71 +785,71 @@ mkAccum f = mkState (\x s -> let y = f s x in (y, y))
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'mkAccumM_'.
-mkAccumM :: (Serialize b, Monad m)
+-- use 'accumM_'.
+accumM :: (Serialize b, Monad m)
          => (b -> a -> m b)       -- ^ (monadic) accumulating function
          -> b                     -- ^ initial accumulator
          -> Auto m a b
-mkAccumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
-{-# INLINE mkAccumM #-}
+accumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
+{-# INLINE accumM #-}
 
--- | A version of 'mkAccum_, where the internal accumulator isn't
+-- | A version of 'accum_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-mkAccum_ :: (b -> a -> b)   -- ^ accumulating function
+accum_ :: (b -> a -> b)   -- ^ accumulating function
          -> b               -- ^ intial accumulator
          -> Auto m a b
-mkAccum_ f = mkState_ (\x s -> let y = f s x in (y, y))
-{-# INLINE mkAccum_ #-}
+accum_ f = mkState_ (\x s -> let y = f s x in (y, y))
+{-# INLINE accum_ #-}
 
--- | A version of 'mkAccumM_, where the internal accumulator isn't
+-- | A version of 'accumM_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-mkAccumM_ :: Monad m
+accumM_ :: Monad m
           => (b -> a -> m b)    -- ^ (monadic) accumulating function
           -> b                  -- ^ initial accumulator
           -> Auto m a b
-mkAccumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
-{-# INLINE mkAccumM_ #-}
+accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
+{-# INLINE accumM_ #-}
 
--- | A "delayed" version of 'mkAccum', where the first output is actually
+-- | A "delayed" version of 'accum', where the first output is actually
 -- the initial state of the accumulator.  Useful in recursive bindings.
-mkAccumD :: Serialize b
+accumD :: Serialize b
          => (b -> a -> b)      -- ^ accumulating function
          -> b                  -- ^ initial accumulator
          -> Auto m a b
-mkAccumD f = mkState (\x s -> (s, f s x))
-{-# INLINE mkAccumD #-}
+accumD f = mkState (\x s -> (s, f s x))
+{-# INLINE accumD #-}
 
--- | A "delayed" version of 'mkAccumM', where the first output is actually
+-- | A "delayed" version of 'accumM', where the first output is actually
 -- the initial state of the accumulator.  Useful in recursive bindings.
-mkAccumMD :: (Serialize b, Monad m)
+accumMD :: (Serialize b, Monad m)
           => (b -> a -> m b)       -- ^ (monadic) accumulating function
           -> b                     -- ^ initial accumulator
           -> Auto m a b
-mkAccumMD f = mkStateM (\x s -> liftM (s,) (f s x))
-{-# INLINE mkAccumMD #-}
+accumMD f = mkStateM (\x s -> liftM (s,) (f s x))
+{-# INLINE accumMD #-}
 
--- | The non-resuming/non-serializing version of 'mkAccumD'.
-mkAccumD_ :: (b -> a -> b)   -- ^ accumulating function
+-- | The non-resuming/non-serializing version of 'accumD'.
+accumD_ :: (b -> a -> b)   -- ^ accumulating function
           -> b               -- ^ intial accumulator
           -> Auto m a b
-mkAccumD_ f = mkState_ (\x s -> (s, f s x))
-{-# INLINE mkAccumD_ #-}
+accumD_ f = mkState_ (\x s -> (s, f s x))
+{-# INLINE accumD_ #-}
 
--- | The non-resuming/non-serializing version of 'mkAccumMD'.
-mkAccumMD_ :: Monad m
+-- | The non-resuming/non-serializing version of 'accumMD'.
+accumMD_ :: Monad m
            => (b -> a -> m b)    -- ^ (monadic) accumulating function
            -> b                  -- ^ initial accumulator
            -> Auto m a b
-mkAccumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
-{-# INLINE mkAccumMD_ #-}
+accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
+{-# INLINE accumMD_ #-}
 
 instance Monad m => Functor (Auto m a) where
     fmap = rmap

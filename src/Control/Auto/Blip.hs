@@ -95,8 +95,6 @@ import Prelude hiding             ((.), id, sequence)
 
 infixr 5 <&
 infixl 5 &>
-infixr 5 `mergeL`
-infixl 5 `mergeR`
 
 -- $blip
 --
@@ -244,20 +242,6 @@ infixl 5 `mergeR`
 -- the documentation for that module.
 --
 
--- | Merges two 'Blip' streams together into one, which emits
--- /either/ of the original 'Blip' streams emit.  If both emit at the same
--- time, the left (first) one is favored.
-mergeL :: Blip a -> Blip a -> Blip a
-mergeL b1@(Blip _) _  = b1
-mergeL _           b2 = b2
-
--- | Merges two 'Blip' streams together into one, which emits
--- /either/ of the original 'Blip' streams emit.  If both emit at the same
--- time, the right (second) one is favored.
-mergeR :: Blip a -> Blip a -> Blip a
-mergeR _  b2@(Blip _) = b2
-mergeR b1 _           = b1
-
 -- | Merge all the blip streams together into one, favoring the first
 -- emitted value.
 mergeLs :: [Blip a] -> Blip a
@@ -279,7 +263,7 @@ foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldlB' f b0 = foldl' (merge f) (Blip b0)
 
 
--- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
+-- | Takes two 'Auto's producing 'Blip' streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
 -- emit at the same time, the left (first) one is favored.
 --
@@ -290,7 +274,7 @@ foldlB' f b0 = foldl' (merge f) (Blip b0)
      -> Auto m a (Blip b)
 (<&) = liftA2 mergeL
 
--- | Takes two 'Auto's generating 'Blip' streams and returns a "merged"
+-- | Takes two 'Auto's producing 'Blip' streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
 -- emit at the same time, the right (second) one is favored.
 --
@@ -503,9 +487,9 @@ dropWhileB p = mkState f False
 -- The resulting 'Blip' stream will emit every time the input stream emits,
 -- but with the "accumulated value".
 --
--- Basically 'mkAccum', but on blip stream emissions.
+-- Basically 'accum', but on blip stream emissions.
 --
--- prop> accumB f x0 == perBlip (mkAccum f x0)
+-- prop> accumB f x0 == perBlip (accum f x0)
 accumB :: Serialize b
        => (b -> a -> b)     -- ^ folding function
        -> b                 -- ^ initial value
@@ -537,13 +521,13 @@ scanB :: Serialize b
       => (b -> a -> b)      -- ^ folding function
       -> b                  -- ^ initial value
       -> Auto m (Blip a) b
-scanB f = mkAccum (_scanBF f)
+scanB f = accum (_scanBF f)
 
 -- | The non-serializing/non-resuming version of 'scanB'.
 scanB_ :: (b -> a -> b)
        -> b                   -- ^ folding function
        -> Auto m (Blip a) b   -- ^ initial value
-scanB_ f = mkAccum_ (_scanBF f)
+scanB_ f = accum_ (_scanBF f)
 
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
@@ -562,7 +546,7 @@ mscanB_ = scanB_ (<>) mempty
 -- | Outputs the number of emitted values of the input 'Blip' stream so
 -- far.
 countB :: Auto m (Blip a) Int
-countB = mkAccum (\i -> (i +) . blip 0 (const 1)) 0
+countB = accum (\i -> (i +) . blip 0 (const 1)) 0
 
 -- | Produces a blip stream that emits whenever the predicate applied to
 -- the input switches from false to true.  Emits with the triggering input
@@ -570,7 +554,7 @@ countB = mkAccum (\i -> (i +) . blip 0 (const 1)) 0
 became :: Serialize a
        => (a -> Bool)       -- ^ change condition
        -> Auto m a (Blip a)
-became p = mkAccum (_becameF p) NoBlip
+became p = accum (_becameF p) NoBlip
 
 -- | Produces a blip stream that emits whenever the predicate applied to
 -- the input switches from true to false.  Emits with the triggering input
@@ -592,7 +576,7 @@ onFlip p = became p &> noLonger p
 became_ :: Monad m
         => (a -> Bool)      -- ^ change condition
         -> Auto m a (Blip a)
-became_ p = mkAccum_ (_becameF p) NoBlip
+became_ p = accum_ (_becameF p) NoBlip
 
 -- | The non-serializing/non-resumable version of 'noLonger'.
 noLonger_ :: Monad m
@@ -614,7 +598,7 @@ _becameF p e x | p x       = blip (Blip x) (const NoBlip) e
 became' :: Monad m
         => (a -> Bool)        -- ^ change condition
         -> Auto m a (Blip ())
-became' p = mkAccum f NoBlip
+became' p = accum f NoBlip
   where
     f e x | p x       = blip (Blip ()) (const NoBlip) e
           | otherwise = NoBlip
@@ -678,14 +662,14 @@ fromBlips d = mkFunc (blip d id)
 holdWith :: Serialize a
          => a
          -> Auto m (Blip a) a
-holdWith = mkAccum f
+holdWith = accum f
   where
     f x = blip x id
 
 -- | A non-serializing/non-resumable version of 'holdWith'.
 holdWith_ :: a
           -> Auto m (Blip a) a
-holdWith_ = mkAccum_ f
+holdWith_ = accum_ f
   where
     f x = blip x id
 

@@ -45,17 +45,17 @@ import Data.Serialize
 -- The first output takes into account the first input.  See 'sumFromD' for
 -- a version where the first output is the initial count itself.
 --
--- prop> sumFrom x0 = mkAccum (+) x0
+-- prop> sumFrom x0 = accum (+) x0
 sumFrom :: (Serialize a, Num a)
         => a             -- ^ initial count
         -> Auto m a a
-sumFrom = mkAccum (+)
+sumFrom = accum (+)
 
 -- | The non-resuming/non-serializing version of 'sumFrom'.
 sumFrom_ :: Num a
          => a             -- ^ initial count
          -> Auto m a a
-sumFrom_ = mkAccum_ (+)
+sumFrom_ = accum_ (+)
 
 -- | Like 'sumFrom', except the first output is the starting count.
 --
@@ -76,28 +76,28 @@ sumFrom_ = mkAccum_ (+)
 sumFromD :: (Serialize a, Num a)
          => a             -- ^ initial count
          -> Auto m a a
-sumFromD = mkAccumD (+)
+sumFromD = accumD (+)
 
 -- | The non-resuming/non-serializing version of 'sumFromD'.
 sumFromD_ :: Num a
           => a             -- ^ initial count
           -> Auto m a a
-sumFromD_ = mkAccumD_ (+)
+sumFromD_ = accumD_ (+)
 
 -- | The output is the running/cumulative product of all of the inputs so
 -- far, starting from an initial product.
 --
--- prop> productFrom x0 = mkAccum (*) x0
+-- prop> productFrom x0 = accum (*) x0
 productFrom :: (Serialize a, Num a)
             => a            -- ^ initial product
             -> Auto m a a
-productFrom = mkAccum (*)
+productFrom = accum (*)
 
 -- | The non-resuming/non-serializing version of 'productFrom'.
 productFrom_ :: Num a
              => a           -- ^ initial product
              -> Auto m a a
-productFrom_ = mkAccum_ (*)
+productFrom_ = accum_ (*)
 
 -- | The output is the the difference between the input and the previously
 -- received input.
@@ -139,13 +139,13 @@ _deltasF x s = case s of
 -- >>> streamAuto' mappender ["hello","world","good","bye"]
 -- ["hello","helloworld","helloworldgood","helloworldgoodbye"]
 --
--- prop> mappender = mkAccum mappend mempty
+-- prop> mappender = accum mappend mempty
 mappender :: (Serialize a, Monoid a) => Auto m a a
-mappender = mkAccum mappend mempty
+mappender = accum mappend mempty
 
 -- | The non-resuming/non-serializing version of 'mappender'.
 mappender_ :: Monoid a => Auto m a a
-mappender_ = mkAccum_ mappend mempty
+mappender_ = accum_ mappend mempty
 
 -- | The output is the running '<>'-sum ('mappend' for 'Semigroup') of all
 -- of the input values so far, starting with a given starting value.
@@ -154,14 +154,14 @@ mappender_ = mkAccum_ mappend mempty
 -- >>> streamAuto' (mappendFrom (Max 0)) [Max 4, Max (-2), Max 3, Max 10]
 -- [Max 4, Max 4, Max 4, Max 10]
 --
--- prop> mappendFrom m0 = mkAccum (<>) m0
+-- prop> mappendFrom m0 = accum (<>) m0
 mappendFrom :: (Serialize a, Semigroup a)
             => a            -- ^ initial value
             -> Auto m a a
-mappendFrom = mkAccum (<>)
+mappendFrom = accum (<>)
 
 -- | The non-resuming/non-serializing version of 'mappender'.
 mappendFrom_ :: Semigroup a
              => a           -- ^ initial value
              -> Auto m a a
-mappendFrom_ = mkAccum_ (<>)
+mappendFrom_ = accum_ (<>)

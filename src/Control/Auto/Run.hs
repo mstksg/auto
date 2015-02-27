@@ -64,7 +64,7 @@ import Text.Read
 
 -- | Steps the 'Auto' through every element of the given list as input.
 --
--- >>> let a          = mkAccum (+) 0
+-- >>> let a          = accum (+) 0
 -- >>> let (ys, a')   = runIdentity (overList a [4,8,-3,5])
 -- >>> ys
 -- [4, 12, 9, 14]
@@ -84,7 +84,7 @@ overList a (x:xs) = do
 -- | Like 'overList', but with an 'Auto'' (the underlying 'Monad' is
 -- 'Identity')
 --
--- >>> let a          = mkAccum (+) 0
+-- >>> let a          = accum (+) 0
 -- >>> let (ys, a')   = overList' a [4,8,-3,5]
 -- >>> ys
 -- [4, 12, 9, 14]
@@ -301,7 +301,7 @@ interactM f nt a = do
 -- outputs a succesful 'Just' result; when it isn't, it outputs a 'Nothing'
 -- on that step.
 --
--- >>> let a0 = duringRead (mkAccum (+) (0 :: Int))
+-- >>> let a0 = duringRead (accum (+) (0 :: Int))
 -- >>> let Output y1 a1 = stepAuto' a0 "12"
 -- >>> y1
 -- Just 12

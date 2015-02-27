@@ -198,27 +198,27 @@ iterator :: Serialize b
          => (b -> b)        -- ^ iterating function
          -> b               -- ^ starting value and initial output
          -> Auto m a b
-iterator f = mkAccumD (\x _ -> f x)
+iterator f = accumD (\x _ -> f x)
 
 -- | Like 'iterator', but with a monadic function.
 iteratorM :: (Serialize b, Monad m)
           => (b -> m b)     -- ^ (monadic) iterating function
           -> b              -- ^ starting value and initial output
           -> Auto m a b
-iteratorM f = mkAccumMD (\x _ -> f x)
+iteratorM f = accumMD (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iterator'.
 iterator_ :: (b -> b)        -- ^ iterating function
           -> b               -- ^ starting value and initial output
           -> Auto m a b
-iterator_ f = mkAccumD_ (\x _ -> f x)
+iterator_ f = accumD_ (\x _ -> f x)
 
 -- | The non-resuming/non-serializing version of 'iteratorM'.
 iteratorM_ :: Monad m
            => (b -> m b)     -- ^ (monadic) iterating function
            -> b              -- ^ starting value and initial output
            -> Auto m a b
-iteratorM_ f = mkAccumMD_ (\x _ -> f x)
+iteratorM_ f = accumMD_ (\x _ -> f x)
 
 -- | Continually enumerate from the starting value, using `succ`.
 enumFromA :: (Serialize b, Enum b)

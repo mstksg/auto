@@ -12,8 +12,8 @@
 --
 --
 -- This module provides combinators and utilities for working with the
--- semantic concept of "intervals": 'Auto's producing values that can
--- either be "on" or "off"...typically for contiguous chunks at a time.
+-- semantic concept of "intervals": an 'Auto' whose output stream is "on"
+-- or "off" for (conceputally) contiguous chunks of time.
 --
 
 module Control.Auto.Interval (
@@ -486,13 +486,13 @@ between = mkState f False
 -- value" before everything else), then you can use 'holdWith' from
 -- "Control.Auto.Blip"...or also just 'hold' with '<|!>' or 'fromInterval'.
 hold :: Serialize a => Interval m (Blip a) a
-hold = mkAccum f Nothing
+hold = accum f Nothing
   where
     f x = blip x Just
 
 -- | The non-serializing/non-resuming version of 'hold'.
 hold_ :: Interval m (Blip a) a
-hold_ = mkAccum_ f Nothing
+hold_ = accum_ f Nothing
   where
     f x = blip x Just
 

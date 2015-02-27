@@ -457,8 +457,8 @@ internally stateful `Auto`s from scratch:
 ~~~haskell
 iterator  :: (b -> b)             -> b -> Auto m a b
 iteratorM :: (b -> m b)           -> b -> Auto m a b
-mkAccum   :: (b -> a -> b)        -> b -> Auto m a b
-mkAccumM  :: (b -> a -> m b)      -> b -> Auto m a b
+accum     :: (b -> a -> b)        -> b -> Auto m a b
+accumM    :: (b -> a -> m b)      -> b -> Auto m a b
 mkState   :: (a -> s -> (b, s))   -> s -> Auto m a b
 mkStateM  :: (a -> s -> m (b, s)) -> s -> Auto m a b
 mkAuto_   :: (a -> Output m a b)       -> Auto m a b
@@ -467,21 +467,21 @@ mkAutoM_  :: (a -> m (Output m a b))   -> Auto m a b
 
 You can look at the documentation for all of these, but these all basically
 work with "internal state" --- `iterator` ignores its input and repeatedly
-applies a function to a value and pops it out at every step.  `mkAccum`
+applies a function to a value and pops it out at every step.  `accum`
 maintains that the *output* is always the result of "folding together" (a la
 `foldl`) all of the inputs so far, with a starting value.  `mkState` is
-like a more powerful `mkAccum`, which keeps an internal state that is updated
+like a more powerful `accum`, which keeps an internal state that is updated
 at every step.  `mkAuto_` lets you describe an `Auto` by its behavior under
 `stepAuto'`.
 
 ~~~haskell
 ghci> take 10 $ streamAuto' (iterator (+1) 0) (repeat ())
 [0,1,2,3,4,5,6,7,8,9]
-ghci> take 10 $ streamAuto' (mkAccum (+) 0)   [1..]
+ghci> take 10 $ streamAuto' (accum (+) 0)   [1..]
 [1,3,6,10,15,21,28,36,45,55]
 ~~~
 
-It is recommended to only use `mkAccum`, `mkState`, `mkAuto` only when
+It is recommended to only use `accum`, `mkState`, `mkAuto` only when
 absolutely necessary; usually you can make what you want from combining
 smaller, simple, pre-made `Auto`s.  But sometimes the case does arrive.
 
@@ -855,11 +855,28 @@ ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last
 Final partings
 --------------
 
-I recommend just looking over the combinators available to you in the various
-modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*, and
-*[Control.Auto.Switch][]*.  We didn't go over anything close to all of them in
-this tutorial, so it's nice for getting a good overview.  The most up-to-date
-documentation at this point in time is on [the github pages][docs]
+One last note before finishing up...if you ever want to implement a low-level
+library, or implement a "backend", defining your own `Auto`s and working with
+them has its own rules.  You're a bit "on your own", in this sense; the
+optimization game might take you to places that really get rid of the nice
+semantic denotative ideals of this library. I plan on writing a
+framework/low-level guide soon (for writing, say, a GUI framework, or hooking
+on GUI).
+
+However, one good principle is just to *separate* your "two hats" as much as
+possible.  There's the hat you wear when you are thinking about your program
+logic, dealing with compositions of ideas ... and there's the hat you wear
+when you are at the nitty-gritty interface between your system and the real
+world. One goal in Haskell is always to be able to create as clear a divide as
+possible...so you can really enjoy the best of both worlds.  So just make sure
+that the `Auto`s and API that you export behave in meaningful ways that you
+can reason about...just what we expect from using `Auto` :)
+
+Anyways, I recommend just looking over the combinators available to you in the
+various modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*,
+and *[Control.Auto.Switch][]*.  We didn't go over anything close to all of
+them in this tutorial, so it's nice for getting a good overview.  The most
+up-to-date documentation at this point in time is on [the github pages][docs]
 
 A good next step too wouild be also just looking at the [auto-examples][]
 directory and peruse over the examples, which each highlight a different
