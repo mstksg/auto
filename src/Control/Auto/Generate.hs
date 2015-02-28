@@ -9,28 +9,9 @@
 -- Stability   : unstable
 -- Portability : portable
 --
--- This module contains various 'Auto's that act as "producers", ignoring
--- their input and producing output through some source or a pure/monadic
--- function.
---
--- === Constant producers
---
--- Are you looking for "constant producers"?  'Auto's that constantly
--- output the same thing, or repeatedly execute the same monadic action and
--- return the result?  To keep things clean, they aren't re-exported here.
--- But you'll find the "constant 'Auto'" as pure from the 'Applicative'
--- interface:
---
--- @
--- 'pure' :: 'Monad' m => b -> 'Auto' m a b
--- @
---
--- And also the "repeatedly execute and return" 'Auto' as 'effect' from
--- "Control.Auto.Effects":
---
--- @
--- 'effect' :: 'Monad' m => m b -> 'Auto' m a b
--- @
+-- This module contains various 'Auto's that act as "producing" streams;
+-- they all ignore their input streams and produce output streams through
+-- a pure or monadic process.
 --
 
 module Control.Auto.Generate (
@@ -38,6 +19,10 @@ module Control.Auto.Generate (
     fromList
   , fromList_
   , fromLongList
+  -- * Constant producers
+  -- $constant
+  , pure
+  , effect
   -- * From functions
   -- ** Iterating
   , iterator
@@ -58,24 +43,24 @@ module Control.Auto.Generate (
   , enumFromA_
   ) where
 
+import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Category
 import Data.Serialize
-import Prelude hiding                 ((.), id)
+import Prelude hiding        ((.), id)
 
--- | Construct an 'Auto' that ignores its input and just continually emits
--- elements from the given list.  Ouputs 'Nothing' forever after reaching
--- the end of the list.
---
--- Outputs an 'Interval'ed output, which is "on" ('Just') as long as the
--- list still has elements to output, and is "off" ('Nothing') after it
--- runs out.
+-- | An 'Interval' that ignores the input stream and just outputs items
+-- from the given list.  Is "on" as long as there are still items in the
+-- list left, and "off" after there is nothing left in the list to output.
 --
 -- Serializes itself by storing the entire rest of the list in binary, so
 -- if your list is long, it might take up a lot of space upon
 -- storage.  If your list is infinite, it makes an infinite binary, so be
 -- careful!
+--
+-- 'fromLongList' can be used for longer lists or infinite lists; or, if
+-- your list can be boild down to an 'unfoldr', you can use 'unfold'.
 --
 --   * Storing: O(n) time and space on length of remaining list
 --   * Loading: O(1) time in the number of times the 'Auto' has been
@@ -97,6 +82,7 @@ fromList = mkState (const _uncons)
 --   * Storing: O(1) time and space on the length of the remaining list
 --   * Loading: O(n) time on the number of times the 'Auto' has been
 --   stepped, maxing out at O(n) on the length of the entire input list.
+--
 fromLongList :: [b]                 -- ^ list to output element-by-element
              -> Interval m a b
 fromLongList xs = go 0 xs
@@ -126,14 +112,21 @@ _uncons :: [a] -> (Maybe a, [a])
 _uncons []     = (Nothing, [])
 _uncons (x:xs) = (Just x , xs)
 
--- | Analogous to 'unfoldr' from "Prelude".  Creates a generating
--- 'Interval' by maintaining an internal accumulator of type @c@ and, at
--- every stpe, applying to the unfolding function to the accumulator.  If
--- the result is 'Nothing', then the 'Interval' will turn "off" forever
--- (output 'Nothing' forever); if the result is @'Just' (y, acc)@, then it
--- will output @y@ and store @acc@ as the new accumulator.
+-- | Analogous to 'unfoldr' from "Prelude".  Creates an 'Interval'
+-- (that ignores its input) by maintaining an internal accumulator of type
+-- @c@ and, at every step, applying to the unfolding function to the
+-- accumulator.  If the result is 'Nothing', then the 'Interval' will turn
+-- "off" forever (output 'Nothing' forever); if the result is @'Just' (y,
+-- acc)@, then it will output @y@ and store @acc@ as the new accumulator.
 --
 -- Given an initial accumulator.
+--
+-- >>> let countFromTil n m = flip unfold n $ \i -> if i <= m
+--                                                    then Just (i, i+1)
+--                                                    else Nothing
+-- >>> take 8 . streamAuto' (countFromTil 5 10) $ repeat ()
+-- [Just 5, Just 6, Just 7, Just 8, Just 9, Just 10, Nothing, Nothing]
+-- 
 unfold :: Serialize c
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
@@ -182,17 +175,13 @@ _unfoldMF f _ (Just x) = do
                Nothing      -> (Nothing, Nothing)
 
 
-
-
-
 -- | Analogous to 'iterate' from "Prelude".  Keeps accumulator value and
--- continually applies the function to the value at every step, outputting
--- the result.
+-- continually applies the function to the accumulator at every step,
+-- outputting the result.
 --
 -- The first result is the initial accumulator value.
 --
--- >>> let (y, _) = stepAutoN' 10 (iterator (*2) 1) ()
--- >>> y
+-- >>> take 10 . streamAuto' (iterator (*2) 1) $ repeat ()
 -- [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
 iterator :: Serialize b
          => (b -> b)        -- ^ iterating function
@@ -232,10 +221,8 @@ enumFromA_ :: Enum b
            -> Auto m a b
 enumFromA_ = iterator_ succ
 
--- | Given a function from discrete enumerable values, iterates through all
+-- | Given a function from discrete enumerable inputs, iterates through all
 -- of the results of that function.
---
--- Still thinking of a good name for this...
 --
 -- >>> take 10 . streamAuto' (discreteF (^2) 0) $ repeat ()
 -- [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
@@ -252,3 +239,63 @@ discreteF_ :: Enum c
            -> Auto m a b
 discreteF_ f = mkState_ $ \_ x -> (f x, succ x)
 
+-- $constant
+--
+-- Here we have the "constant producers": 'Auto's whose output is always
+-- the same value, or the result of executing the same monadic action.
+--
+-- @
+-- 'pure'   :: 'Monad' m => b   -> 'Auto' m a b
+-- 'effect' :: 'Monad' m => m b -> 'Auto' m a b
+-- @
+--
+-- 'pure' always outputs the same value, ignoring its input, and 'effect'
+-- always outputs the result of executing the same monadic action, ignoring
+-- its input.
+
+-- | To get every output, executes the monadic action and returns the
+-- result as the output.  Always ignores input.
+--
+-- This is basically like an "effectful" 'pure':
+--
+-- @
+-- 'pure'   :: b   -> 'Auto' m a b
+-- 'effect' :: m b -> 'Auto' m a b
+-- @
+--
+-- The output of 'pure' is always the same, and the output of 'effect' is
+-- always the result of the same monadic action.  Both ignore their inputs.
+--
+-- Fun times when the underling 'Monad' is, for instance, 'Reader'.
+--
+-- >>> let a = effect ask    :: Auto (Reader b) a b
+-- >>> let r = evalAuto a () :: Reader b b
+-- >>> runReader r "hello"
+-- "hello"
+-- >>> runReader r 100
+-- 100
+--
+-- If your underling monad has effects ('IO', 'State', 'Maybe', 'Writer',
+-- etc.), then it might be fun to take advantage of '*>' from
+-- "Control.Applicative" to "tack on" an effect to a normal 'Auto':
+--
+-- >>> let a = effect (modify (+1)) *> sumFrom 0 :: Auto (State Int) Int Int
+-- >>> let st = streamAuto a [1..10]
+-- >>> let (ys, s') = runState st 0
+-- >>> ys
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> s'
+-- 10
+--
+-- Out 'Auto' @a@ behaves exactly like @'sumFrom' 0@, except at each step,
+-- it also increments the underlying/global state by one.  It is @'sumFrom'
+-- 0@ with an "attached effect".
+--
+-- By the way, the above is identical to
+-- @'sumFrom' 0 '.' 'exec' ('modify' (+1))@.
+-- 
+--
+effect :: m b           -- ^ monadic action to contually execute.
+       -> Auto m a b
+effect = mkConstM
+{-# INLINE effect #-}

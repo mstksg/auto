@@ -45,24 +45,50 @@ module Control.Auto.Run (
   ) where
 
 import Control.Applicative
-import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Interval
-import Control.Monad hiding       (mapM, mapM_)
+import Control.Monad hiding  (mapM, mapM_)
 import Data.Functor.Identity
 import Data.Maybe
-import Prelude hiding             (interact, mapM, mapM_)
+import Data.Profunctor
+import Prelude hiding        (interact, mapM, mapM_)
 import Text.Read
 
--- | Steps the 'Auto' through every element of the given list as input.
+-- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
+-- -> m [b]@ inside.  Streaming is done in the context of the underlying
+-- monad; when done consuming the list, the result is the list of outputs
+-- updated/next 'Auto' in the context of the underlying monad.
 --
--- >>> let a          = accum (+) 0
--- >>> let (ys, a')   = runIdentity (overList a [4,8,-3,5])
+-- Basically just steps the 'Auto' by feeding in every item in the list and
+-- pops out the list of results and the updated/next 'Auto', monadically
+-- chaining the steppings.
+--
+-- See 'overList'' for a simpler example; the following example uses
+-- effects from 'IO' to demonstrate the monadic features of 'overList'.
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> (ys, a') <- overList a [1..5]
+-- 1    -- IO effects
+-- 2
+-- 3
+-- 4
+-- 5
 -- >>> ys
--- [4, 12, 9, 14]
--- >>> let Output y _ = runIdentity (stepAuto a 7)
--- >>> y
--- 21
+-- [1,3,6,10,15]
+-- >>> (ys', _) <- overList a' [11..15]
+-- 11   -- IO effects
+-- 12
+-- 13
+-- 14
+-- 15
+-- >>> ys'
+-- [26,38,51,65,80]
+--
+-- @a@ is like @'sumFrom' 0@, except at every step, prints the input item
+-- to stdout as a side-effect.  Note that in executing we get the updated
+-- @a'@, which ends up with an accumulator of 15.  Now, when we stream
+-- @a'@, we pick up were we left off (from 15) on the results.
+--
 overList :: Monad m
          => Auto m a b            -- ^ the 'Auto' to run
          -> [a]                   -- ^ list of inputs to step the 'Auto' with
@@ -73,16 +99,20 @@ overList a (x:xs) = do
     (ys, a'')   <- overList a' xs
     return (y:ys, a'')
 
--- | Like 'overList', but with an 'Auto'' (the underlying 'Monad' is
--- 'Identity')
+-- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]
+-- -> [b]@ inside.  When done comsuming the list, returns the outputs and
+-- the updated/next 'Auto''.
 --
--- >>> let a          = accum (+) 0
--- >>> let (ys, a')   = overList' a [4,8,-3,5]
+-- >>> let (ys, updatedSummer) = overList' (sumFrom 0) [1..5]
 -- >>> ys
--- [4, 12, 9, 14]
--- >>> let Output y _ = stepAuto' a 7
--- >>> y
--- 21
+-- [1, 3, 6, 10, 15]
+-- >>> let (ys', _) = streamAuto' updatedSummer [1..5]
+-- >>> ys'
+-- [16, 18, 21, 25, 30]
+--
+-- If you wanted to stream over an infinite list then you don't care about
+-- the 'Auto'' at the end, and probably want 'streamAuto''.
+--
 overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
@@ -97,6 +127,23 @@ overList' a (x:xs) = let Output y a' = stepAuto' a x
 --
 -- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
 -- m [b]@.
+--
+-- See 'streamAuto'' for a simpler example; here is one taking advantage of
+-- monadic effects:
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> ys <- streamAuto a [1..5]
+-- 1                -- IO effects
+-- 2
+-- 3
+-- 4
+-- 5
+-- >>> ys
+-- [1,3,6,10,15]    -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
+--
 streamAuto :: Monad m
            => Auto m a b        -- ^ 'Auto' to stream
            -> [a]               -- ^ input stream
@@ -112,6 +159,18 @@ streamAuto a (x:xs) = do
 -- designed for) infinite lists.
 --
 -- Note that conceptually this turns an @'Auto'' a b@ into an @[a] -> [b]@
+--
+-- >>> streamAuto' (arr (+3)) [1..10]
+-- [4,5,6,7,8,9,10,11,12,13]
+-- >>> streamAuto' (sumFrom 0) [1..5]
+-- [1,3,6,10,15]
+-- >>> streamAuto' (productFrom 1) . streamAuto' (sumFrom 0) $ [1..5]
+-- [1,3,18,180,2700]
+-- >>> streamAuto' (productFrom 1 . sumFrom 0) $ [1..5]
+-- [1,3,18,180,2700]
+-- >>> streamAuto' id [1..5]
+-- [1,2,3,4,5]
+--
 streamAuto' :: Auto' a b        -- ^ 'Auto'' to stream
             -> [a]              -- ^ input stream
             -> [b]              -- ^ output stream
@@ -120,18 +179,37 @@ streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
                            ys          = streamAuto' a' xs
                        in  y:ys
 
--- | Repeatedly steps an 'Auto' with the same input a given number of
--- times.
+-- | Streams (in the context of the underlying monad) the given 'Auto' with
+-- a stream of constant values as input, a given number of times.  After
+-- the given number of inputs, returns the list of results and the
+-- next/updated 'Auto', in the context of the underlying monad.
 --
 -- prop> stepAutoN n a0 x = overList a0 (replicate n x)
 --
--- >>> let a          = iterator (*2) 1
--- >>> let (ys, a')   = runIdentity (stepAutoN 8 a ())
+-- See 'stepAutoN'' for a simpler example; here is one taking advantage of
+-- monadic effects:
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> (ys, a') <- stepAutoN 5 a 3
+-- 3                -- IO effects
+-- 3
+-- 3
+-- 3
+-- 3
 -- >>> ys
--- [1, 2, 4, 8, 16, 32, 64, 128]
--- >>> let Output y _ = runIdentity (stepAuto a ())
--- >>> y
--- 256
+-- [3,6,9,12,15]    -- the result
+-- >>> (ys'', _) <- stepAutoN 5 a' 5
+-- 5                -- IO effects
+-- 5
+-- 5
+-- 5
+-- 5
+-- >>> ys''
+-- [20,25,30,35,50] -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
+--
 stepAutoN :: Monad m
           => Int                  -- ^ number of times to step the 'Auto'
           -> Auto m a b           -- ^ the 'Auto' to run
@@ -145,24 +223,45 @@ stepAutoN n a0 x = go (max n 0) a0
       (ys, a'')   <- go (i - 1)  a'
       return (y:ys, a'')
 
--- | Like 'stepAutoN', but with an 'Auto'' (the underlying 'Monad' is
--- 'Identity')
+-- | Streams the given 'Auto'' with a stream of constant values as input,
+-- a given number of times.  After the given number of inputs, returns the
+-- list of results and the next/updated 'Auto'.
 --
--- >>> let a          = iterator (*2) 1
--- >>> let (ys, a')   = stepAutoN 8 a ()
+-- prop> stepAutoN' n a0 x = overList' a0 (replicate n x)
+--
+-- >>> let (ys, a') = stepAutoN' 5 (sumFrom 0) 3
 -- >>> ys
--- [1, 2, 4, 8, 16, 32, 64, 128]
--- >>> let Output y _ = stepAuto a ()
--- >>> y
--- 256
+-- [3,6,9,12,15]
+-- >>> let (ys', _) = stepAutoN' 5 a' 5
+-- >>> ys'
+-- [20,25,30,35,40]
+--
 stepAutoN' :: Int                 -- ^ number of times to step the 'Auto''
            -> Auto' a b           -- ^ the 'Auto'' to run
            -> a                   -- ^ the repeated input
            -> ([b], Auto' a b)    -- ^ list of outputs and the updated 'Auto''
 stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
 
--- | Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
+-- | Streams (in the context of the underlying monad) the given 'Auto' with
+-- a stream of constant values as input, a given number of times.  After
+-- the given number of inputs, returns the list of results in the context
+-- of the underlying monad.
+--
+-- Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
 -- of results.
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> ys <- evalAutoN 5 a 3
+-- 3                -- IO effects
+-- 3
+-- 3
+-- 3
+-- 3
+-- >>> ys
+-- [3,6,9,12,15]    -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
 evalAutoN :: Monad m
           => Int                  -- ^ number of times to step the 'Auto'
           -> Auto m a b           -- ^ the 'Auto' to run
@@ -170,10 +269,16 @@ evalAutoN :: Monad m
           -> m [b]                -- ^ list of outputs
 evalAutoN n a0 = liftM fst . stepAutoN n a0
 
--- | Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the
--- list of results.
+-- | Streams the given 'Auto'' with a stream of constant values as input,
+-- a given number of times.  After the given number of inputs, returns the
+-- list of results and the next/updated 'Auto'.
 --
--- 'evalAutoN' for 'Auto''.
+-- Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the list
+-- of results.
+--
+-- >>> evalAutoN' 5 (sumFrom 0) 3
+-- [3,6,9,12,15]
+--
 evalAutoN' :: Int                 -- ^ number of times to step the 'Auto''
            -> Auto' a b           -- ^ the 'Auto'' to run
            -> a                   -- ^ the repeated input
@@ -195,14 +300,15 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
 -- input and a function from an output to the next input to feed in, and
--- the 'Auto', and you get a feedback loop that constantly feeds back in
--- the result of the function applied to the previous output.  "Stops" when
--- said function returns 'Nothing'.
+-- the 'Interval', and you get a feedback loop that constantly feeds back
+-- in the result of the function applied to the previous output.  "Stops"
+-- when said function returns 'Nothing', or when the 'Interval' turns "off"
+-- for the first time.
 --
--- Note that the none of the results are returned from the loop.  Instead,
--- if you want to process the results, they must be utilized in the
--- "side-effects' of the "next input" function.  (ie, a write to a file, or
--- an accumulation to a state).
+-- Note that the none of the results are actually returned from the loop.
+-- Instead, if you want to process the results, they must be utilized in
+-- the "side-effects' of the "next input" function.  (ie, a write to
+-- a file, or an accumulation to a state).
 --
 run :: Monad m
     => a
@@ -232,9 +338,9 @@ runM x0 f nt a = do
         return a'
 
 -- | Run an 'Auto'' "interactively".  Every step grab a string from stdin,
--- and feed it to the 'Auto'.  If the 'Auto' pops out 'Nothing', end the
--- session; if it outputs a 'Just', print it out to stdout and repeat all
--- over again.
+-- and feed it to the 'Interval''.  If the 'Interval'' is "off", ends the
+-- session; if it is "on", then prints the output value to stdout and
+-- repeat all over again.
 --
 -- If your 'Auto' outputs something other than a 'String', you can use
 -- 'fmap' to transform the output into a 'String' en-route (like @'fmap'
@@ -246,9 +352,10 @@ runM x0 f nt a = do
 --
 -- You can use 'duringRead' or 'bindRead' if you have an 'Auto'' or
 -- 'Interval'' that takes something 'read'able, to chug along until you
--- find something non-readable.
+-- find something non-readable; there's also 'interactRS' which handles
+-- most of that for you.
 --
--- Outputs the final 'Auto'' when the interaction terminates.
+-- Outputs the final 'Interval'' when the interaction terminates.
 interactAuto :: Interval' String String         -- ^ 'Interval'' to run interactively
              -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
 interactAuto = interactM putStrLn (return . runIdentity)
@@ -308,7 +415,7 @@ interactM f nt a = do
 duringRead :: (Monad m, Read a)
            => Auto m a b                -- ^ 'Auto' taking in a readable @a@, outputting @b@
            -> Interval m String b       -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
-duringRead a = during a <<^ readMaybe
+duringRead = lmap readMaybe . during
 
 -- | Like 'duringRead', but the original 'Auto' would output a @'Maybe' b@
 -- instead of a @b@.  Returns 'Nothing' if either the 'String' fails to
@@ -319,4 +426,4 @@ duringRead a = during a <<^ readMaybe
 bindRead :: (Monad m, Read a)
          => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
-bindRead a = bindI a <<^ readMaybe
+bindRead = lmap readMaybe . bindI

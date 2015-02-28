@@ -96,7 +96,7 @@ import Prelude hiding             ((.), id, mapM)
 -- like @'pure' 0@ for three steps, and then like 'count' for the rest:
 --
 -- >>> let a1 = (onFor 3 . pure 0) --> count
--- >>> evalAutoN' 8 a1 ()
+-- >>> take 8 . streamAuto' a1 $ repeat ()
 -- [0, 0, 0, 1, 2, 3, 4, 5]
 --
 -- (Recall that @'pure' x@ is the 'Auto' that ignores the input stream and
@@ -106,7 +106,7 @@ import Prelude hiding             ((.), id, mapM)
 -- above 3, then switches to @'pure' 0@
 --
 -- >>> let a2 = (whenI (<= 3) . count) --> pure 0
--- >>> evalAutoN' 8 a2 ()
+-- >>> take 8 . streamAuto' a2 $ repeat ()
 -- [1, 2, 3, 0, 0, 0, 0, 0]
 --
 -- That's just a small example using one switching combinator, '-->'.  But
@@ -125,7 +125,7 @@ import Prelude hiding             ((.), id, mapM)
 --             c   <- count -< ()
 --             blp <- inB 3 -< ()
 --             after -< (c, blp)
--- >>> evalAutoN' 5 a3 ()
+-- >>> take 5 . streamAuto' a3 $ repeat ()
 -- [Nothing, Nothing, Just 3, Just 4, Just 4]
 --
 -- Intervals are also used for things that want their 'Auto's to "signal"
@@ -190,7 +190,7 @@ import Prelude hiding             ((.), id, mapM)
 -- >>> let a = onFor 2 . pure "hello"
 --        <|!> onFor 4 . pure "world"
 --        <|!> pure "goodbye!"
--- >>> evalAutoN' 6 a ()
+-- >>> take 6 . streamAuto' a $ repeat ()
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
 -- The above could also be written with 'choose':
@@ -321,8 +321,8 @@ fromInterval d = mkFunc (fromMaybe d)
 -- Much like 'maybe' from "Data.Maybe".
 --
 -- prop> fromIntervalWith d f = arr (maybe d f)
-fromIntervalWith :: b
-                 -> (a -> b)
+fromIntervalWith :: b             -- ^ default value, when input is off
+                 -> (a -> b)      -- ^ function to apply when input is on
                  -> Auto m (Maybe a) b
 fromIntervalWith d f = mkFunc (maybe d f)
 
@@ -405,7 +405,7 @@ unlessI p = mkFunc f
 -- the corresponding value of the first input stream.
 --
 -- >>> let a = after . (count &&& inB 3)
--- >>> evalAutoN' 6 a ()
+-- >>> take 6 . streamAuto' a $ repeat ()
 -- >>> res
 -- [Nothing, Nothing, Just 3, Just 4, Just 5, Just 6]
 --
@@ -432,7 +432,7 @@ after = mkState f False
 -- output will be "off" forever, suppressing all input.
 --
 -- >>> let a = before . (count &&& inB 3)
--- >>> evalAutoN' 5 a ()
+-- >>> take 5 . streamAuto' a $ repeat ()
 -- >>> res
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
@@ -461,7 +461,7 @@ before = mkState f False
 -- toggles this "off".
 --
 -- >>> let a        = between . (count &&& (inB 3 &&& inB 5))
--- >>> evalAutoN' 7 a ()
+-- >>> take 7 . streamAuto' a $ repeat ()
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
 between :: Interval m (a, (Blip b, Blip c)) a
 between = mkState f False
@@ -533,7 +533,7 @@ _holdForF n = f   -- n should be >= 0
 -- that of the second one.
 --
 -- >>> let a = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
--- >>> evalAutoN' 5 a ()
+-- >>> take 5 . streamAuto' a $ repeat ()
 -- >>> res
 -- [Just "hello", Just "hello", Just "world", Just "world", Nothing]
 --
@@ -562,7 +562,7 @@ _holdForF n = f   -- n should be >= 0
 -- "on" value.  Otherwise, the output is exactly that of the second one.
 --
 -- >>> let a1 = (onFor 2 . pure "hello") <|!> pure "world"
--- >>> evalAutoN' 5 a1 ()
+-- >>> take 5 . streamAuto' a1 $ repeat ()
 -- ["hello", "hello", "world", "world", "world"]
 --
 -- This one is neat because it associates from the right, so it can be
@@ -571,7 +571,7 @@ _holdForF n = f   -- n should be >= 0
 -- >>> let a2 = onFor 2 . pure "hello"
 --         <|!> onFor 4 . pure "world"
 --         <|!> pure "goodbye!"
--- >>> evalAutoN' 6 a2 ()
+-- >>> take 6 . streamAuto' a2 $ repeat ()
 -- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
 --
 -- >  a <|!> b <|!> c
@@ -620,15 +620,15 @@ choose = foldr (<|!>)
 -- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,
 -- transforming /intervals/ of @a@s into /intervals/ of @b@.
 --
--- It does this by "running" the given 'Auto' whenever it receives a 'Just'
--- value, and skipping/pausing it whenever it receives a 'Nothing' value.
+-- It does this by running the 'Auuto' as normal when the input is "on",
+-- and freezing it/being "off" when the input is /off/.
 --
 -- >>> let a1 = during (sumFrom 0) . onFor 2 . pure 1
--- >>> evalAutoN' 5 a1 ()
+-- >>> take 5 . streamAuto' a1 $ repeat ()
 -- [Just 1, Just 2, Nothing, Nothing, Nothing]
 --
 -- >>> let a2 = during (sumFrom 0) . offFor 2 . pure 1
--- >>> evalAutoN' 5 a2 ()
+-- >>> take 5 . streamAuto' a2 $ repeat ()
 -- [Nothing, Nothing, Just 1, Just 2, Just 3]
 --
 -- (Remember that @'pure' x@ is the 'Auto' that ignores its input and
@@ -639,7 +639,7 @@ choose = foldr (<|!>)
 -- and putting the 'sumFrom' "before":
 --
 -- >>> let a3 = offFor 2 . sumFrom 0 . pure 1
--- >>> evalAutoN' 5 a3 ()
+-- >>> take 5 . streamAuto' a3 $ repeat ()
 -- [Nothing, Nothing, Just 3, Just 4, Just 5]
 --
 -- In the first case (with @a2@), the output of @'pure' 1@ was suppressed
@@ -652,17 +652,19 @@ choose = foldr (<|!>)
 -- always summing, the entire time.  The final output of that @'sumFrom' 0@
 -- is suppressed at the end with @'offFor' 2@.
 --
-during :: Monad m => Auto m a b -> Auto m (Maybe a) (Maybe b)
+during :: Monad m
+       => Auto m a b      -- ^ 'Auto' to lift to work over intervals
+       -> Auto m (Maybe a) (Maybe b)
 during = dimap to from . right
   where
     from = either (const Nothing) Just
     to   = maybe (Left ()) Right
 
 -- | "Lifts" (more technically, "binds") an @'Interval' m a b@ into
--- an @'Auto' m ('Maybe' a) ('Maybe' b)@ (or an @'Interval' m ('Maybe' a) b@)
+-- an @'Interval' m ('Maybe' a) b@.
 --
--- The given 'Auto' is "run" only on the 'Just' inputs, and paused on
--- 'Nothing' inputs.
+-- Does this by running the 'Auto' as normal when the input is "on", and
+-- freezing it/being "off" when the input is /off/.
 --
 -- It's kind of like 'during', but the resulting @'Maybe' ('Maybe' b))@ is
 -- "joined" back into a @'Maybe' b@.
@@ -691,7 +693,9 @@ during = dimap to from . right
 --
 -- See 'compI' for examples of this use case.
 --
-bindI :: Monad m => Interval m a b -> Auto m (Maybe a) (Maybe b)
+bindI :: Monad m
+      => Interval m a b       -- ^ 'Interval' to bind
+      -> Interval m (Maybe a) b
 bindI = fmap join . during
 
 -- | Composes two 'Interval's, the same way that '.' composes two 'Auto's:
@@ -715,5 +719,8 @@ bindI = fmap join . during
 -- >>> streamAuto' (window' 2 3)
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
-compI :: Monad m => Interval m b c -> Interval m a b -> Interval m a c
+compI :: Monad m
+      => Interval m b c   -- ^ compose this 'Interval'...
+      -> Interval m a b   -- ^ ...to this one
+      -> Interval m a c
 compI f g = fmap join (during f) . g

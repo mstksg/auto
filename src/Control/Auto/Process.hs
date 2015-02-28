@@ -7,14 +7,15 @@
 -- Stability   : unstable
 -- Portability : portable
 --
--- Various 'Auto's for miscellaneous common processes.
+-- Various 'Auto's describing relationships following common processes,
+-- like 'sumFrom', whose output is the cumulative sum of the input.
 --
 -- Note that all of these can be turned into an equivalent version acting
 -- on 'Blip' streams, with 'perBlip':
 --
 -- @
--- 'sumFrom'         :: ('Serialize' a, 'Num' a) => a -> 'Auto' m a a
--- 'perBlip' 'sumFrom' :: ('Serialize' a, 'Num' a) => a -> 'Auto' m ('Blip' a) ('Blip' a)
+-- 'sumFrom' n           :: 'Num' a => 'Auto' m a a
+-- 'perBlip' ('sumFrom' n) :: 'Num' a => 'Auto' m ('Blip' a) ('Blip' a)
 -- @
 --
 module Control.Auto.Process (

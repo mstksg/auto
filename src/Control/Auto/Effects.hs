@@ -125,36 +125,26 @@ _execOnceF m = go
     go False = liftM (const ((), True)) m
     go _     = return ((), True)
 
--- | To get every output, executes the monadic action and returns the
--- result as the output.  Always ignores input.
---
--- This is basically like an "effectful" 'pure':
---
--- @
--- 'pure'   :: b   -> 'Auto' m a b
--- 'effect' :: m b -> 'Auto' m a b
--- @
---
--- The output of 'pure' is always the same, and the output of 'effect' is
--- always the result of the same monadic action.  Both ignore their inputs.
---
--- Fun times when the underling 'Monad' is, for instance, 'Reader'.
---
--- >>> let a = effect ask    :: Auto (Reader b) a b
--- >>> let r = evalAuto a () :: Reader b b
--- >>> runReader r "hello"
--- "hello"
--- >>> runReader r 100
--- 100
---
-effect :: m b           -- ^ monadic action to contually execute.
-       -> Auto m a b
-effect = mkConstM
-{-# INLINE effect #-}
-
 -- | Acts like 'id', in that the output stream is identical to the input
 -- stream.  However, at each retrieval of output, executes the given
 -- monadic action and ignores the result.
+--
+-- You can use this to "tag along" an effect somewhere along a chain of
+-- compositions without altering the output of the compositions:
+--
+-- @
+-- foo '.' 'exec' mx
+-- @
+--
+-- Is just like 'foo', except executing 'mx' at every step.
+--
+-- The above is identical to:
+--
+-- @
+-- 'effect' mx '*>' foo
+-- @
+--
+-- See docs for 'effect' for more details.
 exec :: Monad m
      => m b           -- ^ monadic action to contually execute.
      -> Auto m a a
@@ -179,6 +169,24 @@ effects = arrM id
 -- @
 --
 -- prop> arrM f . arrM g == arrM (f <=< g)
+--
+-- One neat trick you can do is that you can "tag on effects" to a normal
+-- 'Auto' by using '*>' from "Control.Applicative".  For example:
+--
+-- >>> let a = arrM print *> sumFrom 0
+-- >>> ys <- streamAuto a [1..5]
+-- 1                -- IO output
+-- 2
+-- 3
+-- 4
+-- 5
+-- >>> ys
+-- [1,3,6,10,15]    -- the result
+--
+-- Here, @a@ behaves "just like" @'sumFrom' 0@...except, when you step it,
+-- it prints out to stdout as a side-effect.  We just gave automatic
+-- stdout logging behavior!
+--
 arrM :: (a -> m b)    -- ^ monadic function
      -> Auto m a b
 arrM = mkFuncM
