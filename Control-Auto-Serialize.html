@@ -67,7 +67,7 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Serialize
  value.</p><p>Whenever the output <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits, it automatically serializes and
  saves the state of the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to the emitted <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/System-IO.html#t:FilePath">FilePath</a></code>.</p><p>In practice, this allows any <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to basically control when it wants
  to &quot;save&quot;, by providing a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream.</p><p>The following is an alternative implementation of <code><a href="Control-Auto-Serialize.html#v:saving">saving</a></code>, except
- saving every two steps instead of every step:</p><pre>    saving2 fp a = <code><a href="Control-Auto-Serialize.html#v:saveFromB">saveFromB</a></code> (a <code>&amp;&amp;&amp;</code> (<code>every</code> 2 . <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> fp))
+ saving every two steps instead of every step:</p><pre>    saving2 fp a = <code><a href="Control-Auto-Serialize.html#v:saveFromB">saveFromB</a></code> (a <code>&amp;&amp;&amp;</code> (<code>every</code> 2 . <code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> fp))
 </pre><p>Or, in proc notation:</p><pre>saving2 fp a = saveFromB $ proc x -&gt; do
     y &lt;- a       -&lt; x
     b &lt;- every 2 -&lt; fp

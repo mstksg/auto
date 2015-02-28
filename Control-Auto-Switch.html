@@ -21,7 +21,7 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let Output res1 _ = stepAutoN' 5 a1 ()
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res1
 </code></strong>[&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;world&quot;]
-</pre><p>(Recall that <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> &quot;hello&quot;</code> is the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that ignores its input and
+</pre><p>(Recall that <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> &quot;hello&quot;</code> is the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that ignores its input and
  constantly outputs &quot;hello&quot;, and <code><code><a href="Control-Auto-Interval.html#v:onFor">onFor</a></code> 2</code> lets its input pass &quot;on&quot;
  (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Just">Just</a></code>) for two steps, then is &quot;off&quot; (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Nothing">Nothing</a></code>) ever after.)</p><p>Association works in a way that you can &quot;chain&quot; <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s, as long as you
  have a non-<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#t:Maybe">Maybe</a></code> / non-<a href="Interval.html">Interval</a> <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> at the end.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a2 = onFor 2 . pure &quot;hello&quot;
@@ -60,7 +60,7 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
  the first part of the result tuple.  Then, as soon as the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
  emits with an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> <code>a1</code>, the whole thing behaves like <code>a1</code> forever.</p><p>In the following example, <code>a1</code> is an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that counts upwards forever
  and also outputs a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream that will emit an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> containing
- <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> 100</code> (the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that always emits 100) after three steps.</p><pre>    a1 :: Auto' () (Int, Blip (Auto' () Int))
+ <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> (the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that always emits 100) after three steps.</p><pre>    a1 :: Auto' () (Int, Blip (Auto' () Int))
     a1 = proc _ -&gt; do
         c          &lt;- count -&lt; ()
         switchBlip &lt;- inB 3 -&lt; pure 100
@@ -69,7 +69,7 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
     -- alternatively
     a1' = count &amp;&amp;&amp; (tagBlips (pure 100) . inB 3)
 </pre><p>So, <code><code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> a1</code> will be the output of <code>count</code> for three steps,
- and then switch to <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> 100</code> afterwards (when the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
+ and then switch to <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> afterwards (when the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
  emits):</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res1, _) = stepAutoN' 6 (switchFrom_ a1) ()
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res1
 </code></strong>[0, 1, 2, 100, 100, 100]
@@ -92,8 +92,8 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
  <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, it begins to behave like that emitted <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>Input to the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is fed through the first field of the
  tuple, and a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emitting new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s is fed through the
  second field.</p><p>When the stream emits, <em>immediately</em> feeds the input to the new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>Given an initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave like.</p><p>For example, here we push several <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s one after the other into the
- box: <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> 100</code>, <code>count</code>, and <code><code>iterator</code> (+3) 0</code>, starting with
- <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Applicative.html#v:pure">pure</a></code> 0</code>.  <code><code><a href="Control-Auto-Blip.html#v:eachAt_">eachAt_</a></code> 3</code> emits each <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in the given list every
+ box: <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code>, <code>count</code>, and <code><code>iterator</code> (+3) 0</code>, starting with
+ <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 0</code>.  <code><code><a href="Control-Auto-Blip.html#v:eachAt_">eachAt_</a></code> 3</code> emits each <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in the given list every
  three steps, starting on the third.</p><pre>    newAutos :: Auto' () (Blip (Auto' () Int))
     newAutos = eachAt_ 3 [pure 100, count, iterator (+3) 0]
 
