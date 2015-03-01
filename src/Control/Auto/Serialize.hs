@@ -4,7 +4,7 @@
 -- Module      : Control.Auto.Serialize
 -- Description : Serializing and deserializing 'Auto's to and from disk,
 --               and also 'Auto' transformers focused around serialization.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -26,9 +26,17 @@
 -- and give you the ability to "trigger" saving and loading events on the
 -- 'Auto' using the 'Blip' mechanisms from "Control.Auto.Blip".
 --
+-- Note that the entire 'Auto' construct is a little bit awkward when it
+-- comes to performing IO effects --- it isn't exactly what they were
+-- designed for originally.  Hooking on effects to stepping can be
+-- powerful, but as of now, not much has been looked into meaningful error
+-- handling when working with IO.  If you have any experience with this and
+-- are willing to help, please feel free to send me an e-mail or open an
+-- issue on the <https://github.com/mstksg/auto/issues issue tracker>!
+--
 
 module Control.Auto.Serialize (
-  -- * Serializing and deserializing 'Auto's from binary and from disk.
+  -- * Serializing and deserializing 'Auto's
   -- ** To and from "Data.Serialize" types
     saveAuto
   , loadAuto
@@ -38,8 +46,8 @@ module Control.Auto.Serialize (
   -- ** To and from disk
   , writeAuto
   , readAuto
-  , readAuto'
-  -- * 'Auto' transformers
+  , readAutoDef
+  -- * Imbuing 'Auto's with serialization
   -- ** Implicit automatic serialization
   , saving
   , loading'
@@ -63,6 +71,7 @@ import Control.Monad.IO.Class
 import Control.Monad
 import Control.Exception
 import Control.Applicative
+import System.IO.Error
 import Control.Auto.Core
 import qualified Data.ByteString as B
 
@@ -75,29 +84,23 @@ readAuto :: FilePath        -- ^ filepath to read from
          -> IO (Either String (Auto m a b))
 readAuto fp a = decodeAuto a <$> B.readFile fp
 
--- | Like 'readAuto', but if any 'IO' or decoding error pops up, it is
--- silently ignored; the /original/ 'Auto' (passed to 'readAuto'') is
--- returned unchanged.
+-- | Like 'readAuto', but will return the /original/ 'Auto' (instead of
+-- a resumed one) if the file does not exist.
 --
--- Useful if you want to "resume an 'Auto' in case there is a save state,
--- and otherwise use it as-is if there isn't".
-readAuto' :: FilePath                   -- ^ filepath to read from
-          -> Auto m a b                 -- ^ 'Auto' to resume (or return
-                                        --   unchanged)
-          -> IO (Auto m a b)
-readAuto' = go
-  where
-    go :: forall a m b. FilePath
-       -> Auto m a b
-       -> IO (Auto m a b)
-    go fp a = do
-        esa <- try (readAuto fp a) :: IO (Either SomeException (Either String (Auto m a b)))
-        case esa of
-          Right (Right a') -> return a'
-          _                -> return a
+-- Useful if you want to "resume an 'Auto'" "if there is" a save state, or
+-- just use it as-is if there isn't.
+readAutoDef :: FilePath             -- ^ filepath to read from
+            -> Auto m a b           -- ^ 'Auto' to resume
+            -> IO (Either String (Auto m a b))
+readAutoDef fp a = do
+    esa <- try (readAuto fp a);
+    case esa of
+      Right a'                       -> return a'
+      Left e | isDoesNotExistError e -> return (Right a)
+             | otherwise             -> throw e
 
 -- | Like 'readAuto', but will throw a runtime exception on a failure to
--- decode.
+-- decode or an IO error.
 readAutoErr :: FilePath             -- ^ filepath to read from
             -> Auto m a b           -- ^ 'Auto' to resume
             -> IO (Auto m a b)
@@ -126,12 +129,9 @@ saving :: MonadIO m
        => FilePath          -- ^ filepath to write to
        -> Auto m a b        -- ^ 'Auto' to transform
        -> Auto m a b
-saving fp a = mkAutoM (saving fp <$> loadAuto a)
-                      (saveAuto a)
-                      $ \x -> do
-                          Output y a' <- stepAuto a x
-                          liftIO $ writeAuto fp a'
-                          return (Output y (saving fp a'))
+saving fp = interceptO $ \(Output y a') -> do
+                             liftIO $ writeAuto fp a'
+                             return y
 
 -- | "Transforms" the given 'Auto' into an 'Auto' that, when you /first/
 -- try to run or step it, "loads" itself from disk at the given 'FilePath'.
@@ -161,8 +161,8 @@ loading fp a0 = mkAutoM (loading fp <$> loadAuto a0)
 
 
 
--- | Like 'loading', except suppresses all I/O and decoding errors; if
--- there are errors, it returns back the given 'Auto' as-is.
+-- | Like 'loading', except silently suppresses all I/O and decoding
+-- errors; if there are errors, it returns back the given 'Auto' as-is.
 --
 -- Useful for when you aren't sure the save state is on disk or not yet,
 -- and want to resume it only in the case that it is.
@@ -173,7 +173,11 @@ loading' :: MonadIO m
 loading' fp a0 = mkAutoM (loading' fp <$> loadAuto a0)
                          (saveAuto a0)
                          $ \x -> do
-                             a <- liftM loaded (liftIO (readAuto' fp a0))
+                             a <- do
+                               ea' <- liftIO $ readAutoDef fp a0
+                               case ea' of
+                                 Right a' -> return (loaded a')
+                                 Left _   -> return a0
                              stepAuto a x
   where
     loaded a = mkAutoM (loading' fp <$> loadAuto a)
@@ -207,25 +211,25 @@ serializing' fp a = loading' fp (saving fp a)
 -- $onfrom
 --
 -- Note that these follow the naming conventions from
--- "Control.Auto.Switch": Something "from" a 'Blip' stream is a thing
--- triggered by the 'Auto' itself, and something "on" a 'Blip' stream is
+-- "Control.Auto.Switch": Something "from" a blip stream is a thing
+-- triggered by the 'Auto' itself, and something "on" a blip stream is
 -- a thing triggered externally, from another 'Auto'.
 
--- | Takes an 'Auto' that produces a 'Blip' stream with a 'FilePath' and
+-- | Takes an 'Auto' that produces a blip stream with a 'FilePath' and
 -- a value, and turns it into an 'Auto' that, outwardly, produces just the
 -- value.
 --
--- Whenever the output 'Blip' stream emits, it automatically serializes and
+-- Whenever the output blip stream emits, it automatically serializes and
 -- saves the state of the 'Auto' to the emitted 'FilePath'.
 --
 -- In practice, this allows any 'Auto' to basically control when it wants
--- to "save", by providing a 'Blip' stream.
+-- to "save", by providing a blip stream.
 --
 -- The following is an alternative implementation of 'saving', except
 -- saving every two steps instead of every step:
 --
 -- @
---     saving2 fp a = 'saveFromB' (a '&&&' ('every' 2 . 'pure' fp))
+-- saving2 fp a = 'saveFromB' (a '&&&' ('every' 2 . 'pure' fp))
 -- @
 --
 -- Or, in proc notation:
@@ -248,10 +252,10 @@ serializing' fp a = loading' fp (saving fp a)
 -- negative.
 --
 -- @
---     saveOnNegative fp a = saveFromB $ proc x -> do
---         y       <- a            -< x
---         saveNow <- 'became' (< 0) -< y
---         id       -< (y, fp '<$' saveNow)
+-- saveOnNegative fp a = saveFromB $ proc x -> do
+--     y       <- a            -< x
+--     saveNow <- 'became' (< 0) -< y
+--     id       -< (y, fp '<$' saveNow)
 -- @
 --
 -- Contrast to 'saveOnB', where the saves are triggered by outside input.
@@ -259,52 +263,55 @@ serializing' fp a = loading' fp (saving fp a)
 --
 saveFromB :: MonadIO m
           => Auto m a (b, Blip FilePath)    -- ^ 'Auto' producing a value
-                                            --   @b@ and a 'Blip' stream
+                                            --   @b@ and a blip stream
                                             --   with a 'FilePath' to save
                                             --   to
           -> Auto m a b
-saveFromB a = mkAutoM (saveFromB <$> loadAuto a)
-                      (saveAuto a)
-                      $ \x -> do
-                          Output (y, b) a' <- stepAuto a x
-                          case b of
-                            Blip p -> liftIO $ writeAuto p a'
-                            NoBlip -> return ()
-                          return (Output y (saveFromB a'))
+saveFromB = interceptO $ \(Output (y, b) a') -> do
+                             case b of
+                               Blip p -> liftIO $ writeAuto p a'
+                               _      -> return ()
+                             return y
 
--- | Takes an 'Auto' that outputs a @b@ and a 'Blip' stream of 'FilePath's
+-- | Takes an 'Auto' that outputs a @b@ and a blip stream of 'FilePath's
 -- and returns an 'Auto' that ouputs only that @b@ stream...but every time
--- the 'Blip' stream emits, it "resets/loads" itself from that 'FilePath'.
+-- the blip stream emits, it "resets/loads" itself from that 'FilePath'.
 --
 -- The following is a re-implementation of 'loading'...except delayed by
 -- one (the second step that is run is the first "resumed" step).
 --
 -- @
---     loading2 fp a = 'loadFromB' $ proc x -> do
---         y       <- a           -< x
---         loadNow <- 'immediately' -< fp
---         'id'       -< (y, loadNow)
+-- loading2 fp a = 'loadFromB' $ proc x -> do
+--     y       <- a           -< x
+--     loadNow <- 'immediately' -< fp
+--     'id'       -< (y, loadNow)
 -- @
 --
--- (the 'Blip' stream emits only once, immediately, to re-load).
+-- (the blip stream emits only once, immediately, to re-load).
 --
 -- In the real world, you could have the 'Auto' decide to reset or resume
 -- itself based on a user command:
 --
 -- @
---     loadFrom = loadFromB $ proc x -> do
---         steps  <- count -< ()
---         toLoad <- case words x of
---                       ("load":fp:_) -> do
---                           immediately -< fp
---                       _             -> do
---                           never       -< ()
---         id      -< (steps, toLoad)
+-- loadFrom = loadFromB $ proc x -> do
+--     steps  <- count -< ()
+--     toLoad <- case words x of
+--                   ("load":fp:_) -> do
+--                       immediately -< fp
+--                   _             -> do
+--                       never       -< ()
+--     id      -< (steps, toLoad)
 -- @
 --
 -- This will throw a runtime error on an IO exception or parsing error.
 --
-loadFromB :: MonadIO m => Auto m a (b, Blip FilePath) -> Auto m a b
+loadFromB :: MonadIO m
+          => Auto m a (b, Blip FilePath)    -- ^ 'Auto' with an output
+                                            --     and a blip stream to
+                                            --     trigger re-loading
+                                            --     itself from the given
+                                            --     filepath
+          -> Auto m a b
 loadFromB a = mkAutoM (loadFromB' <$> loadAuto a)
                       (saveAuto a)
                       $ \x -> do
@@ -316,27 +323,37 @@ loadFromB a = mkAutoM (loadFromB' <$> loadAuto a)
 
 -- | Like 'loadFromB', except silently ignores errors.  When a load is
 -- requested, but there is an IO or parse error, the loading is skipped.
-loadFromB' :: MonadIO m => Auto m a (b, Blip FilePath) -> Auto m a b
-loadFromB' a = mkAutoM (loadFromB' <$> loadAuto a)
-                       (saveAuto a)
-                       $ \x -> do
-                           Output (y, b) a' <- stepAuto a x
-                           a'' <- case b of
-                                    Blip p -> liftIO $ readAuto' p a'
-                                    NoBlip -> return a'
-                           return (Output y (loadFromB' a''))
+loadFromB' :: MonadIO m
+           => Auto m a (b, Blip FilePath)   -- ^ 'Auto' with an output
+                                            --     and a blip stream to
+                                            --     trigger re-loading
+                                            --     itself from the given
+                                            --     filepath
+           -> Auto m a b
+loadFromB' a0 = mkAutoM (loadFromB' <$> loadAuto a0)
+                        (saveAuto a0)
+                        $ \x -> do
+                            Output (y, b) a1 <- stepAuto a0 x
+                            a2 <- case b of
+                                    Blip p -> do
+                                      ea3 <- liftIO $ readAutoDef p a1
+                                      case ea3 of
+                                        Right a3 -> return a3
+                                        Left _   -> return a1
+                                    NoBlip -> return a1
+                            return (Output y (loadFromB' a2))
 
 -- | Takes an 'Auto' and basically "wraps" it so that you can trigger saves
--- with a 'Blip' stream.
+-- with a blip stream.
 --
 -- For example, we can take @'sumFrom' 0@:
 --
 -- @
---     'saveOnB' ('sumFrom' 0) :: 'Auto' 'IO' ('Int', 'Blip' 'FilePath') 'Int'
+-- 'saveOnB' ('sumFrom' 0) :: 'Auto' 'IO' ('Int', 'Blip' 'FilePath') 'Int'
 -- @
 --
 -- It'll behave just like @'sumFrom' 0@ (with the input you pass in the
--- first field of the tuple)...and whenever the 'Blip' stream (the second
+-- first field of the tuple)...and whenever the blip stream (the second
 -- field of the input tuple) emits, it'll save the state of @'sumFrom' 0@
 -- to disk at the given 'FilePath'.
 --
@@ -346,7 +363,9 @@ loadFromB' a = mkAutoM (loadFromB' <$> loadAuto a)
 -- Might be useful in similar situations as 'saveFromB', except if you want
 -- to trigger the save externally.
 --
-saveOnB :: MonadIO m => Auto m a b -> Auto m (a, Blip FilePath) b
+saveOnB :: MonadIO m
+        => Auto m a b       -- ^ 'Auto' to make saveable-by-trigger
+        -> Auto m (a, Blip FilePath) b
 saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
                     (saveAuto a)
                     $ \(x, b) -> do
@@ -357,16 +376,16 @@ saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
                       return (Output y (saveOnB a'))
 
 -- | Takes an 'Auto' and basically "wraps" it so that you can trigger
--- loads/resumes from a file with a 'Blip' stream.
+-- loads/resumes from a file with a blip stream.
 --
 -- For example, we can take @'sumFrom' 0@:
 --
 -- @
---     'loadOnB' ('sumFrom' 0) :: 'Auto' 'IO' ('Int', 'Blip' 'FilePath') 'Int'
+-- 'loadOnB' ('sumFrom' 0) :: 'Auto' 'IO' ('Int', 'Blip' 'FilePath') 'Int'
 -- @
 --
 -- It'll behave just like @'sumFrom' 0@ (with the input you pass in the
--- first field of the tiple)...and whenever the 'Blip' stream (the second
+-- first field of the tiple)...and whenever the blip stream (the second
 -- field of the input tuple) emits, it'll "reset" and "reload" the
 -- @'sumFrom' 0@ from the 'FilePath' on disk.
 --
@@ -378,7 +397,9 @@ saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
 -- Might be useful in similar situations as 'loadFromB', except if you want
 -- to trigger the loading externally.
 --
-loadOnB :: MonadIO m => Auto m a b -> Auto m (a, Blip FilePath) b
+loadOnB :: MonadIO m
+        => Auto m a b       -- ^ 'Auto' to make reloadable-by-trigger
+        -> Auto m (a, Blip FilePath) b
 loadOnB a = mkAutoM (loadOnB' <$> loadAuto a)
                     (saveAuto a)
                     $ \(x, b) -> do
@@ -390,13 +411,19 @@ loadOnB a = mkAutoM (loadOnB' <$> loadAuto a)
 
 -- | Like 'loadOnB', except silently ignores errors.  When a load is
 -- requested, but there is an IO or parse error, the loading is skipped.
-loadOnB' :: MonadIO m => Auto m a b -> Auto m (a, Blip FilePath) b
-loadOnB' a = mkAutoM (loadOnB' <$> loadAuto a)
-                     (saveAuto a)
-                     $ \(x, b) -> do
-                         a' <- case b of
-                                 Blip p -> liftIO $ readAuto' p a
-                                 NoBlip -> return a
-                         Output y a'' <- stepAuto a' x
-                         return (Output y (loadOnB' a''))
+loadOnB' :: MonadIO m
+         => Auto m a b      -- ^ 'Auto' to make reloadable-by-trigger
+         -> Auto m (a, Blip FilePath) b
+loadOnB' a0 = mkAutoM (loadOnB' <$> loadAuto a0)
+                      (saveAuto a0)
+                      $ \(x, b) -> do
+                          a1 <- case b of
+                                  Blip p -> do
+                                    ea2 <- liftIO $ readAutoDef p a0
+                                    case ea2 of
+                                      Right a2 -> return a2
+                                      Left _   -> return a0
+                                  NoBlip -> return a0
+                          Output y a2 <- stepAuto a1 x
+                          return (Output y (loadOnB' a2))
 

@@ -52,6 +52,8 @@ module Control.Auto.Core (
   -- ** Underlying monad
   , hoistA
   , generalizeA
+  -- ** Special modifiers
+  , interceptO
   -- * Auto output
   , Output(..)
   , Output'
@@ -547,6 +549,14 @@ forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
 seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 {-# INLINE seqer #-}
+
+interceptO :: Monad m => (Output m a b -> m c) -> Auto m a b -> Auto m a c
+interceptO f a0 = mkAutoM (interceptO f <$> loadAuto a0)
+                          (saveAuto a0)
+                        $ \x -> do
+                             o@(Output _ a1) <- stepAuto a0 x
+                             y <- f o
+                             return (Output y (interceptO f a1))
 
 -- compMAuto :: (Monad m, Monad m') => Auto m b (m' c) -> Auto m a (m' b) -> Auto m a (m' c)
 -- compMAuto g f = AutoArbM undefined

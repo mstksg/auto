@@ -28,7 +28,7 @@
 -- the backend level and not at the logic level of whatever you are
 -- programming, then this is useful.
 --
--- Be sure, of course, that whatever 'Blip' streams you do manually
+-- Be sure, of course, that whatever blip streams you do manually
 -- construct and export preserve "Blip semantics", which is further
 -- defined in "Control.Auto.Blip".
 --
@@ -74,7 +74,7 @@ infixl 5 `mergeR`
 -- to the constructor is not needed.
 --
 -- If you are creating a framework, library, or backend, you might want to
--- manually create 'Blip' stream-producing 'Auto's for your users to
+-- manually create blip stream-producing 'Auto's for your users to
 -- access.  In this case, you can import the constructors and useful
 -- internal (and, of course, semantically unsafe) functions from
 -- "Control.Auto.Blip.Internal".
@@ -118,30 +118,34 @@ merge _ ex NoBlip          = ex
 merge _ NoBlip ey          = ey
 merge f (Blip x) (Blip y) = Blip (f x y)
 
--- | Merges two 'Blip' streams together into one, which emits
--- /either/ of the original 'Blip' streams emit.  If both emit at the same
+-- | Merges two blip streams together into one, which emits
+-- /either/ of the original blip streams emit.  If both emit at the same
 -- time, the left (first) one is favored.
 --
 -- Lazy on the second stream if the first stream is emitting.
 --
 -- If we discount laziness, this is @'merge' 'const'@.
-mergeL :: Blip a -> Blip a -> Blip a
+mergeL :: Blip a    -- ^ first stream
+       -> Blip a    -- ^ second stream (higher priority)
+       -> Blip a
 mergeL b1@(Blip _) _  = b1
 mergeL _           b2 = b2
 
--- | Merges two 'Blip' streams together into one, which emits
--- /either/ of the original 'Blip' streams emit.  If both emit at the same
+-- | Merges two blip streams together into one, which emits
+-- /either/ of the original blip streams emit.  If both emit at the same
 -- time, the right (second) one is favored.
 --
 -- Lazy on the first stream if the second stream is emitting.
 --
 -- If we discout laziness, this is @'merge' ('flip' 'const')@.
 --
-mergeR :: Blip a -> Blip a -> Blip a
+mergeR :: Blip a        -- ^ first stream (higher priority)
+       -> Blip a        -- ^ second stream
+       -> Blip a
 mergeR _  b2@(Blip _) = b2
 mergeR b1 _           = b1
 
--- | Destruct a 'Blip' by giving a default result if the 'Blip' is
+-- | Deconstruct a 'Blip' by giving a default result if the 'Blip' is
 -- non-occuring and a function to apply on the contents, if the 'Blip' is
 -- occuring.
 --
@@ -151,6 +155,9 @@ mergeR b1 _           = b1
 -- what it means to be 'Blip'py.
 --
 -- Analogous to 'maybe' from "Prelude".
-blip :: b -> (a -> b) -> Blip a -> b
+blip :: b           -- ^ default value
+     -> (a -> b)    -- ^ function to apply on value
+     -> Blip a      -- ^ 'Blip' to deconstruct
+     -> b
 blip d _ NoBlip   = d
 blip _ f (Blip x) = f x

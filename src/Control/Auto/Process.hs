@@ -1,7 +1,7 @@
 -- |
 -- Module      : Control.Auto.Process
 -- Description : 'Auto's useful for various commonly occurring processes.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -11,7 +11,7 @@
 -- like 'sumFrom', whose output is the cumulative sum of the input.
 --
 -- Note that all of these can be turned into an equivalent version acting
--- on 'Blip' streams, with 'perBlip':
+-- on blip streams, with 'perBlip':
 --
 -- @
 -- 'sumFrom' n           :: 'Num' a => 'Auto' m a a

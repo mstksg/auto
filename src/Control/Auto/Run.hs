@@ -5,7 +5,7 @@
 -- Module      : Control.Auto.Run
 -- Description : Various utilities for running and unrolling 'Auto's, both
 --               interactively and non-interactively.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable

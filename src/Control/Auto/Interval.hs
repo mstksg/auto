@@ -2,7 +2,7 @@
 -- Module      : Control.Auto.Interval
 -- Description : Tools for working with "interval" semantics: "On or off"
 --               'Auto's.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -117,7 +117,7 @@ import Prelude hiding             ((.), id, mapM)
 -- 'Blip' semantic tool, as well.
 --
 -- The following 'Interval' will be "off" and suppress all of its input
--- (from 'count') /until/ the 'Blip' stream produced by @'inB' 3@ emits
+-- (from 'count') /until/ the blip stream produced by @'inB' 3@ emits
 -- something, then it'll allow 'count' to pass.
 --
 -- >>> let a3 = after . (count &&& inB 3)
@@ -411,12 +411,12 @@ unlessI p = mkFunc f
 --
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
--- a 'Blip' stream that emits at the third step.)
+-- a blip stream that emits at the third step.)
 --
 -- Be careful to remember that in the above example, 'count' is still "run"
 -- at every step, and is progressed (and if it were an 'Auto' with monadic
 -- effects, they would still be executed).  It just isn't allowed to pass
--- its output values through 'after' until the 'Blip' stream emits.
+-- its output values through 'after' until the blip stream emits.
 --
 after :: Interval m (a, Blip b) a
 after = mkState f False
@@ -438,12 +438,12 @@ after = mkState f False
 --
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
--- a 'Blip' stream that emits at the third step.)
+-- a blip stream that emits at the third step.)
 --
 -- Be careful to remember that in the above example, 'count' is still "run"
 -- at every step, and is progressed (and if it were an 'Auto' with monadic
 -- effects, they would still be executed).  It just isn't allowed to pass
--- its output values through 'before' after the 'Blip' stream emits.
+-- its output values through 'before' after the blip stream emits.
 --
 before :: Interval m (a, Blip b) a
 before = mkState f False

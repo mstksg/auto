@@ -3,7 +3,7 @@
 -- |
 -- Module      : Control.Auto.Generate
 -- Description : 'Auto's that act as generators or "producers", ignoring input.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -126,7 +126,9 @@ _uncons (x:xs) = (Just x , xs)
 --                                                    else Nothing
 -- >>> take 8 . streamAuto' (countFromTil 5 10) $ repeat ()
 -- [Just 5, Just 6, Just 7, Just 8, Just 9, Just 10, Nothing, Nothing]
--- 
+--
+-- @'unfold' f c0@ behaves like @'overList' ('unfoldr' f c0)@.
+--
 unfold :: Serialize c
        => (c -> Maybe (b, c))     -- ^ unfolding function
        -> c                       -- ^ initial accumulator
@@ -293,7 +295,6 @@ discreteF_ f = mkState_ $ \_ x -> (f x, succ x)
 --
 -- By the way, the above is identical to
 -- @'sumFrom' 0 '.' 'exec' ('modify' (+1))@.
--- 
 --
 effect :: m b           -- ^ monadic action to contually execute.
        -> Auto m a b
