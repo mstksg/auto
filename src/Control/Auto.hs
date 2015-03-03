@@ -77,7 +77,7 @@ module Control.Auto (
   -- ** Generators
   -- *** Effects
   , effect
-  , exec
+  -- , exec
   -- *** Iterators
   , iterator
   , iterator_
