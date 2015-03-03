@@ -24,7 +24,8 @@
 -- behind-the-scenes saving or re-load itself from disk when it is first
 -- stepped.  Or you have some "trigger enhancers" that take normal 'Auto's
 -- and give you the ability to "trigger" saving and loading events on the
--- 'Auto' using the 'Blip' mechanisms from "Control.Auto.Blip".
+-- 'Auto' using the 'Blip' mechanisms and blip stream semantics from
+-- "Control.Auto.Blip".
 --
 -- Note that the entire 'Auto' construct is a little bit awkward when it
 -- comes to performing IO effects --- it isn't exactly what they were
@@ -54,7 +55,7 @@ module Control.Auto.Serialize (
   , loading
   , serializing'
   , serializing
-  -- ** Triggered ('Blip'-based) automatic serialization
+  -- ** Triggered (blip stream-based) automatic serialization
   -- $onfrom
   -- *** External triggering
   , saveOnB

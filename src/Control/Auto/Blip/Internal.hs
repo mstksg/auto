@@ -38,6 +38,7 @@
 module Control.Auto.Blip.Internal (
     Blip(..)
   , merge
+  -- , merge'
   , mergeL
   , mergeR
   , blip
@@ -106,7 +107,7 @@ instance NFData a => NFData (Blip a)
 
 -- | Merge two blip streams together; the result emits with /either/ of the
 -- two merged streams emit.  When both emit at the same time, emit the
--- result of applying the given function on the two values.
+-- result of applying the given function on the two emitted values.
 --
 -- Note that this might be too strict for some purposes; see 'mergeL' and
 -- 'mergeR' for lazier alternatives.
@@ -114,9 +115,25 @@ merge :: (a -> a -> a)      -- ^ merging function
       -> Blip a             -- ^ first stream
       -> Blip a             -- ^ second stream
       -> Blip a             -- ^ merged stream
-merge _ ex NoBlip          = ex
-merge _ NoBlip ey          = ey
-merge f (Blip x) (Blip y) = Blip (f x y)
+merge = merge' id id
+
+-- | Slightly more powerful 'merge', but I can't imagine a situation where
+-- this power is necessary.
+--
+-- If only the first stream emits, emit with the first function applied to the
+-- value.  If only the second stream emits, emit with the second function
+-- applied to the value.  If both emit, then emit with the third function
+-- applied to both emitted values.
+merge' :: (a -> c)          -- ^ function for first stream
+       -> (b -> c)          -- ^ function for second stream
+       -> (a -> b -> c)     -- ^ merging function
+       -> Blip a            -- ^ first stream
+       -> Blip b            -- ^ second stream
+       -> Blip c            -- ^ merged stream
+merge' f _ _ (Blip x) NoBlip   = Blip (f x)
+merge' _ g _ NoBlip   (Blip y) = Blip (g y)
+merge' _ _ h (Blip x) (Blip y) = Blip (h x y)
+merge' _ _ _ NoBlip   NoBlip   = NoBlip
 
 -- | Merges two blip streams together into one, which emits
 -- /either/ of the original blip streams emit.  If both emit at the same
