@@ -4,7 +4,7 @@
 -- Module      : Control.Auto.Effects
 -- Description : Accessing, executing, and manipulating underyling monadic
 --               effects.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -15,13 +15,11 @@
 -- and manipulating such effects.
 --
 
-
 module Control.Auto.Effects (
   -- * Running effects
   -- ** Continually
     arrM
   , effect
-  , exec
   -- ** From inputs
   , effects
   -- ** On 'Blip's
@@ -125,32 +123,6 @@ _execOnceF m = go
     go False = liftM (const ((), True)) m
     go _     = return ((), True)
 
--- | Acts like 'id', in that the output stream is identical to the input
--- stream.  However, at each retrieval of output, executes the given
--- monadic action and ignores the result.
---
--- You can use this to "tag along" an effect somewhere along a chain of
--- compositions without altering the output of the compositions:
---
--- @
--- foo '.' 'exec' mx
--- @
---
--- Is just like 'foo', except executing 'mx' at every step.
---
--- The above is identical to:
---
--- @
--- 'effect' mx '*>' foo
--- @
---
--- See docs for 'effect' for more details.
-exec :: Monad m
-     => m b           -- ^ monadic action to contually execute.
-     -> Auto m a a
-exec m = mkFuncM $ \x -> m >> return x
-{-# INLINE exec #-}
-
 -- | The input stream is a stream of monadic actions, and the output stream
 -- is the result of their executions, through executing them.
 effects :: Monad m => Auto m (m a) a
@@ -215,7 +187,7 @@ effectB = perBlip . effect
 execB :: Monad m
       => m b
       -> Auto m (Blip a) (Blip a)
-execB = perBlip . exec
+execB mx = perBlip (arrM $ \x -> mx >> return x)
 {-# INLINE execB #-}
 
 -- | Takes an 'Auto' that works with underlying global, mutable state, and
@@ -307,9 +279,9 @@ sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
 -- environment, an environment value, and turns it into a normal 'Auto'
 -- that always "sees" that value when it asks for one.
 --
--- ghci> let a   = effect ask :: Auto (Reader b) a b
--- ghci> let rdr = streamAuto' a [1..5] :: Reader b [b]
--- ghci> runReader rdr "hey"
+-- >>> let a   = effect ask :: Auto (Reader b) a b
+-- >>> let rdr = streamAuto' a [1..5] :: Reader b [b]
+-- >>> runReader rdr "hey"
 -- ["hey", "hey", "hey", "hey", "hey"]
 --
 -- Useful if you wanted to use it inside/composed with an 'Auto' that does
@@ -322,7 +294,7 @@ sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
 --     id -< hey ++ show x
 -- @
 --
--- ghci> streamAuto' bar [1..5]
+-- >>> streamAuto' bar [1..5]
 -- ["hey1", "hey2", "hey3", "hey4", "hey5"]
 --
 sealReader :: (Monad m, Serialize r)

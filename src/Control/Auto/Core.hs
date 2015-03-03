@@ -197,13 +197,6 @@ data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
                 deriving ( Typeable )
 
--- data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
---                        , _saveAuto :: Put
---                        , _stepAuto :: !(a -> m (Output m a b))
---                        } deriving ( Typeable
---                                   , Generic
---                                   )
-
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
 type Auto'   = Auto Identity
 
@@ -870,7 +863,6 @@ instance Monad m => Functor (Auto m a) where
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
-    -- af <*> ax = uncurry ($) <$> (af &&& ax)
     af <*> ax = case (af, ax) of
                   (AutoFunc f, AutoFunc x)  ->
                       AutoFunc (f <*> x)
@@ -1213,6 +1205,26 @@ instance Monad m => Arrow (Auto m) where
                            $ \(x, z) -> do
                                Output y a' <- f x
                                return (Output (y, z) (first a'))
+    second a = case a of
+                 AutoFunc f         ->
+                     AutoFunc (second f)
+                 AutoFuncM f        ->
+                     AutoFuncM (secondM f)
+                 AutoState gp fa s  ->
+                     AutoState gp (\(z, x) -> first (z,) . fa x) s
+                 AutoStateM gp fa s ->
+                     AutoStateM gp (\(z, x) -> liftM (first (z,)) . fa x) s
+                 AutoArb l s f      ->
+                     AutoArb (second <$> l)
+                             s
+                           $ \(z, x) -> let Output y a' = f x
+                                        in  Output (z, y) (second a')
+                 AutoArbM l s f     ->
+                     AutoArbM (second <$> l)
+                              s
+                            $ \(z, x) -> do
+                                Output y a' <- f x
+                                return (Output (z, y) (second a'))
 
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
@@ -1389,7 +1401,12 @@ instance (Monad m, Floating b) => Floating (Output m a b) where
     atanh   = fmap atanh
     acosh   = fmap acosh
 
--- Utility function
+-- Utility functions
+
 firstM :: Monad m => (a -> m b) -> (a, c) -> m (b, c)
-firstM f (x, y) = liftM (, y) (f x)
+firstM f ~(x, y) = liftM (, y) (f x)
 {-# INLINE firstM #-}
+
+secondM :: Monad m => (a -> m b) -> (c, a) -> m (c, b)
+secondM f ~(x, y) = liftM (x,) (f y)
+{-# INLINE secondM #-}

@@ -2,7 +2,7 @@
 
 -- |
 -- Module      : Control.Auto.Blip
--- Description : Tools for generating and manipulating 'Blip' streams.
+-- Description : Tools for generating and manipulating blip streams.
 -- Copyright   : (c) Justin Le 2014
 -- License     : MIT
 -- Maintainer  : justin@jle.im
@@ -10,12 +10,11 @@
 -- Portability : portable
 --
 --
--- This module provides tools for generating and manipulating 'Blip'
--- streams.  The 'Blip' abstraction is not fundamental to 'Auto', but
+-- This module provides tools for generating and manipulating "blip
+-- streams".  The blip stream abstraction is not fundamental to 'Auto', but
 -- rather, like /interval/, is a very useful semantic tool for the
 -- denotation of many programs, games, simulations, and computations in
 -- general that you are likely to write with this library.
---
 --
 
 module Control.Auto.Blip (
@@ -98,13 +97,22 @@ infixl 5 &>
 
 -- $blip
 --
--- A @'Blip' a@, in the context of 'Auto' and 'Auto' compositions,
--- represents a "stream of 'Blip's".  This is a stream that may "emit"
--- a value every once-in-a-while, "discretely", or in "isolated"
--- occurrences.
+-- In the context of inputs/outputs of 'Auto', a @'Blip' a@ represents
+-- a "blip stream" that occasionally, in isolated incidents, emits a value
+-- of type @a@.
 --
--- By this, we mean that every emitted value is emitted "alone", and not as
--- a part of continuous on/off chunks.
+-- For example, @'Auto'' a ('Blip' b)@ is an 'Auto'' that a stream of @a@'s
+-- as input and outputs a *blip stream* that occasionally emits with a @b@.
+-- An @'Auto'' ('Blip' a) b@ is an 'Auto'' that takes a *blip stream* that
+-- occasionally emits with a @a@ and outputs a stream of @b@'s.
+-- 
+-- If an 'Auto' takes or outputs a "blip stream", it comes with some
+-- "semantic" contracts on to how the stream behaves.  The main contract is
+-- that your 'Blip' stream should only output on (meaningfully) "isolated"
+-- incidents, and never on continuous regions of the input stream.
+--
+-- By this, we mean that every emitted value is (conceptually) emitted
+-- "alone", and not as a part of continuous on/off chunks.
 --
 -- == Example situations
 --
@@ -119,48 +127,51 @@ infixl 5 &>
 --
 -- == Contrast with /Intervals/
 --
--- 'Blip' streams are contrasted with another semantic tool: stream
+-- Blip streams are contrasted with another semantic tool: stream
 -- _intervals_, manipulated with "Control.Auto.Interval".  /Intervals/ are
 -- adjacent/contiguous "chunks" of on/off behavior, and are on or off for
 -- contiguous "chunks" at a time.  So when deciding whether or not you want
--- to use the semantics of 'Blip' or the semantics of /Interval/, consider:
--- is this behavior going to be "on/off" for chunks at a time (such as an
--- interval that is on whenever a slowly-moving value is positive)?  Or is
--- it something that is usually "not on", but makes separate, isolated,
--- "blips" --- each emitted value alone and (semantically) isolated from
--- the rest.
+-- to use the semantics of blip streams or the semantics of /Interval/,
+-- consider: is this behavior going to be "on/off" for chunks at a time
+-- (such as an interval that is on whenever a slowly-moving value is
+-- positive)?  Or is it something that is usually "not on", but makes
+-- separate, isolated, "blips" --- each emitted value alone and
+-- (semantically) isolated from the rest.
 --
 -- == Motivations
 --
 -- The main motivations of the semantic concept of 'Blip's (and why they
 -- even exist in the first place) is probably for how well they integrate
--- (with /interval/ semantics) with the various powerful switching
--- combinators from "Control.Auto.Switch".  Many of the combinators in that
--- module are designed so that switches can be "triggered" by 'Blip's.
+-- with /Interval/ semantics and, with intervals, the various powerful
+-- switching combinators from "Control.Auto.Switch".  Many of the
+-- combinators in that module are designed so that switches can be
+-- "triggered" by 'Blip's.
 --
--- 'Blip's have many usages, as will be explained later.  You'll also find
--- that 'Blip' streams work well with their cousins, /interval/ streams.
+-- Blip streams have many usages, as will be explained later.  You'll also
+-- find that blip streams work well with their cousins, /interval/ streams.
 -- But perhaps the use case that stands out above all (and is alone enough
 -- to motivate their existence) is in switching.
 --
--- == "'Blip' semantics"
+-- == "Blip semantics"
 --
--- We say that a 'Blip' stream has "'Blip' semantics" when it is used in
+-- We say that a blip stream has "blip semantics" when it is used in
 -- a way that its emitted values are "isolated", "alone", "discrete", in
--- this way.  When it is not, we say that the stream "breaks" 'Blip'
+-- this way.  When it is not, we say that the stream "breaks" blip
 -- semantics.
 --
--- Note that this can't really be enforced by the types, so it's up to you
--- as a library developer or application developer to take care that the
--- blip streams you make all conform to 'Blip' semantics.
+-- Note that this can't really be enforced by the types, so if you're
+-- a library or framework developer, it's up to you to take care that the
+-- blip streams you offer all conform to blip semantics.  However, if
+-- you're just making an application, you can use most of the combinators
+-- in this library/module and not worry.
 --
--- Also note that in many of these cases, "'Blip' semantics" depends on how
--- the 'Auto's are composed, and what they are composed to.  If the value
+-- Also note that in many of these cases, "blip semantics" depends on how
+-- the 'Auto's are /composed/, and what they are composed to.  If the value
 -- in question is "almost always" positive and only negative at isolated
 -- points in time, then such a "blip stream that emits whenever the value
--- is negative" has proper 'Blip' semantics.  If the value in question is
+-- is negative" has proper blip semantics.  If the value in question is
 -- slowly-moving and meandering, and might spend a lot of time negative at
--- a time, then the same blip stream would /not/ preserve 'Blip' semantics.
+-- a time, then the same blip stream would /not/ preserve blip semantics.
 --
 -- === Why semantics are important
 --
@@ -175,25 +186,26 @@ infixl 5 &>
 -- and @x /= x@ are both true...and it would completely break down any
 -- attempt at understanding what 'Eq' code "means".
 --
--- You can think of "'Blip' semantics" as being the "laws" of 'Blip'
--- streams.  If we assume that things follow blip semantics properly, then
--- we can reason about them in a unified and useful way.  If we can trust
--- that 'Blip's actually behave "like blips", then 'Blip' becomes an
--- extremely useful tool for denoting certain behaviors and programs.
+-- You can think of "blip semantics" as being the "laws" of blip streams.
+-- If we assume that things follow blip semantics properly, then we can
+-- reason about them in a unified and useful way.  If we can trust that
+-- blip streams actually behave "like blip streams", then blip streams
+-- become an extremely useful tool for denoting certain behaviors and
+-- programs.
 --
 -- If we can't...then it becomes a lot less useful :)
 --
--- In particular, one big use case for 'Blip' streams (the switching
+-- In particular, one big use case for blip streams (the switching
 -- mechanisms "Control.Auto.Switch") all only "work well" when your 'Blip'
 -- streams follow proper semantics.
 --
 -- === Combinators preserve semantics
 --
--- /Most/ of the combinators in this module try their best to preserve
--- 'Blip' semantics.  That is, you can't use them in a way that will
--- produce a non-semantic-abiding 'Blip' stream.  You can "trust" them, and
--- if you use only safe combinators, you don't ever have to worry.  Well.
--- That much, at least.
+-- /Most/ of the combinators in this module try their best to preserve blip
+-- semantics.  That is, you can't use them in a way that will produce
+-- a non-semantic-abiding blip stream.  You can "trust" them, and if you
+-- use only safe combinators, you don't ever have to worry.  Well. That
+-- much, at least.
 --
 -- There are a few notable exceptions:
 --
@@ -206,24 +218,24 @@ infixl 5 &>
 --
 -- == Practical examples
 --
--- There are many practical examples of using 'Blip's in the various
+-- There are many practical examples of using blip streams in the various
 -- examples in <https://github.com/mstksg/auto-examples auto-examples>,
--- especially from /chatbot/.  There, 'Blip' streams are used in many
--- situations, primarily streams for players sending certain commands.
--- It's also used in /hangman/, to signify player events such as victory,
+-- especially from /chatbot/.  There, blip streams are used in many
+-- situations, primarily streams for players sending certain commands. It's
+-- also used in /hangman/, to signify player events such as victory,
 -- good/bad guesses, etc.
 --
--- 'Blip' streams work very closely with the various switching combinators
--- in "Control.Auto.Switch".  If anything, if there is only one reason to
--- use 'Blip's, it's with the various switching mechanisms in that module.
--- All of the switching combinators rely on the fact that your 'Blip'
--- streams follow proper semantics, further emphasizing the importance of
+-- Blip streams work very closely with the various switching combinators in
+-- "Control.Auto.Switch".  If anything, if there is only one reason to use
+-- blip streams, it's with the various switching mechanisms in that module.
+-- All of the switching combinators rely on the fact that your blip streams
+-- follow proper semantics, further emphasizing the importance of
 -- conforming to the semantics.
 --
 -- == For library, framework, and back-end developers
 --
 -- Remember that this module is only meant to export "safe" combinators
--- that try their best to maintain 'Blip' semantics.  Think of this module
+-- that try their best to maintain blip semantics.  Think of this module
 -- as a useful guideline to help programmers maintain semantics at
 -- compile-time, by only exporting not-as-dangerous combinators.
 --
@@ -233,7 +245,7 @@ infixl 5 &>
 --
 -- As a library or framework or back-end developer, however, you aren't
 -- programming at the logic level, but rather at the gritty implementation
--- level.  So, you might want to provide 'Blip' streams and for your
+-- level.  So, you might want to provide blip streams and for your
 -- library users or application developers or the game logic you are
 -- writing.
 --
@@ -286,32 +298,36 @@ foldlB' f b0 = foldl' (merge f) (Blip b0)
 (&>) = liftA2 mergeR
 
 
--- | An 'Auto' that ignores its input and produces a 'Blip' stream that
--- never emits.
+-- | An 'Auto' that ignores its input and produces a blip stream never
+-- emits.
 never :: Auto m a (Blip b)
 never = mkConst NoBlip
 
--- | An 'Auto' that produces a 'Blip' stream that emits on the first ever
--- "tick", with the input at that step.  It never emits again after that.
+-- | Produces a blip stream that emits with the first received input value,
+-- and never again after that.
 --
 -- Often used with 'pure':
 --
--- >>> immediately . pure "Emit me!"
+-- > immediately . pure "Emit me!"
 --
 -- Or, in proc notation:
 --
--- >>> blp <- immediately -< "Emit me!"
+-- > blp <- immediately -< "Emit me!"
 --
--- To get a 'Blip' stream that emits a given value (eg., "Emit me!") once
+-- to get a blip stream that emits a given value (eg., "Emit me!") once
 -- and stops emitting ever again.
+--
+-- >>> streamAuto' (immediately . pure "Emit me!") [1..5]
+-- [Blip "Emit Me!", NoBlip, NoBlip, NoBlip, NoBlip]
+--
 immediately :: Auto m a (Blip a)
 immediately = mkState f False
   where
     f _ True  = (NoBlip, True)
     f x False = (Blip x, True)
 
--- | An 'Auto' that produces a 'Blip' stream that only emits once, on the
--- given number step.  It emits the input /on/ that many steps.
+-- | Produces a blip stream that only emits once, with the input value on
+-- the given step number.  It emits the input /on/ that many steps.
 --
 -- prop> immediately == inB 1
 inB :: Int                -- ^ number of steps before value is emitted.
@@ -322,11 +338,11 @@ inB n = mkState f (n, False)
     f x (i, False) | i <= 1    = (Blip x, (1  , True ))
                    | otherwise = (NoBlip, (i-1, False))
 
--- | An 'Auto' producing a 'Blip' stream that emits the input whenever the
--- input satisfies a given predicate.
+-- | Produces a blip stream that emits the input value whenever the input
+-- satisfies a given predicate.
 --
--- Warning!  This 'Auto' has the capability of "breaking" 'Blip' semantics.
--- Be sure you know what you are doing when using this.  'Blip' streams are
+-- Warning!  This 'Auto' has the capability of "breaking" blip semantics.
+-- Be sure you know what you are doing when using this.  Blip streams are
 -- semantically supposed to only emit at discrete, separate occurrences.
 -- Do not use this for interval-like (on and off for chunks at a time)
 -- things; each input should be dealt with as a separate thing.
@@ -368,11 +384,10 @@ emitJusts :: (a -> Maybe b)     -- ^ "predicate" to emit on.
 emitJusts p = mkFunc (maybe NoBlip Blip . p)
 
 
--- | @'every' n@ is an 'Auto' that takes in a stream of @a@s and produces
--- a blip stream that emits the input @a@ every @n@ steps.  First emission
--- is on the @n@th step.
+-- | @'every' n@ is an 'Auto' that emits with the incoming inputs on every
+-- @n@th input value.  First emitted value is on the @n@th step.
 --
--- Will usually break 'Blip' semantics when you pass in 1.
+-- Will obviously break 'Blip' semantics when you pass in 1.
 --
 every :: Int    -- ^ emit every @n@ steps.
       -> Auto m a (Blip a)
@@ -381,9 +396,9 @@ every (max 1 -> n) = mkState f n
     f x i | i <= 1    = (Blip x, n    )
           | otherwise = (NoBlip, i - 1)
 
--- | @'eachAt' n xs@ is an 'Auto' that ignores its input and emits each
--- element of @xs@ one at a time, evey @n@ steps.  First emitted value is
--- at step @n@.
+-- | @'eachAt' n xs@ is an 'Auto' that ignores its input and creates
+-- a 'Blip' stream that emits each element of @xs@ one at a time, evey @n@
+-- steps.  First emitted value is at step @n@.
 --
 -- Once the list is exhausted, never emits again.
 --
@@ -391,7 +406,10 @@ every (max 1 -> n) = mkState f n
 --
 -- The process of serializing and resuming this 'Auto' is O(n) space and
 -- time with the length of @xs@.  So don't serialize this if you plan on
--- passing an infinite list :)
+-- passing an infinite list :)  See "Control.Auto.Generate" for more
+-- options.
+--
+-- prop> eachAt n xs == perBlip (fromList xs) . every n
 eachAt :: Serialize b
        => Int   -- ^ emit every @n@ steps
        -> [b]   -- ^ list to emit values from
@@ -410,22 +428,24 @@ _eachAtF n (i, xs) = case xs of
                        y:ys | i <= 1    -> (Blip y, (n    , ys))
                             | otherwise -> (NoBlip, (i - 1, xs))
 
--- | Suppress all emissions when the predicate is false.
+-- | Suppress all upstream emissions when the predicate (on the emitted
+-- value) fails.
 filterB :: (a -> Bool)      -- ^ filtering predicate
         -> Auto m (Blip a) (Blip a)
 filterB p = mkFunc $ \x -> case x of
                              Blip x' | p x' -> x
                              _              -> NoBlip
 
--- | Maps the given function onto every emission, and suppresses all those
--- whose results are Nothing.
+-- | Applies the given function to every emitted value, and suppresses all
+-- those for which the result is 'Nothing'.  Otherwise, lets it pass
+-- through with the value in the 'Just'.
 mapMaybeB :: (a -> Maybe b)
           -> Auto m (Blip a) (Blip b)
 mapMaybeB f = mkFunc $ \x -> case x of
                                Blip x' -> maybe NoBlip Blip $ f x'
                                _       -> NoBlip
 
--- | Supress all emissions except for the very first.
+-- | Supress all upstream emitted values except for the very first.
 once :: Auto m (Blip a) (Blip a)
 once = mkState f False
   where
@@ -433,7 +453,8 @@ once = mkState f False
     f e@(Blip _) False = (e,       True )
     f _          False = (NoBlip, False)
 
--- | Suppress only the first emission, and ignore the rest.
+-- | Suppress only the first emission coming from upstream, and let all the
+-- others pass uninhibited.
 notYet :: Auto m (Blip a) (Blip a)
 notYet = mkState f False
   where
@@ -441,7 +462,8 @@ notYet = mkState f False
     f (Blip _) False = (NoBlip, True )
     f _        False = (NoBlip, False)
 
--- | @'takeB' n@ allows only the first @n@ emissions to pass.
+-- | @'takeB' n@ allows only the first @n@ emissions to pass; it suppresses
+-- all of the rest.
 takeB :: Int    -- ^ number of emissions to allow to pass
       -> Auto m (Blip a) (Blip a)
 takeB = mkState f . max 0
@@ -450,7 +472,8 @@ takeB = mkState f . max 0
     f e@(Blip _) i = (e      , i-1)
     f _          i = (NoBlip, i  )
 
--- | Allow emissions to pass until the first that fails the predicate.
+-- | Allow all emitted valuesto pass until the first that fails the
+-- predicate.
 takeWhileB :: (a -> Bool)       -- ^ filtering predicate
            -> Auto m (Blip a) (Blip a)
 takeWhileB p = mkState f False
@@ -459,8 +482,8 @@ takeWhileB p = mkState f False
     f e@(Blip x) False | p x = (e      , False)
     f _          False       = (NoBlip, True )
 
--- | @'dropB' n@ suppresses the first @n@ emissions and passes through the
--- rest.
+-- | @'dropB' n@ suppresses the first @n@ emissions from upstream and
+-- passes through the rest uninhibited.
 dropB :: Int      -- ^ number of emissions to suppress initially
       -> Auto m (Blip a) (Blip a)
 dropB = mkState f . max 0
@@ -469,8 +492,8 @@ dropB = mkState f . max 0
     f (Blip _) i = (NoBlip, i-1)
     f _        i = (NoBlip, i  )
 
--- | Suppress all emissions until the first one satisfying the predicate,
--- then allow the rest through.
+-- | Suppress all emited values until the first one satisfying the
+-- predicate, then allow the rest to pass through.
 dropWhileB :: (a -> Bool)     -- ^ filtering predicate
            -> Auto m (Blip a) (Blip a)
 dropWhileB p = mkState f False
@@ -484,7 +507,7 @@ dropWhileB p = mkState f False
 -- a "folding function", with a given starting value.  @b -> a -> b@, with
 -- a starting @b@, gives @'Auto' m ('Blip' a) ('Blip' b)@.
 --
--- The resulting 'Blip' stream will emit every time the input stream emits,
+-- The resulting blip stream will emit every time the input stream emits,
 -- but with the "accumulated value".
 --
 -- Basically 'accum', but on blip stream emissions.
@@ -508,14 +531,13 @@ _accumBF f e y0 = case e of
                               in  (Blip y1, y1)
                     NoBlip ->     (NoBlip , y0)
 
--- | At every step, outputs the result of applying the "folding function"
--- with against the contents of every emitted value so far.
+-- | The output is the result of folding up every emitted value seen thus
+-- far, with the given folding function and initial value.
 --
--- prop> scanB f x0 == (hold . accumB f x0) <|!> pure x0
+-- prop> scanB f x0 == holdWith x0 . accumB f x0
 --
 -- >>> let a = scanB (+) 0 . eachAt 2 [1,2,3]
--- >>> let Output res _ = stepAutoN' 8 ()
--- >>> res
+-- >>> take 8 . streamAuto' a $ repeat ()
 -- [0, 1, 1, 3, 3, 6, 6, 6, 6]
 scanB :: Serialize b
       => (b -> a -> b)      -- ^ folding function
@@ -532,8 +554,8 @@ scanB_ f = accum_ (_scanBF f)
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
 
--- | At every step, outputs the monoid sum of all emitted values received
--- so far.
+-- | The output is the 'mconcat' (monoid sum) of all emitted values seen
+-- this far.
 mscanB :: (Monoid a, Serialize a)
        => Auto m (Blip a) a
 mscanB = scanB (<>) mempty
@@ -543,30 +565,28 @@ mscanB_ :: Monoid a
         => Auto m (Blip a) a
 mscanB_ = scanB_ (<>) mempty
 
--- | Outputs the number of emitted values of the input 'Blip' stream so
--- far.
+-- | The output is the number of emitted values received from the upstream
+-- blip stream so far.
 countB :: Auto m (Blip a) Int
 countB = accum (\i -> (i +) . blip 0 (const 1)) 0
 
--- | Produces a blip stream that emits whenever the predicate applied to
--- the input switches from false to true.  Emits with the triggering input
--- value.
+-- | Blip stream that emits whenever the predicate applied to the input
+-- switches from false to true.  Emits with the triggering input value.
 became :: Serialize a
        => (a -> Bool)       -- ^ change condition
        -> Auto m a (Blip a)
 became p = accum (_becameF p) NoBlip
 
--- | Produces a blip stream that emits whenever the predicate applied to
--- the input switches from true to false.  Emits with the triggering input
--- value.
+-- | Blip stream that emits whenever the predicate applied to the input
+-- switches from true to false.  Emits with the triggering input value.
 noLonger :: Serialize a
          => (a -> Bool)     -- ^ change condition
          -> Auto m a (Blip a)
 noLonger p = became (not . p)
 
--- | Produces a blip stream that emits whenever the predicate applied to
--- the input switches from true to false or false to true.  Emits with the
--- triggering input value.
+-- | Blip stream that emits whenever the predicate applied to the input
+-- switches from true to false or false to true.  Emits with the triggering
+-- input value.
 onFlip :: (Serialize a, Monad m)
        => (a -> Bool)       -- ^ change condition
        -> Auto m a (Blip a)
@@ -595,6 +615,9 @@ _becameF p e x | p x       = blip (Blip x) (const NoBlip) e
                | otherwise = NoBlip
 
 -- | Like 'became', but emits a '()' instead of the triggering input value.
+--
+-- Useful because it can be serialized without the output needing
+-- a 'Serialize' instance.
 became' :: Monad m
         => (a -> Bool)        -- ^ change condition
         -> Auto m a (Blip ())
@@ -605,22 +628,28 @@ became' p = accum f NoBlip
 
 -- | Like 'noLonger', but emits a '()' instead of the triggering input
 -- value.
+--
+-- Useful because it can be serialized without the output needing
+-- a 'Serialize' instance.
 noLonger' :: Monad m
           => (a -> Bool)        -- ^ change condition
           -> Auto m a (Blip ())
 noLonger' p = became' (not . p)
 
 -- | Like 'onFlip', but emits a '()' instead of the triggering input value.
+--
+-- Useful because it can be serialized without the output needing
+-- a 'Serialize' instance.
 onFlip' :: Monad m
         => (a -> Bool)            -- ^ change condition
         -> Auto m a (Blip Bool)
 onFlip' p = fmap (True <$) (became' p) &> fmap (False <$) (noLonger' p)
 
--- | Produces a blip stream that emits whenever the input value changes.
--- Emits with the new value.
+-- | Blip stream that emits whenever the input value changes. Emits with
+-- the new value.
 --
 -- Warning: Note that, when composed on a value that is never expected to
--- keep the same value twice, this technically breaks 'Blip' semantics.
+-- keep the same value twice, this technically breaks blip semantics.
 onChange :: (Serialize a, Eq a) => Auto m a (Blip a)
 onChange = mkState _onChangeF Nothing
 
@@ -654,9 +683,9 @@ fromBlips :: a  -- ^ the "default value" to output when the input is not
           -> Auto m (Blip a) a
 fromBlips d = mkFunc (blip d id)
 
--- | @'holdWith' y0@ is an 'Auto' that always outputs the /most recently
--- emitted/ value from the input /Blip/ stream.  Before anything is
--- emitted, @y0@ is outputted as a placeholder.
+-- | @'holdWith' y0@ is an 'Auto' whose output is always the /most recently
+-- emitted/ value from the input blip stream.  Before anything is emitted,
+-- @y0@ is outputted as a placeholder.
 --
 -- Contrast with 'hold' from "Control.Auto.Interval".
 holdWith :: Serialize a
@@ -690,46 +719,22 @@ modifyBlips f = mkFunc (fmap f)
 
 -- | Takes an @'Auto' m a b@ (an 'Auto' that turns incoming @a@s into
 -- outputting @b@s) into an @'Auto' m ('Blip' a) ('Blip' b)@; the original
--- 'Auto' is lifted to only be applied to emitted contents of a 'Blip'
+-- 'Auto' is lifted to only be applied to emitted contents of a blip
 -- stream.
 --
 -- When the stream emits, the original 'Auto' is "stepped" with the emitted
 -- value; when it does not, it is paused and frozen until the next
 -- emission.
 --
--- >>> let a    = perBlip (sumFrom 0)
+-- >>> let sums = perBlip (sumFrom 0)
 -- >>> let blps = eachAt 2 [1,5,2]
--- >>> let Output bres _ = stepAutoN' 8 blps ()
--- >>> bres
+-- >>> take 8 . streamAuto' blps $ repeat ()
 -- [NoBlip, Blip 1, NoBlip, Blip 5, NoBlip, Blip 2, NoBlip, NoBlip]
--- >>> let Output ares _ = stepAutoN' 8 a ()
--- >>> ares
+-- >>> take 8 . streamAuto' (sums . blps) $ repeat ()
 -- [NoBlip, Blip 1, NoBlip, Blip 6, NoBlip, Blip 8, NoBlip, NoBlip]
+--
 perBlip :: Monad m => Auto m a b -> Auto m (Blip a) (Blip b)
 perBlip = dimap to from . right
   where
     to   = blip (Left ()) Right
     from = either (const NoBlip) Blip
-
--- -- | Why is this even here
--- hm i think it is for cases where 'Maybe's are used as 'Blip's or
--- something and vice versa...
---
--- still weird.  should this even be in unsafe?
--- perBlipI :: Monad m
---           => Auto m (Maybe a) (Maybe b)
---           -> Auto m (Blip a) (Blip b)
--- perBlipI = dimap (blip Nothing Just) (maybe NoBlip Blip)
-
--- again, why?
--- -- | Takes an @'Auto' m a ('Blip' b)@ (an 'Auto' that turns incoming @a@s
--- -- into a 'Blip' stream of @b@s) into an @'Auto' m ('Blip' a) ('Blip' b)@.
--- -- The original 'Auto' is applied only to emitted contents of a 'Blip'
--- -- stream.
--- --
--- -- It is like 'perBlip', but the resulting @'Blip' ('Blip' b)@ is "joined"
--- -- back into a @'Blip' b@.
--- --
--- -- prop> bindB a == fmap (blip NoBlip id) (perBlip a)
--- bindB :: Monad m => Auto m a (Blip b) -> Auto m (Blip a) (Blip b)
--- bindB  = fmap (blip NoBlip id) . perBlip

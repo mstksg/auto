@@ -458,7 +458,8 @@ _muxgathermapF f k (mz, _) = (mz, f k mz)
 -- immediately removed from the collection.  If something for that key is
 -- received again, it will re-initialize it.
 --
--- >>> let sumUntil = proc x -> do
+-- >>> let sumUntil :: Interval' Int Int
+--         sumUntil = proc x -> do
 --                        sums <- sumFrom 0     -< x
 --                        stop <- became (> 10) -< sums
 --                        before -< (sums, stop)
@@ -533,7 +534,8 @@ gather__ = lmap (uncurry M.singleton) . gatherMany__
 -- pairs every step, to update multiple internal 'Auto's.
 --
 -- >>> import qualified Data.Map as M
--- >>> let sumUntil = proc x -> do
+-- >>> let sumUntil :: Interval' Int Int
+--         sumUntil = proc x -> do
 --                        sums <- sumFrom 0     -< x
 --                        stop <- became (> 10) -< sums
 --                        before -< (sums, stop)

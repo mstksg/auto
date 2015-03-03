@@ -293,9 +293,6 @@ discreteF_ f = mkState_ $ \_ x -> (f x, succ x)
 -- it also increments the underlying/global state by one.  It is @'sumFrom'
 -- 0@ with an "attached effect".
 --
--- By the way, the above is identical to
--- @'sumFrom' 0 '.' 'exec' ('modify' (+1))@.
---
 effect :: m b           -- ^ monadic action to contually execute.
        -> Auto m a b
 effect = mkConstM
