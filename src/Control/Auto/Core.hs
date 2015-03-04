@@ -49,6 +49,7 @@ module Control.Auto.Core (
   , decodeAuto
   , saveAuto
   , loadAuto
+  , unserialize
   -- ** Underlying monad
   , hoistA
   , generalizeA
@@ -391,18 +392,15 @@ saveAuto a = case a of
 -- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
--- -- does this even do anything?
--- --
--- -- probably should profile this to see
--- unserialize :: Monad m => Auto m a b -> Auto m a b
--- unserialize a =
---     case a of
---         AutoFunc _       -> a
---         AutoFuncM _      -> a
---         AutoState _ f s  -> AutoState (pure s, const (put ())) f s
---         AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
---         AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
---         AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
+unserialize :: Monad m => Auto m a b -> Auto m a b
+unserialize a =
+    case a of
+        AutoFunc _       -> a
+        AutoFuncM _      -> a
+        AutoState _ f s  -> AutoState (pure s, const (put ())) f s
+        AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
+        AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
+        AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
 
 -- | "Runs" the 'Auto' through one step.
 --
@@ -589,6 +587,8 @@ mkAuto = AutoArb
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
+--
+-- TODO: Tutorial!!!!
 mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
         -> Put                      -- ^ saving 'Put'
         -> (a -> m (Output m a b))  -- ^ (monadic) step function

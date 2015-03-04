@@ -108,7 +108,7 @@ infixl 5 &>
 -- 
 -- If an 'Auto' takes or outputs a "blip stream", it comes with some
 -- "semantic" contracts on to how the stream behaves.  The main contract is
--- that your 'Blip' stream should only output on (meaningfully) "isolated"
+-- that your blip stream should only output on (meaningfully) "isolated"
 -- incidents, and never on continuous regions of the input stream.
 --
 -- By this, we mean that every emitted value is (conceptually) emitted
@@ -140,12 +140,12 @@ infixl 5 &>
 --
 -- == Motivations
 --
--- The main motivations of the semantic concept of 'Blip's (and why they
+-- The main motivations of the semantic concept of blip streams (and why they
 -- even exist in the first place) is probably for how well they integrate
 -- with /Interval/ semantics and, with intervals, the various powerful
 -- switching combinators from "Control.Auto.Switch".  Many of the
 -- combinators in that module are designed so that switches can be
--- "triggered" by 'Blip's.
+-- "triggered" by blip stream emissions.
 --
 -- Blip streams have many usages, as will be explained later.  You'll also
 -- find that blip streams work well with their cousins, /interval/ streams.
@@ -196,7 +196,7 @@ infixl 5 &>
 -- If we can't...then it becomes a lot less useful :)
 --
 -- In particular, one big use case for blip streams (the switching
--- mechanisms "Control.Auto.Switch") all only "work well" when your 'Blip'
+-- mechanisms "Control.Auto.Switch") all only "work well" when your blip
 -- streams follow proper semantics.
 --
 -- === Combinators preserve semantics
@@ -275,7 +275,7 @@ foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldlB' f b0 = foldl' (merge f) (Blip b0)
 
 
--- | Takes two 'Auto's producing 'Blip' streams and returns a "merged"
+-- | Takes two 'Auto's producing blip streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
 -- emit at the same time, the left (first) one is favored.
 --
@@ -286,7 +286,7 @@ foldlB' f b0 = foldl' (merge f) (Blip b0)
      -> Auto m a (Blip b)
 (<&) = liftA2 mergeL
 
--- | Takes two 'Auto's producing 'Blip' streams and returns a "merged"
+-- | Takes two 'Auto's producing blip streams and returns a "merged"
 -- 'Auto' that emits when either of the original 'Auto's emit.  When both
 -- emit at the same time, the right (second) one is favored.
 --
@@ -373,7 +373,7 @@ emitOn p = mkFunc $ \x -> if p x then Blip x else NoBlip
 -- A less "boolean-blind" version of 'emitOn'.
 --
 -- Warning!  Carries all of the same dangers of 'emitOn'.  You can easily
--- break 'Blip' semantics with this if you aren't sure what you are doing.
+-- break blip semantics with this if you aren't sure what you are doing.
 -- Remember to only emit at discrete, separate occurences, and not for
 -- interval-like (on and off for chunks at a time) things.  For interval
 -- semantics, we have "Control.Auto.Interval".
@@ -387,7 +387,7 @@ emitJusts p = mkFunc (maybe NoBlip Blip . p)
 -- | @'every' n@ is an 'Auto' that emits with the incoming inputs on every
 -- @n@th input value.  First emitted value is on the @n@th step.
 --
--- Will obviously break 'Blip' semantics when you pass in 1.
+-- Will obviously break blip semantics when you pass in 1.
 --
 every :: Int    -- ^ emit every @n@ steps.
       -> Auto m a (Blip a)
@@ -397,12 +397,12 @@ every (max 1 -> n) = mkState f n
           | otherwise = (NoBlip, i - 1)
 
 -- | @'eachAt' n xs@ is an 'Auto' that ignores its input and creates
--- a 'Blip' stream that emits each element of @xs@ one at a time, evey @n@
+-- a blip stream that emits each element of @xs@ one at a time, evey @n@
 -- steps.  First emitted value is at step @n@.
 --
 -- Once the list is exhausted, never emits again.
 --
--- Obviously breaks 'Blip' semantics when you pass in 1.
+-- Obviously breaks blip semantics when you pass in 1.
 --
 -- The process of serializing and resuming this 'Auto' is O(n) space and
 -- time with the length of @xs@.  So don't serialize this if you plan on
@@ -503,7 +503,7 @@ dropWhileB p = mkState f False
                        | otherwise = (e      , True )
     f _          False             = (NoBlip, False)
 
--- | Accumulates all emissions in the incoming 'Blip' stream with
+-- | Accumulates all emissions in the incoming blip stream with
 -- a "folding function", with a given starting value.  @b -> a -> b@, with
 -- a starting @b@, gives @'Auto' m ('Blip' a) ('Blip' b)@.
 --
@@ -666,7 +666,7 @@ _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
 -- value inside the 'Just'.
 --
 -- Warning!  Carries all of the same dangers of 'emitOn'.  You can easily
--- break 'Blip' semantics with this if you aren't sure what you are doing.
+-- break blip semantics with this if you aren't sure what you are doing.
 -- Remember to only emit at discrete, separate occurences, and not for
 -- interval-like (on and off for chunks at a time) things.  For interval
 -- semantics, we have "Control.Auto.Interval".
@@ -675,7 +675,7 @@ _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
 onJusts :: Auto m (Maybe a) (Blip a)
 onJusts = mkFunc (maybe NoBlip Blip)
 
--- | @'fromBlips' d@ is an 'Auto' that decomposes the incoming 'Blip'
+-- | @'fromBlips' d@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
 -- outputs the emitted value when it does.
 fromBlips :: a  -- ^ the "default value" to output when the input is not
@@ -703,7 +703,7 @@ holdWith_ = accum_ f
     f x = blip x id
 
 
--- | Re-emits every emission from the input 'Blip' stream, but replaces its
+-- | Re-emits every emission from the input blip stream, but replaces its
 -- value with the given value.
 --
 -- prop> tagBlips x == modifyBlips (const x)
@@ -711,7 +711,7 @@ tagBlips :: b             -- ^ value to replace every emitted value with
          -> Auto m (Blip a) (Blip b)
 tagBlips y = mkFunc (y <$)
 
--- | Re-emits every emission from the input 'Blip' stream, but applies the
+-- | Re-emits every emission from the input blip stream, but applies the
 -- given function to the emitted value.
 modifyBlips :: (a -> b)     -- ^ function to modify emitted values with
             -> Auto m (Blip a) (Blip b)

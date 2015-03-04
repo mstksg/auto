@@ -722,7 +722,7 @@ Like with blip streams, intervals are used to great effect with switches, like
 the useful `(-->)` combinator:
 
 ~~~haskell
-ghci> let a1 = whileI (< 4) --> pure 0
+ghci> let a1 = whileI (<= 4) --> pure 0
 ghci> streamAuto' a1 [1..10]
 [1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
                -- look, recursion!
