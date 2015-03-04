@@ -1,40 +1,39 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>Control.Auto.Switch</title><link href="ocean.css" rel="stylesheet" type="text/css" title="Ocean" /><script src="haddock-util.js" type="text/javascript"></script><script type="text/javascript">//<![CDATA[
 window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.html");};
 //]]>
-</script></head><body><div id="package-header"><ul class="links" id="page-menu"><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul><p class="caption">auto-0.1.0.0: Locally stateful programming with denotational semantics.</p></div><div id="content"><div id="module-header"><table class="info"><tr><th>Copyright</th><td>(c) Justin Le 2014</td></tr><tr><th>License</th><td>MIT</td></tr><tr><th>Maintainer</th><td>justin@jle.im</td></tr><tr><th>Stability</th><td>unstable</td></tr><tr><th>Portability</th><td>portable</td></tr><tr><th>Safe Haskell</th><td>None</td></tr><tr><th>Language</th><td>Haskell2010</td></tr></table><p class="caption">Control.Auto.Switch</p></div><div id="table-of-contents"><p class="caption">Contents</p><ul><li><a href="#g:1">Sequential switching</a></li><li><a href="#g:2">Arbitrary switching</a></li><li><a href="#g:3">Function-based switches</a></li><li><a href="#g:4">Resetting</a></li></ul></div><div id="description"><p class="caption">Description</p><div class="doc"><p>A collection of versatile switching mechanisms.  Switching is really
+</script></head><body><div id="package-header"><ul class="links" id="page-menu"><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul><p class="caption">auto-0.1.0.0: Locally stateful programming with denotational semantics.</p></div><div id="content"><div id="module-header"><table class="info"><tr><th>Copyright</th><td>(c) Justin Le 2015</td></tr><tr><th>License</th><td>MIT</td></tr><tr><th>Maintainer</th><td>justin@jle.im</td></tr><tr><th>Stability</th><td>unstable</td></tr><tr><th>Portability</th><td>portable</td></tr><tr><th>Safe Haskell</th><td>None</td></tr><tr><th>Language</th><td>Haskell2010</td></tr></table><p class="caption">Control.Auto.Switch</p></div><div id="table-of-contents"><p class="caption">Contents</p><ul><li><a href="#g:1">Sequential switching</a></li><li><a href="#g:2">Arbitrary switching</a></li><li><a href="#g:3">Function-based switches</a></li><li><a href="#g:4">Resetting</a></li></ul></div><div id="description"><p class="caption">Description</p><div class="doc"><p>A collection of versatile switching mechanisms.  Switching is really
  a core mechanic at the heart of how to structure a lot of program
  logics.  Switching from one &quot;mode&quot; to another, from dead to alive, from
  room to room, menu to menu...switching between <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s is a core part
- about how many programs are built.</p><p>All of the switches here take advantage of either <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> semantics (from
+ about how many programs are built.</p><p>All of the switches here take advantage of either blip semantics (from
  <a href="Control-Auto-Blip.html">Control.Auto.Blip</a>) or <em>Interval</em> semantics (from
  <a href="Control-Auto-Interval.html">Control.Auto.Interval</a>)...so this is where maintaining semantically
- meaningful <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> streams and intervals pays off!</p><p>Each switch here has various examples, and you'll find many of these in
+ meaningful blip streams and intervals pays off!</p><p>Each switch here has various examples, and you'll find many of these in
  use in the <a href="https://github.com/mstksg/auto-examples">example projects</a>.</p><p>Note the naming convention going on here (also used in
- <a href="Control-Auto-Serialize.html">Control.Auto.Serialize</a>):  A switch &quot;from&quot; a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream is triggered
- &quot;internally&quot; by the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> being switched itself; a switch &quot;on&quot; a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream is
- triggered &quot;externally&quot; by an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that is <em>not</em> swiched.</p></div></div><div id="synopsis"><p id="control.syn" class="caption expander" onclick="toggleSection('syn')">Synopsis</p><ul id="section.syn" class="hide" onclick="toggleSection('syn')"><li class="src short"><a href="#v:-45--45--62-">(--&gt;)</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:-45--63--62-">(-?&gt;)</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b</li><li class="src short"><a href="#v:switchFrom_">switchFrom_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:switchOn_">switchOn_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) b</li><li class="src short"><a href="#v:switchOnF">switchOnF</a> :: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c) =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:switchOnF_">switchOnF_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:switchFromF">switchFromF</a> :: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c) =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:switchFromF_">switchFromF_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:resetOn">resetOn</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:resetFrom">resetFrom</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li></ul></div><div id="interface"><h1 id="g:1">Sequential switching</h1><div class="top"><p class="src"><a name="v:-45--45--62-" class="def">(--&gt;)</a> <span class="fixity">infixr 1</span><span class="rightedge"></span></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b</td><td class="doc"><p>initial behavior</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>final behavior, when the initial
-   behavior turns off.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>&quot;One after the other&quot;.  Behave like the first <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> (and run only its
- effects) as long as it is &quot;on&quot; (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Just">Just</a></code>).  As soon as it is <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Nothing">Nothing</a></code>,
- begin behaving like the second <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> forevermore, and running the
- second <code><a href="Control-Auto-Core.html#t:Auto-39-">Auto'</a></code>s effects, if any.  Works well if the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s follow
- interval semantics from <a href="Control-Auto-Interval.html">Control.Auto.Interval</a>.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a1 = (onFor 2 . pure &quot;hello&quot;) --&gt; pure &quot;world&quot;
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let Output res1 _ = stepAutoN' 5 a1 ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res1
-</code></strong>[&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;world&quot;]
-</pre><p>(Recall that <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> &quot;hello&quot;</code> is the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that ignores its input and
- constantly outputs &quot;hello&quot;, and <code><code><a href="Control-Auto-Interval.html#v:onFor">onFor</a></code> 2</code> lets its input pass &quot;on&quot;
- (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Just">Just</a></code>) for two steps, then is &quot;off&quot; (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Nothing">Nothing</a></code>) ever after.)</p><p>Association works in a way that you can &quot;chain&quot; <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s, as long as you
- have a non-<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#t:Maybe">Maybe</a></code> / non-<a href="Interval.html">Interval</a> <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> at the end.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a2 = onFor 2 . pure &quot;hello&quot;
-</code></strong>         --&gt; onFor 2 . pure &quot;world&quot;
-         --&gt; pure &quot;goodbye!&quot;
-<code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let Output res2 _ = stepAutoN' 6 a2 ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res2
-</code></strong>[&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;goodbye!&quot;, &quot;goodbye!&quot;]
+ <a href="Control-Auto-Serialize.html">Control.Auto.Serialize</a>):  A switch &quot;from&quot; a blip stream is triggered
+ &quot;internally&quot; by the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> being switched itself; a switch &quot;on&quot; a blip
+ stream is triggered &quot;externally&quot; by an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that is <em>not</em> swiched.</p></div></div><div id="synopsis"><p id="control.syn" class="caption expander" onclick="toggleSection('syn')">Synopsis</p><ul id="section.syn" class="hide" onclick="toggleSection('syn')"><li class="src short"><a href="#v:-45--45--62-">(--&gt;)</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:-45--63--62-">(-?&gt;)</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b -&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b</li><li class="src short"><a href="#v:switchFrom_">switchFrom_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:switchOn_">switchOn_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) b</li><li class="src short"><a href="#v:switchOnF">switchOnF</a> :: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c) =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:switchOnF_">switchOnF_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:switchFromF">switchFromF</a> :: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c) =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:switchFromF_">switchFromF_</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li><li class="src short"><a href="#v:resetOn">resetOn</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</li><li class="src short"><a href="#v:resetFrom">resetFrom</a> :: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</li></ul></div><div id="interface"><h1 id="g:1">Sequential switching</h1><div class="top"><p class="src"><a name="v:-45--45--62-" class="def">(--&gt;)</a> <span class="fixity">infixr 1</span><span class="rightedge"></span></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Interval.html#t:Interval">Interval</a> m a b</td><td class="doc"><p>initial behavior</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>final behavior, when the initial
+   behavior turns off.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>&quot;This, then that&quot;.  Behave like the first <code><a href="Control-Auto-Interval.html#t:Interval">Interval</a></code> (and run its
+ effects) as long as it is &quot;on&quot; (outputting <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Just">Just</a></code>).  As soon as it turns
+ off (is 'Nothing), it'll &quot;switch over&quot; and begin behaving like the
+ second <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> forever, running the effects of the second <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, too.
+ Works well if the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s follow interval semantics from
+ <a href="Control-Auto-Interval.html">Control.Auto.Interval</a>.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a1 = whileI (&lt;= 4) --&gt; pure 0
+</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a1 [1..10]
+</code></strong>[1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
+</pre><p>(<code>whileI</code> only lets items satisfying the predicate pass through as &quot;on&quot;,
+ and is &quot;off&quot; otherwise; <code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> is the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that always produces the
+ same output)</p><p>Association works in a way that you can &quot;chain&quot; <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s, as long as you
+ have an appropriate <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> (and not <code><a href="Control-Auto-Interval.html#t:Interval">Interval</a></code>) at the end:</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a2 = onFor 3 . sumFrom 0
+</code></strong>         --&gt; onFor 3 . sumFrom 100
+         --&gt; pure 0
+<code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a2 [1..10]
+</code></strong>[1,3,6,104,109,115,0,0,0,0]
 </pre><p><code>a --&gt; b --&gt; c</code> associates as <code>a --&gt; (b --&gt; c)</code></p><p>This is pretty invaluable for having <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s &quot;step&quot; through a series of
  different <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s, progressing their state from one stage to the next.
  <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s can control when they want to be &quot;moved on&quot; from by turning
  &quot;off&quot; (outputting <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Nothing">Nothing</a></code>).</p><p>Note that recursive bindings work just fine, so:</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a3 = onFor 2 . pure &quot;hello&quot;
-</code></strong>         --&gt; onFor 2 . pure &quot;world&quot;
+</code></strong>         --&gt; onFor 2 . pure &quot;goodbye&quot;
          --&gt; a3
 <code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res3, _) = stepAutoN' 8 a3 ()
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res3
@@ -52,138 +51,191 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
  interval/<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#t:Maybe">Maybe</a></code>.  The entire result is, then, a <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#t:Maybe">Maybe</a></code>.  Probably less
  useful than <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code> in most situations.</p></div></div><h1 id="g:2">Arbitrary switching</h1><div class="top"><p class="src"><a name="v:switchFrom_" class="def">switchFrom_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p><code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> outputting a
    normal output (<code>b</code>)
-   and a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
+   and a blip stream
    containing the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
    to replace itself
-   with.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Takes an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that emits an output with a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emitting
- <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s.</p><p><code><code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> a0</code> behaves like <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Tuple.html#v:fst">fst</a></code> <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Functor.html#v:-60--36--62-">&lt;$&gt;</a></code> a0</code> at first, outputting
- the first part of the result tuple.  Then, as soon as the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
- emits with an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> <code>a1</code>, the whole thing behaves like <code>a1</code> forever.</p><p>In the following example, <code>a1</code> is an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that counts upwards forever
- and also outputs a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream that will emit an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> containing
- <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> (the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that always emits 100) after three steps.</p><pre>    a1 :: Auto' () (Int, Blip (Auto' () Int))
-    a1 = proc _ -&gt; do
-        c          &lt;- count -&lt; ()
-        switchBlip &lt;- inB 3 -&lt; pure 100
-        id -&lt; (c, switchBlip)
+   with.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Takes an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> who has both a normal output stream and a blip stream
+ output stream, where the blip stream emits new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s.</p><p>You can imagine <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> as a box containing a single <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> like
+ the one just described.  It feeds its input into the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>,
+ and its output stream is the &quot;normal value&quot; output stream of the
+ contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>However, as soon as the blip stream of the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> emits a new
+ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>...it immediately <em>replaces</em> the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> with the <em>new</em>
+ one.  And the whole thing starts all over again.</p><p><code><code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> a0</code> will &quot;start&quot; with <code>a0</code> already in the box.</p><p>This is mostly useful to allow <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to &quot;replace themselves&quot; or
+ control their own destiny, or the behavior of their successors.</p><p>In the following example, <code>a1</code> is an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that behaves like
+ a cumulative sum but also outputs a blip stream that will emit an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
+ containing <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> (the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that always emits 100) after three
+ steps.</p><pre>a1 :: Auto' Int (Int, Blip (Auto' Int Int))
+a1 = proc x -&gt; do
+    sums       &lt;- sumFrom 0 -&lt; x
+    switchBlip &lt;- inB 4     -&lt; pure 100
+    id -&lt; (sums, switchBlip)
 
-    -- alternatively
-    a1' = count &amp;&amp;&amp; (tagBlips (pure 100) . inB 3)
+-- alternatively
+a1' = sumFrom 0 &amp;&amp;&amp; (tagBlips (pure 100) . inB 4)
 </pre><p>So, <code><code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> a1</code> will be the output of <code>count</code> for three steps,
- and then switch to <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> afterwards (when the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream
- emits):</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res1, _) = stepAutoN' 6 (switchFrom_ a1) ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res1
-</code></strong>[0, 1, 2, 100, 100, 100]
-</pre><p>This is fun to use with recursion, so you can get looping switches:</p><pre>    a2 :: Auto' () (Int, Blip (Auto' () Int))
-    a2 = proc _ -&gt; do
-        c &lt;- count -&lt; ()
-        switchBlip &lt;- inB 3 -&lt; switchFrom_ a2
-        id -&lt; (c, switchBlip)
+ and then switch to <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code> afterwards (when the blip stream
+ emits):</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' (switchFrom_ a1) [1..10]
+</code></strong>[1,3,6,10,100,100,100,100,100,100]
+</pre><p>This is fun to use with recursion, so you can get looping switches:</p><pre>a2 :: Auto' Int (Int, Blip (Auto' Int Int))
+a2 = proc x -&gt; do
+    sums       &lt;- sumFrom 0 -&lt; x
+    switchBlip &lt;- inB 3     -&lt; switchFrom_ a2
+    id -&lt; (c, switchBlip)
 
-   -- alternatively
-   a2' = count &amp;&amp;&amp; (tagBlips (switchFrom_ a2) . inB 3)
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res2, _) = stepAutoN' 10 (switchFrom_ a2) ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res2
-</code></strong>[0, 1, 2, 0, 1, 2, 0, 1, 2, 0]
+-- alternatively
+a2' = sumFrom 0 &amp;&amp;&amp; (tagBlips (switchFrom_ a2') . inB 3)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' (switchFrom_ a2) [101..112]
+</code></strong>[ 101, 203, 306  -- first 'sumFrom', on first three items
+, 104, 209, 315  -- second 'sumFrom', on second three items
+, 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
+, 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
+</pre><p>If you're ever only going to use <code>a2</code> in &quot;switchy&quot; form, you could also
+ do:</p><pre>a2s :: Auto' Int Int
+a2s = switchFrom_ $ proc x -&gt; do
+          sums       &lt;- sumFrom 0 -&lt; x
+          switchBlip &lt;- inB 3     -&lt; a2s
+          id -&lt; (c, switchBlip)
+
+-- or
+a2s' = switchFrom_
+     $ sumFrom 0 &amp;&amp;&amp; (tagBlips a2s' . inB 3)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a2s [101..112]
+</code></strong>[101, 203, 306, 104, 209, 315, 107, 215, 324, 110, 221, 333]
 </pre><p>Note that this combinator is inherently unserializable, so you are going
  to lose all serialization capabilities if you use this.  So sad, I know!
  :(  This fact is reflected in the underscore suffix, as per convention.</p><p>If you want to use switching <em>and</em> have serialization, you can use the
  perfectly serialization-safe alternative, <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code>, which slightly
- less powerful in ways that are unlikely to be missed in practical usage.</p></div></div><div class="top"><p class="src"><a name="v:switchOn_" class="def">switchOn_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code></p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Is a little <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> box...whenever the input <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits an
- <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, it begins to behave like that emitted <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>Input to the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is fed through the first field of the
- tuple, and a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emitting new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s is fed through the
- second field.</p><p>When the stream emits, <em>immediately</em> feeds the input to the new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>Given an initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave like.</p><p>For example, here we push several <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s one after the other into the
- box: <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 100</code>, <code>count</code>, and <code><code>iterator</code> (+3) 0</code>, starting with
- <code><code><a href="Control-Auto-Generate.html#v:pure">pure</a></code> 0</code>.  <code><code><a href="Control-Auto-Blip.html#v:eachAt_">eachAt_</a></code> 3</code> emits each <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in the given list every
- three steps, starting on the third.</p><pre>    newAutos :: Auto' () (Blip (Auto' () Int))
-    newAutos = eachAt_ 3 [pure 100, count, iterator (+3) 0]
+ less powerful in ways that are unlikely to be missed in practical usage.
+ That is, almost all non-contrived real life usages of <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> can
+ be recovered using <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code>.</p></div></div><div class="top"><p class="src"><a name="v:switchOn_" class="def">switchOn_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code></p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>You can think of this as a little box containing a single <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
+ inside.  Takes two input streams: an input stream of normal values, and
+ a blip stream containing <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s.  It feeds the input stream into the
+ contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>...but every time the input blip stream emits with a new
+ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, <em>replaces</em> the contained <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> with the emitted one.  Then
+ starts the cycle all over, immediately giving the new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> the
+ received input.</p><p>Useful for being able to externally &quot;swap out&quot; <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s for a given
+ situation by just emitting a new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in the blip stream.</p><p>For example, here we push several <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s one after the other into the
+ box: <code><code>sumFrom</code> 0</code>, <code><code>productFrom</code> 1</code>, and <code>count</code>. <code><code><a href="Control-Auto-Blip.html#v:eachAt_">eachAt_</a></code> 4</code> emits
+ each <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in the given list every four steps, starting on the fourth.</p><pre>newAutos :: Auto' Int (Blip (Auto' Int Int))
+newAutos = eachAt_ 4 [sumFrom 0, productFrom 1, count]
 
-    a :: Auto' () Int
-    a = proc _ -&gt; do
-        blipAutos &lt;- newAutos -&lt; ()
-        switchOn_ (pure 0)    -&lt; ((), blipAutos)
+a :: Auto' Int Int
+a = proc i -&gt; do
+    blipAutos &lt;- newAutos -&lt; ()
+    switchOn_ (pure 0)    -&lt; (i, blipAutos)
 
-    -- alternatively
-    a' = switchOn_ (pure 0) . (pure () &amp;&amp;&amp; newAutos)
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 14 a ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
-</code></strong>[0, 0, 100, 100, 100, 0, 1, 2, 0, 3, 6, 9, 12, 15]
+-- alternatively
+a' = switchOn_ (pure 0) . (id &amp;&amp;&amp; newAutos)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a [1..12]
+</code></strong>[ 1,  3,   6           -- output from sumFrom 0
+, 4, 20, 120           -- output from productFrom 1
+, 0,  1,   2, 3, 4, 5] -- output from count
 </pre><p>Like <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code>, this combinator is inherently unserializable.  So if
  you use it, you give up serialization for your <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s.  This is
  reflected in the underscore suffix.</p><p>If you wish to have the same switching devices but keep serialization,
  you can use <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code>, which is slightly less powerful, but should be
  sufficient for all practical use cases.</p></div></div><h1 id="g:3">Function-based switches</h1><div class="top"><p class="src"><a name="v:switchOnF" class="def">switchOnF</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c)</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</td><td class="doc"><p>function to generate the next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
    to behave like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>initial starting <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave
-   like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Like <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code>, <code><code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code> f a0</code> is like a little <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> box
- wrapping and running an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.  It takes in both an input and a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code>
- stream of <code>c</code>'s.  It behaves just like the internal <code><code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> m a b</code>,
- and initially behaves like <code>a0</code>, until the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits.</p><p>Then, it swaps the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> for a <em>new</em> one, given by the function <code>f</code>.
- <code>f</code> is applied to the <code>c</code> that the stream emits, and that new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is
- placed into the box and is immediately run on that same step.</p><p>In the following example we are using just <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-List.html#v:iterate">iterate</a></code> (+1)</code> for our
- &quot;next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot; function, and triggering it with a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream that
- counts up from 0.</p><pre>nextAuto :: Int -&gt; Auto' () Int
-nextAuto = iterator (+1)
+   like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Essentially identical to <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code>, except instead of taking in
+ a blip stream of new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to put into the box, takes a blip stream
+ of <code>c</code> --- and <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code> uses the <code>c</code> to create the new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to put
+ in the box.</p><p>Here is the equivalent of the two examples from <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code>,
+ implemented with <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code>; see the documentatino for <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code>
+ for a description of what they are to do.</p><pre>newAuto :: Int -&gt; Auto' Int Int
+newAuto 1 = sumFrom 0
+newAuto 2 = productFrom 1
+newAuto 3 = count
+newAuto _ = error &quot;Do you expect rigorous error handling from a toy example?&quot;
 
-triggerer :: Auto' () (Blip Int)
-triggerer = stretchB 3 (iterator (+10) 0)
-
-a :: Auto' () Int
-a = proc _ -&gt; do
-    triggers &lt;- triggerer -&lt; ()
-    switchOnF nextAuto (nextAuto 0) -&lt; ((), triggers)
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 10 a ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
-</code></strong>[0,1,2,10,11,12,20,21,22,30,31]
-</pre></div></div><div class="top"><p class="src"><a name="v:switchOnF_" class="def">switchOnF_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</td><td class="doc"><p>function to generate the next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
+a :: Auto' Int Int
+a = proc i -&gt; do
+    blipAutos &lt;- eachAt 4 [1,2,3] -&lt; ()
+    switchOnF_ newAuto (pure 0) -&lt; (i, blipAutos)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a [1..12]
+</code></strong>[ 1,  3,   6           -- output from sumFrom 0
+, 4, 20, 120           -- output from productFrom 1
+, 0,  1,   2, 3, 4, 5] -- output from count
+</pre><p>Instead of sending in the &quot;replacement <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot;, sends in a number, which
+ corresponds to a specific replacement <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>As you can see, all of the simple examples from <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code> can be
+ implemented in <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code>...and so can most real-life examples.  The
+ advantage is that <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code> is serializable, and <code><a href="Control-Auto-Switch.html#v:switchOn_">switchOn_</a></code> is
+ not.</p></div></div><div class="top"><p class="src"><a name="v:switchOnF_" class="def">switchOnF_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</td><td class="doc"><p>function to generate the next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
    to behave like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p>initial starting <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave
    like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>The non-serializing/non-resuming version of <code><a href="Control-Auto-Switch.html#v:switchOnF">switchOnF</a></code>.</p></div></div><div class="top"><p class="src"><a name="v:switchFromF" class="def">switchFromF</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html#t:Serialize">Serialize</a> c)</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c))</td><td class="doc"><p>function to generate the
    next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)</td><td class="doc"><p>initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.  the <code>b</code>
    is the output, and the
-   <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream triggers new
+   blip stream triggers new
    <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to replace this
-   one.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Takes a function from a <code>c</code> to a new (next) <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, and an initial
- <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>These <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s all taken in <code>a</code> and output <code>b</code>, along with a <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code>
- stream of <code>c</code>s.</p><p><code><code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code> f a0</code> behaves like the current <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> (beginning with
- <code>a0</code>), taking in the <code>a</code> and popping out the <code>b</code>.  However, as soon as
- the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits a <code>c</code>, it replaces internal <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> with a new
- one, determined by the function.</p><p>Here is an example where the &quot;next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot; function is <code>nextAuto</code>:</p><pre>    nextAuto :: Int -&gt; Auto' () (String, Blip Int)
-    nextAuto i0 = proc _ -&gt; do
-        c     &lt;- sumFromD i0 -&lt; 1
-        nextB &lt;- inB 3       -&lt; c
-        id    -<a href="(show">c, (+10) &lt;$</a> nextB)
-</pre><p><code>nextAuto</code> continually counts upwards from the given initial value <code>i0</code>.
- Then, on the third step, the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits with the value of the
- counter plus ten.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res0, _) = stepAutoN' 5 (nextAuto 0) ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res0
-</code></strong>[(&quot;0&quot;, NoBlip), (&quot;1&quot;, NoBlip), (&quot;2&quot;, Blip 13), (&quot;3&quot;, NoBlip), (&quot;4&quot;, NoBlip)]
-</pre><p>Let's see what happens when we wrap it with <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code> and an initial
- <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> of <code><code>nextAuto</code> 0</code>:</p><pre>    a :: Auto' () String
-    a = switchFromF nextAuto (nextAuto 0)
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 10 a ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
-</code></strong>[ &quot;0&quot;, &quot;1&quot;, &quot;2&quot;, &quot;12&quot;, &quot;13&quot;, &quot;14&quot;, &quot;24&quot;, &quot;25&quot;, &quot;26&quot;, &quot;36&quot;, &quot;37&quot;]
-</pre><p>Every three steps, the the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is replaced by a new one, skipping
- ten steps ahead.  First it behaves like the first field of the output of
- <code>nextAuto 0</code>, then like <code>nextAuto 12</code>, then like <code>nextAuto 24</code>, etc.</p><p>This is a more limited (but serializable) version of <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code>,
- where you know the form of all the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s you might be switching to in
- the future, and can generate them with a function conceived ahead of
- time.</p></div></div><div class="top"><p class="src"><a name="v:switchFromF_" class="def">switchFromF_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c))</td><td class="doc"><p>function to generate the
+   one.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Essentially identical to <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code>, except insead of the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
+ outputting a blip stream of new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to replace itself with, it emits
+ a blip stream of <code>c</code> --- and <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code> uses the <code>c</code> to create the
+ new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.</p><p>Here is the equivalent of the two examples from <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code>,
+ implemented with <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code>; see the documentatino for <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code>
+ for a description of what they are to do.</p><pre>a1 :: Auto' Int (Int, Blip Int)
+a1 = proc x -&gt; do
+    sums       &lt;- sumFrom 0 -&lt; x
+    switchBlip &lt;- inB 4     -&lt; 100
+    id -&lt; (sums, switchBlip)
+
+-- alternatively
+a1' = sumFrom 0 &amp;&amp;&amp; (tagBlips 100 . inB 4)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' (switchFrom_ pure a1) [1..10]
+</code></strong>[1,3,6,10,100,100,100,100,100,100]
+</pre><pre>a2 :: Auto' Int (Int, Blip ())
+a2 = proc x -&gt; do
+    sums       &lt;- sumFrom 0 -&lt; x
+    switchBlip &lt;- inB 3     -&lt; ()
+    id -&lt; (c, switchBlip)
+
+-- alternatively
+a2' = sumFrom 0 &amp;&amp;&amp; (tagBlips () . inB 3)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' (switchFromF (const a2) a2) [101..112]
+</code></strong>[ 101, 203, 306  -- first 'sumFrom', on first three items
+, 104, 209, 315  -- second 'sumFrom', on second three items
+, 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
+, 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
+</pre><p>Or, if you're only ever going to use <code>a2</code> in switching form:</p><pre>a2s :: Auto' Int Int
+a2s = switchFromF (const a2s) $ proc x -&gt; do
+          sums       &lt;- sumFrom 0 -&lt; x
+          switchBlip &lt;- inB 3     -&lt; ()
+          id -&lt; (c, swichBlip)
+
+-- or
+a2s' = switchFromF (const a2s')
+     $ sumFrom 0 &amp;&amp;&amp; (tagBlips () . inB 3)
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a2s [101..112]
+</code></strong>[101, 203, 306, 104, 209, 315, 107, 215, 324, 110, 221, 333]
+</pre><p>As you can see, all of the simple examples from <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> can be
+ implemented in <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code>...and so can most real-life examples.  The
+ advantage is that <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code> is serializable, and <code><a href="Control-Auto-Switch.html#v:switchFrom_">switchFrom_</a></code> is
+ not.</p><p>Note that for the examples above, instead of using <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Prelude.html#v:const">const</a></code>, we could
+ have actually used the input parameter to create a new <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> based on
+ what we outputted.</p></div></div><div class="top"><p class="src"><a name="v:switchFromF_" class="def">switchFromF_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; (c -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c))</td><td class="doc"><p>function to generate the
    next <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to behave like</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)</td><td class="doc"><p>initial <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>.  the <code>b</code>
    is the output, and the
-   <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream triggers new
+   blip stream triggers new
    <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to replace this
    one.</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>The non-serializing/non-resuming version of <code><a href="Control-Auto-Switch.html#v:switchFromF">switchFromF</a></code>.</p></div></div><h1 id="g:4">Resetting</h1><div class="top"><p class="src"><a name="v:resetOn" class="def">resetOn</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc"><p><code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to repeatedly reset</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m (a, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c) b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Takes an innocent <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> and wraps a &quot;reset button&quot; around it.  It
- behaves just like the original <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> at first, but when the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code>
- stream emits, the internal <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is reset back to the beginning.</p><p>Here we have <code>count</code>, being reset every five steps:</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a = resetOn count . (pure () &amp;&amp;&amp; every 5)
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 15 a ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
-</code></strong>[0,1,2,3,0,1,2,3,4,0,1,2,3,4,0]
-</pre></div></div><div class="top"><p class="src"><a name="v:resetFrom" class="def">resetFrom</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)</td><td class="doc"><p>The self-resetting <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code></p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Gives an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> the ability to &quot;reset&quot; itself on command</p><p>Basically acts like <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#v:fmap">fmap</a></code> <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Tuple.html#v:fst">fst</a></code></code></p><pre>    fmap fst :: Monad m =&gt; Auto m a (b, Blip c) -&gt; Auto m a b
-</pre><p>But...whenever the <code><a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a></code> stream emits...&quot;resets&quot; the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> back to the
- original state, as if nothing ever happened.</p><p>Here is a counter that attempts to resets itself every three steps:</p><pre>    resetCounter :: Auto' () (Int, Blip ())
-    resetCounter = count &amp;&amp;&amp; inB 3
-</pre><p>And now we throw it into <code><a href="Control-Auto-Switch.html#v:resetFrom">resetFrom</a></code>:</p><pre>    resettingCounter :: Auto' () Int
-    resettingCounter = resetFrom resetCounter
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let (res, _) = stepAutoN' 11 resettingCounter ()
-</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res
-</code></strong>[0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1]
+ behaves just like the original <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> at first, but when the input blip
+ stream emits, the internal <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> is reset back to the beginning.</p><p>Here we have <code>sumFrom</code> wrapped around a reset button, and we send
+ in a blip stream that emits every 4 steps; so every 4th step, the whole
+ summer resets.</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let a = resetOn (sumFrom 0) . (id &amp;&amp;&amp; every 4)
+</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a [101..112]
+</code></strong>[ 101, 203, 306
+, 104, 209, 315  -- resetted!
+, 107, 215, 324  -- resetted!
+, 110, 221, 333] -- resetted!
+</pre></div></div><div class="top"><p class="src"><a name="v:resetFrom" class="def">resetFrom</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m</td><td class="doc empty">&nbsp;</td></tr><tr><td class="src">=&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, <a href="Control-Auto-Blip-Internal.html#t:Blip">Blip</a> c)</td><td class="doc"><p>The self-resetting <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code></p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Gives an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> the ability to &quot;reset&quot; itself on command</p><p>Basically acts like <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#v:fmap">fmap</a></code> <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Tuple.html#v:fst">fst</a></code></code></p><pre>fmap fst :: Monad m =&gt; Auto m a (b, Blip c) -&gt; Auto m a b
+</pre><p>But...whenever the blip stream emits...&quot;resets&quot; the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> back to the
+ original state, as if nothing ever happened.</p><p>Note that this resetting happens on the step <em>after</em> the blip stream
+ emits.</p><p>Here is a summer that sends out a signal to reset itself whenever the
+ cumulative sum reaches 10 or higher:</p><pre>limitSummer :: Auto' Int (Int, Blip ())
+limitSummer = (id &amp;&amp;&amp; became (&gt;= 10)) . sumFrom 0
+</pre><p>And now we throw it into <code><a href="Control-Auto-Switch.html#v:resetFrom">resetFrom</a></code>:</p><pre>resettingSummer :: Auto' Int Int
+resettingSummer = resetFrom limitSummer
+</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' resettingSummer [1..10]
+</code></strong>[ 1, 3, 6, 10    -- and...reset!
+, 5, 11          -- and...reset!
+, 7, 15          -- and...reset!
+, 9, 19 ]
 </pre></div></div></div></div><div id="footer"><p>Produced by <a href="http://www.haskell.org/haddock/">Haddock</a> version 2.14.3</p></div></body></html>
