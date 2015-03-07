@@ -133,8 +133,8 @@ a1 -?> a2 = mkAutoM l s t
     l = do
       flag <- get
       if flag
-        then loadAuto (switched a2)
-        else liftA2 (-?>) (loadAuto a1) (loadAuto a2)
+        then resumeAuto (switched a2)
+        else liftA2 (-?>) (resumeAuto a1) (resumeAuto a2)
     s = put False *> saveAuto a1 *> saveAuto a2
     t x = do
       (y1, a1') <- stepAuto a1 x
@@ -144,7 +144,7 @@ a1 -?> a2 = mkAutoM l s t
         Nothing -> do
           (y, a2') <- stepAuto a2 x
           return (y, switched a2')
-    switched a = mkAutoM (switched <$> loadAuto a)
+    switched a = mkAutoM (switched <$> resumeAuto a)
                          (put True  *> saveAuto a)
                        $ \x -> do
                            (y, a') <- stepAuto a x
@@ -374,8 +374,8 @@ switchFromF f = go Nothing
     l a = do
       mz <- get
       case mz of
-        Just z  -> go mz <$> loadAuto (f z)
-        Nothing -> go mz <$> loadAuto a
+        Just z  -> go mz <$> resumeAuto (f z)
+        Nothing -> go mz <$> resumeAuto a
 
 -- | The non-serializing/non-resuming version of 'switchFromF'.
 switchFromF_ :: Monad m
@@ -482,8 +482,8 @@ switchOnF f = go Nothing
     l a0 = do
       mz <- get
       case mz of
-        Just z  -> go mz <$> loadAuto (f z)
-        Nothing -> go mz <$> loadAuto a0
+        Just z  -> go mz <$> resumeAuto (f z)
+        Nothing -> go mz <$> resumeAuto a0
     s mz a0 = put mz
            *> saveAuto a0
     t mz a0 (x, ez) =

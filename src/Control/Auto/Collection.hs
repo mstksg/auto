@@ -131,7 +131,7 @@ zipAuto :: Monad m
         => a                -- ^ default input value
         -> [Auto m a b]     -- ^ 'Auto's to zip up
         -> Auto m [a] [b]
-zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
+zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM resumeAuto as)
                         (mapM_ saveAuto as)
                         $ \xs -> do
                             res <- zipWithM stepAuto as (xs ++ repeat x0)
@@ -397,7 +397,7 @@ muxMany f = go mempty
     l     = do
       ks <- get
       let as = M.fromList (map (id &&& f) ks)
-      go <$> mapM loadAuto as
+      go <$> mapM resumeAuto as
     s as  = put (M.keys as) *> mapM_ saveAuto as
     t     = _muxManyF f go
 
@@ -640,7 +640,7 @@ _loadAs :: forall k a m b c. (Serialize k, Serialize c, Ord k)
 _loadAs f = do
     kszs <- get :: Get [(k, Maybe c)]
     let as = M.fromList (map (\(k, mz) -> (k, (mz, f k mz))) kszs)
-    mapM (mapM loadAuto) as
+    mapM (mapM resumeAuto) as
 
 
 gatherFMany__ :: forall k a m b c. (Ord k, Monad m)

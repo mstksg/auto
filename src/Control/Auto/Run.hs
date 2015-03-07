@@ -95,8 +95,8 @@ overList :: Monad m
          -> m ([b], Auto m a b)   -- ^ list of outputs and the updated 'Auto'
 overList a []     = return ([], a)
 overList a (x:xs) = do
-    ~(y, a') <- stepAuto a  x
-    ~(ys, a'')   <- overList a' xs
+    (y, a')   <- stepAuto a  x
+    (ys, a'') <- overList a' xs
     return (y:ys, a'')
 
 -- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]

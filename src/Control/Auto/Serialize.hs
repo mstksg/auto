@@ -40,7 +40,7 @@ module Control.Auto.Serialize (
   -- * Serializing and deserializing 'Auto's
   -- ** To and from "Data.Serialize" types
     saveAuto
-  , loadAuto
+  , resumeAuto
   -- ** To and from binary
   , encodeAuto
   , decodeAuto
@@ -148,13 +148,13 @@ loading :: MonadIO m
         => FilePath         -- ^ filepath to read from
         -> Auto m a b       -- ^ 'Auto' to transform
         -> Auto m a b
-loading fp a0 = mkAutoM (loading fp <$> loadAuto a0)
+loading fp a0 = mkAutoM (loading fp <$> resumeAuto a0)
                          (saveAuto a0)
                          $ \x -> do
                              a <- liftM loaded . liftIO $ readAutoErr fp a0
                              stepAuto a x
   where
-    loaded a = mkAutoM (loading' fp <$> loadAuto a)
+    loaded a = mkAutoM (loading' fp <$> resumeAuto a)
                        (saveAuto a)
                        $ \x -> do
                            (y, a') <- stepAuto a x
@@ -171,7 +171,7 @@ loading' :: MonadIO m
          => FilePath        -- ^ filepath to read from
          -> Auto m a b      -- ^ 'Auto' to transform (or return unchanged)
          -> Auto m a b
-loading' fp a0 = mkAutoM (loading' fp <$> loadAuto a0)
+loading' fp a0 = mkAutoM (loading' fp <$> resumeAuto a0)
                          (saveAuto a0)
                          $ \x -> do
                              a <- do
@@ -181,7 +181,7 @@ loading' fp a0 = mkAutoM (loading' fp <$> loadAuto a0)
                                  Left _   -> return a0
                              stepAuto a x
   where
-    loaded a = mkAutoM (loading' fp <$> loadAuto a)
+    loaded a = mkAutoM (loading' fp <$> resumeAuto a)
                        (saveAuto a)
                        $ \x -> do
                            (y, a') <- stepAuto a x
@@ -313,7 +313,7 @@ loadFromB :: MonadIO m
                                             --     itself from the given
                                             --     filepath
           -> Auto m a b
-loadFromB a = mkAutoM (loadFromB' <$> loadAuto a)
+loadFromB a = mkAutoM (loadFromB' <$> resumeAuto a)
                       (saveAuto a)
                       $ \x -> do
                           ((y, b), a') <- stepAuto a x
@@ -331,7 +331,7 @@ loadFromB' :: MonadIO m
                                             --     itself from the given
                                             --     filepath
            -> Auto m a b
-loadFromB' a0 = mkAutoM (loadFromB' <$> loadAuto a0)
+loadFromB' a0 = mkAutoM (loadFromB' <$> resumeAuto a0)
                         (saveAuto a0)
                         $ \x -> do
                             ((y, b), a1) <- stepAuto a0 x
@@ -367,7 +367,7 @@ loadFromB' a0 = mkAutoM (loadFromB' <$> loadAuto a0)
 saveOnB :: MonadIO m
         => Auto m a b       -- ^ 'Auto' to make saveable-by-trigger
         -> Auto m (a, Blip FilePath) b
-saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
+saveOnB a = mkAutoM (saveOnB <$> resumeAuto a)
                     (saveAuto a)
                     $ \(x, b) -> do
                       case b of
@@ -401,7 +401,7 @@ saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
 loadOnB :: MonadIO m
         => Auto m a b       -- ^ 'Auto' to make reloadable-by-trigger
         -> Auto m (a, Blip FilePath) b
-loadOnB a = mkAutoM (loadOnB' <$> loadAuto a)
+loadOnB a = mkAutoM (loadOnB' <$> resumeAuto a)
                     (saveAuto a)
                     $ \(x, b) -> do
                         a' <- case b of
@@ -415,7 +415,7 @@ loadOnB a = mkAutoM (loadOnB' <$> loadAuto a)
 loadOnB' :: MonadIO m
          => Auto m a b      -- ^ 'Auto' to make reloadable-by-trigger
          -> Auto m (a, Blip FilePath) b
-loadOnB' a0 = mkAutoM (loadOnB' <$> loadAuto a0)
+loadOnB' a0 = mkAutoM (loadOnB' <$> resumeAuto a0)
                       (saveAuto a0)
                       $ \(x, b) -> do
                           a1 <- case b of

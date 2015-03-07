@@ -218,7 +218,7 @@ stretch :: (Serialize b, Monad m)
         -> Auto m a b
 stretch n = go (1, undefined)
   where
-    go (i, y) a = mkAutoM (go <$> get <*> loadAuto a)
+    go (i, y) a = mkAutoM (go <$> get <*> resumeAuto a)
                           (put (i, y) *> saveAuto a)
                           $ \x ->
                               if i <= 1
@@ -260,7 +260,7 @@ stretchB :: Monad m
          -> Auto m a (Blip b)
 stretchB (max 1 -> n) = go 1
   where
-    go i a = mkAutoM (go <$> get <*> loadAuto a)
+    go i a = mkAutoM (go <$> get <*> resumeAuto a)
                      (put i *> saveAuto a)
                      $ \x ->
                          if i <= 1
@@ -297,7 +297,7 @@ accelOverList :: Monad m
               -> Auto m [a] [b]
 accelOverList = go
   where
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     $ \xs -> do
                         (a1, ysEndo) <- runWriterT (wr a0 xs)
@@ -327,7 +327,7 @@ accelerate :: Monad m
 accelerate n = go
   where
     n'    = max n 1
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     $ \x0 -> do
                         yas <- flip (iterateM n') (undefined, a0)
@@ -357,7 +357,7 @@ accelerateWith xd n | n <= 1    = fmap (:[])
                     | otherwise = go
   where
     n'    = n - 1
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     $ \x0 -> do
                         (y0, a1) <- stepAuto a0 x0
@@ -407,7 +407,7 @@ skipTo x0 = go
   where
     -- go :: Auto m a (b, Blip c)
     --    -> Auto m a ([b], c)
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     $ \x -> do
                       ((ys, z), a1) <- skipOut a0 x []
@@ -455,7 +455,7 @@ fastForward x0 = go
   where
     -- go :: Auto m a (Maybe b)
     --    -> Auto m a b
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     (skipNothings a0)
     -- skipNothings :: Auto m a (Maybe b) -> a -> m (b, Auto m a b)
@@ -475,7 +475,7 @@ fastForwardEither x0 = fmap (second reverse) . go
   where
     -- go :: Auto m a (Either c b)
     --    -> Auto m a (b, [c])
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                     (skipNothings a0 [])
     -- skipNothings :: Auto m a (Either c b)
@@ -543,6 +543,6 @@ priming xs a0 = mkAutoM l
     l = do
       flag <- get
       if flag
-        then primed <$> loadAuto a0
+        then primed <$> resumeAuto a0
         else return $ priming xs a0
 

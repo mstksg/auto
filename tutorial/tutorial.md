@@ -217,6 +217,18 @@ ghci> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
 [ 2, 5, 12, 34, 135]
 ~~~
 
+You can also "fork" an input stream to two `Auto`s, and then throw away the
+output stream of one: (very useful for `Auto`s like `effect`, which we will
+see later, where we only care about the monadic effects and not about the
+actual output stream)
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0 *> productFrom 1) [1..5]
+[ 1, 2,  6, 24, 120]
+ghci> streamAuto' (sumFrom 0 <* productFrom 1) [1..5]
+[ 1, 3,  6, 10,  15]
+~~~
+
 Heck, you can even `sequenceA` several!
 
 ~~~haskell

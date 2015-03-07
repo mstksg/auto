@@ -51,6 +51,9 @@ module Control.Auto (
   -- ** Strictness
   , forcer
   , seqer
+  -- ** Internal monad
+  , hoistA
+  , generalizeA
   -- * Auto constructors
   , arrM
   , arrD

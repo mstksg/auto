@@ -49,7 +49,7 @@ module Control.Auto.Core (
   , encodeAuto
   , decodeAuto
   , saveAuto
-  , loadAuto
+  , resumeAuto
   , unserialize
   -- ** Underlying monad
   , hoistA
@@ -158,43 +158,27 @@ import Prelude hiding         ((.), id, sequence)
 -- You can get this function using 'stepAuto':
 --
 -- @
--- 'stepAuto' :: Auto m a b -> (a -> (b, Auto m a b))
+-- 'stepAuto' :: 'Auto' m a b -> (a -> m (b, 'Auto' m a b))
 -- @
 --
--- --
--- --
--- --
--- --
--- -- 
--- -- In a way, you can think about 'Auto's as /stream transformers/.
--- -- A stream of sequential inputs come in one at a time, and a stream of
--- -- outputs pop out one at a time as well.  You can think of 'streamAuto''
--- -- as taking an `Auto' a b` and "unwrapping" its internal `[a] -> [b]`.
--- -- 
--- -- The Auto type.  Basically represents a function containing its own
--- -- localized internal state.  If you have an @'Auto' a b@, you can "step"
--- -- it with 'stepAuto' and an @a@, to get a @b@ and a "next 'Auto'".  The
--- -- @a@ is the input, and the @b@ is the output, and the next 'Auto' is the
--- -- 'Auto' with updated internal state.
--- --
--- -- The "stepping" process can be monadic:
--- --
--- -- > stepAuto :: Auto m a b -> a -> m (Output m a b)
--- --
--- -- So you can have access to, say, a shared environment using 'Reader' or
--- -- something like that.
--- --
--- -- 'Auto' is mostly useful because of its 'Functor', 'Applicative',
--- -- 'Category', and 'Arrow' (and Arrow-related) instances.  These allow you
--- -- to modify, combine, chain, and side-chain Autos in expressive way,
--- -- allowing you to build up complex ones from combinations of simple,
--- -- primitive ones.
--- --
--- -- TODO: see tutorial
--- --
--- -- The 'Auto' also contains information on its own serialization, so you
--- -- can serialize and re-load the internal state without actually accessing
--- -- it.
+-- Or, for 'Auto'', 'stepAuto'':
+--
+-- @
+-- 'stepAuto'' :: 'Auto'' a b -> (a -> (b, 'Auto'' a b))
+-- @
+--
+-- "Give me an @a@ and I'll give you a @b@ and your "updated" 'Auto'".
+--
+-- 'Auto's really are mostly useful because they can be composed, chained,
+-- and modified using their various typeclass instances, like 'Category',
+-- 'Applicative', 'Functor', 'Arrow', etc., and also with the combinators
+-- in this library.  You can build complex programs as a complex 'Auto' by
+-- building up smaller and smaller components.  See the tutorial for more
+-- information on this.
+--
+-- This type also contains information on its own serialization, so you can
+-- serialize and re-load the internal state to binary or disk.
+--
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
                 | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
@@ -204,12 +188,18 @@ data Auto m a b =           AutoFunc    !(a -> b)
                 deriving ( Typeable )
 
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
+--
+-- Instead of "wrapping" an @[a] -> m [b]@, it "wraps" an @[a] -> [b]@.
 type Auto'   = Auto Identity
 
 
 -- | Re-structure 'Auto' internals to use the 'Arb' ("arbitrary")
--- constructors, as recursion-based mealy machines.  Almost always a bad
--- idea in every conceivable situation.  Why is it even here?
+-- constructors, as recursion-based mealy machines.
+--
+-- Almost always a bad idea in every conceivable situation.  Why is it even
+-- here?
+--
+-- I'm sorry.
 toArb :: Monad m => Auto m a b -> Auto m a b
 toArb a = a_
   where
@@ -220,13 +210,13 @@ toArb a = a_
            AutoFuncM f -> AutoArbM (pure a_)
                                    (return ())
                                  $ \x -> liftM (, a_) (f x)
-           AutoState ~gp@(g,p) f s  ->
+           AutoState gp@(g,p) f s  ->
                           let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
                                                (p s')
                                              $ \x -> let (y, s'') = f x s'
                                                      in  (y, a__ s'')
                           in  a__ s
-           AutoStateM ~gp@(g,p) f s ->
+           AutoStateM gp@(g,p) f s ->
                           let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
                                                 (p s)
                                               $ \x -> do
@@ -239,6 +229,15 @@ toArb a = a_
 -- | Returns a string representation of the internal constructor of the
 -- 'Auto'.  Useful for debugging the result of compositions and functions
 -- and seeing how they affect the internal structure of the 'Auto'.
+--
+-- In the order of efficiency, "AutoFunc"s tend to be faster than
+-- "AutoState"s tend to be faster than "AutoArb"s.  However, when composing
+-- one with the other (using 'Category' or 'Applicative'), the two have to
+-- be "reduced" to the greatest common denominator; composing an "AutoFunc"
+-- with an "AutoArb" produces an "AutoArb".
+--
+-- More benchmarking is to be done to be able to rigorously say what these
+-- really mean, performance wise.
 autoConstr :: Auto m a b -> String
 autoConstr (AutoFunc {})   = "AutoFunc"
 autoConstr (AutoFuncM {})  = "AutoFuncM"
@@ -248,12 +247,22 @@ autoConstr (AutoArb {})    = "AutoArb"
 autoConstr (AutoArbM {})   = "AutoArbM"
 
 -- | Swaps out the underlying 'Monad' of an 'Auto' using the given monad
--- morphism "transforming function".
+-- morphism "transforming function", a natural transformation.
 --
--- Should be free for non-monadic functions.
+-- Basically, given a function to "swap out" any @m a@ with an @m' a@, it
+-- swaps out the underlying monad of the 'Auto'.
+--
+-- This forms a functor, so you rest assured in things like this:
+--
+-- @
+-- hoistA id == id
+-- hoistA f a1 . hoistA f a2 == hoistA f (a1 . a2)
+-- @
 hoistA :: (Monad m, Monad m')
-       => (forall c. m c -> m' c)
-       -> Auto m a b -> Auto m' a b
+       => (forall c. m c -> m' c)   -- ^ monad morphism;
+                                    --     the natural transformation
+       -> Auto m a b
+       -> Auto m' a b
 hoistA _ (AutoFunc f)        = AutoFunc f
 hoistA g (AutoFuncM f)       = AutoFuncM (g . f)
 hoistA _ (AutoState gp f s)  = AutoState gp f s
@@ -268,13 +277,15 @@ hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
                                             (y, a') <- f x
                                             return (y, hoistA g a')
 
--- | Generalizes an 'Auto'' to any 'Auto' m a b', using 'hoist'.
+-- | Generalizes an @'Auto'' a b@ to an @'Auto' m a b'@ for any 'Monad'
+-- @m@, using 'hoist'.
 --
--- Should be free for non-monadic functions.
 generalizeA :: Monad m => Auto' a b -> Auto m a b
 generalizeA = hoistA (return . runIdentity)
 
 -- | Force the serializing components of an 'Auto'.
+--
+-- TODO: Test if this really works
 forceSerial :: Auto m a b -> Auto m a b
 forceSerial a = case a of
                   AutoArb _ l s  -> l `seq` s `seq` a
@@ -291,21 +302,21 @@ forceSerial a = case a of
 -- there's 'saveAuto'.
 --
 -- You can "resume" any 'Auto' from a 'ByteString' using 'decodeAuto' (or,
--- if you want the raw 'Get' for some reason, there's 'loadAuto').
+-- if you want the raw 'Get' for some reason, there's 'resumeAuto').
 --
--- Note 'decodeAuto' and 'loadAuto' "resume" a /given 'Auto'/.  That is, if
--- you call 'decodeAuto' on a "fresh 'Auto'", it'll decode a 'ByteString'
--- into /that 'Auto', but "resumed"/.  That is, it'll "fast forward" that
--- 'Auto' into the state it was when it was saved.
+-- Note 'decodeAuto' and 'resumeAuto' "resume" a /given 'Auto'/.  That is,
+-- if you call 'decodeAuto' on a "fresh 'Auto'", it'll decode
+-- a 'ByteString' into /that 'Auto', but "resumed"/.  That is, it'll "fast
+-- forward" that 'Auto' into the state it was when it was saved.
 --
--- For example, let's say I have @a = 'accum' (+) 0@, the 'Auto' that
--- returns the sum of everything it has received so far.  If I feed it
--- 3 and 10, it'll have its internal accumulator as 13, keeping track of
--- all the numbers it has seen so far.
+-- For example, let's say I have @a = 'sumFrom' 0@, the 'Auto' whose output
+-- is the cumulative sum of all of its inputs so far. If I feed it 3 and
+-- 10, it'll have its internal accumulator as 13, keeping track of all the
+-- numbers it has seen so far.
 --
--- >>> let a             = accum (+) 0
--- >>> let Output _ a'   = stepAuto' a  3
--- >>> let Output _ a''  = stepAuto' a' 10
+-- >>> let a = sumFrom 0
+-- >>> let (_, a' ) = stepAuto' a  3
+-- >>> let (_, a'') = stepAuto' a' 10
 --
 -- I can then use 'encodeAuto' to "freeze"/"save" the 'Auto' into the
 -- 'ByteString' @bs@:
@@ -317,25 +328,25 @@ forceSerial a = case a of
 -- 'Auto' with a starting accumulator of 0.  We use 'decodeAuto' to
 -- "resume" it, with and resume it with its internal accumulator at 13.
 --
--- >>> let Right resumed = decodeAuto a bs
--- >>> let Output y _    = stepAuto' resumed 0
+-- >>> let (Right resumed) = decodeAuto a bs
+-- >>> let (y, _) = stepAuto' resumed 0
 -- 13
 --
 -- Note that all of these would have had the same result:
 --
--- >>> let Right resumed = decodeAuto a'  bs
--- >>> let Right resumed = decodeAuto a'' bs
--- >>> let Right resumed = decodeAuto (accum (+) 0) bs
+-- >>> let (Right resumed) = decodeAuto a'  bs
+-- >>> let (Right resumed) = decodeAuto a'' bs
+-- >>> let (Right resumed) = decodeAuto (sumFrom 0) bs
 --
 -- I mean, after all, if 'decodeAuto' "fast forwards" an 'Auto' to the
 -- state it was at when it was frozen...then all of these should really be
 -- resumed to the same point, right?
 --
--- One way you can think about it is that 'loadAuto' / 'decodeAuto' takes
+-- One way you can think about it is that 'resumeAuto' / 'decodeAuto' takes
 -- an 'Auto' and creates a "blueprint" from that 'Auto', on how to "load
 -- it"; the blueprint contains what the form of the internal state is, and
 -- their offets in the 'ByteString'.  So in the above, 'a', 'a'', 'a''',
--- and 'accum (+) 0' all have the same "blueprint" --- their internal
+-- and @'sumFrom' 0@ all have the same "blueprint" --- their internal
 -- states are of the same structure.
 --
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
@@ -353,8 +364,6 @@ forceSerial a = case a of
 -- have to worry about this!  You shouldn't really ever be "surprised",
 -- because you'll always explicitly chose the resuming version for 'Auto's
 -- you want to resume, and the non-resuming version for those you don't.
---
--- TODO: replace "decode" with "resume".
 
 -- | Encode an 'Auto' and its internal state into a 'ByteString'.
 encodeAuto :: Auto m a b -> ByteString
@@ -364,26 +373,25 @@ encodeAuto = runPut . saveAuto
 -- | "Resume" an 'Auto' from its 'ByteString' serialization, giving
 -- a 'Left' if the deserialization is not possible.
 decodeAuto :: Auto m a b -> ByteString -> Either String (Auto m a b)
-decodeAuto = runGet . loadAuto
+decodeAuto = runGet . resumeAuto
 {-# INLINE decodeAuto #-}
 
 -- | Returns a 'Get' from an 'Auto' ---  instructions (from
 -- "Data.Serialize") on taking a ByteString and "restoring" the originally
 -- saved 'Auto', in the originally saved state.
-loadAuto :: Auto m a b -> Get (Auto m a b)
-loadAuto a = case a of
-               AutoState gp f _  -> AutoState  gp f <$> fst gp
-               AutoStateM gp f _ -> AutoStateM gp f <$> fst gp
-               AutoArb g _ _     -> g
-               AutoArbM g _ _    -> g
-               _                 -> return a
--- loadAuto = return
-{-# INLINE loadAuto #-}
+resumeAuto :: Auto m a b -> Get (Auto m a b)
+resumeAuto a = case a of
+                 AutoState gp f _  -> AutoState  gp f <$> fst gp
+                 AutoStateM gp f _ -> AutoStateM gp f <$> fst gp
+                 AutoArb g _ _     -> g
+                 AutoArbM g _ _    -> g
+                 _                 -> return a
+{-# INLINE resumeAuto #-}
 
 -- | Returns a 'Put' --- instructions (from "Data.Serialize") on how to
 -- "freeze" the 'Auto', with its internal state, and save it to a binary
 -- encoding.  It can later be reloaded and "resumed" by
--- 'loadAuto'/'decodeAuto'.
+-- 'resumeAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto a = case a of
                AutoState (_, p) _ s  -> p s
@@ -391,9 +399,13 @@ saveAuto a = case a of
                AutoArb _ p _         -> p
                AutoArbM _ p _        -> p
                _                     -> return ()
--- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
+-- | Takes an 'Auto' that is serializable/resumable and returns an 'Auto'
+-- that is not.  That is, when it is "saved", saves no data, and when it is
+-- "resumed", resets itself back to the initial configuration every time;
+-- in other words, @'decodeAuto' (unserialize a) bs = Right (unserialize
+-- a)@.  Trying to "resume" it will just always give itself, unchanged.
 unserialize :: Monad m => Auto m a b -> Auto m a b
 unserialize a =
     case a of
@@ -406,22 +418,88 @@ unserialize a =
 
 -- | "Runs" the 'Auto' through one step.
 --
--- Remember that at every step for an @'Auto' m a b@, you provide an @a@
--- input and receive a @b@ output with an "updated"/"next" 'Auto'.
+-- That is, given an @'Auto' m a b@, returns a function that takes an @a@
+-- and returns a @b@ and an "updated"/"next" 'Auto'; an @a -> m (b, 'Auto'
+-- m a b)@.
 --
--- >>> let a = accum (+) 0 :: Auto Identity Int Int
---             -- an Auto that sums all of its input.
--- >>> let Identity (Output y a') = stepAuto a 3
--- >>> y      -- the result
--- 3 :: Int
--- >>> :t a'   -- the updated 'Auto'
--- a' :: Auto Identity Int Int
+-- This is the main way of running an 'Auto' "step by step", so if you have
+-- some sort of game loop that updates everything every "tick", this is
+-- what you're looking for.  At every loop, gather input @a@, feed it into
+-- the 'Auto', "render" the result @b@, and get your new 'Auto' to run the
+-- next time.
 --
--- ('Identity', from "Data.Functor.Identity", is the "dumb Functor": @data
--- 'Identity' a = 'Identity' a@)
+-- Here is an example with @'sumFrom' 0@, the 'Auto' whose output is the
+-- cumulative sum of the inputs, and an underying monad of @Identity@.
+-- Here,
 --
--- If you think of an @'Auto' m a b@ as a "stateful function" of type @a ->
--- m b@, then 'stepAuto' lets you "run" it.
+-- @
+-- stepAuto :: Auto Identity Int Int
+--          -> (Int -> Identity (Int, Auto Identity Int Int))
+-- @
+--
+-- Every time you "step", you give it an 'Int' and get a resulting 'Int'
+-- (the cumulative sum) and the "updated 'Auto'", with the updated
+-- accumulator.
+--
+-- >>> let a0 :: Auto Identity Int Int
+--         a0 = sumFrom 0
+-- >>> let Identity (res1, a1) = stepAuto a0 4      -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let Identity (res2, a2) = stepAuto a1 5      -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let Identity (res3, _ ) = stepAuto a2 3      -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- By the way, for the case where your 'Auto' is under 'Identity', we have
+-- a type synomym 'Auto''...and a convenience function to make "running" it
+-- more streamlined:
+--
+-- >>> let a0 :: Auto' Int Int
+--         a0 = sumFrom 0
+-- >>> let (res1, a1) = stepAuto' a0 4          -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let (res2, a2) = stepAuto' a1 5          -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let (res3, _ ) = stepAuto' a2 3          -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- But, if your 'Auto' actaully has effects when being stepped, 'stepAuto'
+-- will execute them:
+--
+-- >>> let a0 :: Auto IO Int Int
+--         a0 = effect (putStrLn "hey!") *> sumFrom 0
+-- >>> (res1, a1) <- stepAuto a0 4              -- run with 4
+-- hey!         -- IO effect
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> (res2, a2) <- stepAuto a1 5              -- run with 5
+-- hey!         -- IO effect
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> (res3, _ ) <- stepAuto a2 3              -- run with 3
+-- hey!         -- IO effect
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- (Here, @'effect' ('putStrLn' "hey")@ is an @'Auto' IO Int ()@, which
+-- ignores its input and just executes @'putStrLn' "hey"@ every time it is
+-- run.  When we use '*>' from "Control.Applicative", we "combine" the two
+-- 'Auto's together and run them /both/ on each input (4, 5, 3...)...but
+-- for the "final" output at the end, we only return the output of the
+-- second one, @'sumFrom' 0@ (5, 9, 12...))
+--
+-- If you think of an @'Auto' m a b@ as a "stateful function" @a -> m b@,
+-- then 'stepAuto' lets you "run" it.
+--
+-- In order to directly run an 'Auto' on a stream, an @[a]@, use
+-- 'streamAuto'.  That gives you an @[a] -> m [b]@.
+--
 stepAuto :: Monad m
          => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
@@ -433,42 +511,78 @@ stepAuto a x = case a of
                      y <- f x
                      return (y, a)
                  AutoState gp f s  ->
-                     let ~(y, s') = f x s
-                         a'       = AutoState gp f s'
+                     let (y, s') = f x s
+                         a'      = AutoState gp f s'
                      in  return (y, a')
                  AutoStateM gp f s -> do
-                     ~(y, s') <- f x s
+                     (y, s') <- f x s
                      let a' = AutoStateM gp f s'
                      return (y, a')
                  AutoArb _ _ f     -> return (f x)
                  AutoArbM _ _ f    -> f x
 {-# INLINE stepAuto #-}
 
--- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
--- 'Identity'.  Returns the output stripped of 'Identity'.
+-- | "Runs" an 'Auto'' through one step.
 --
--- If you think of an @'Auto'' a b@ as a "stateful function" of type
--- @a -> b@, then 'stepAuto'' lets you "run" it.
+-- That is, given an @'Auto'' a b@, returns a function that takes an @a@
+-- and returns a @b@ and an "updated"/"next" 'Auto''; an @a -> (b, 'Auto''
+-- a b)@.
+--
+-- See 'stepAuto' documentation for motivations, use cases, and more
+-- details.  You can use this instead of 'stepAuto' when your underyling
+-- monad is 'Identity', and your 'Auto' doesn't produce any effects.
+--
+-- Here is an example with @'sumFrom' 0@, the 'Auto'' whose output is the
+-- cumulative sum of the inputs
+--
+-- @
+-- stepAuto' :: Auto' Int Int
+--           -> (Int -> (Int, Auto' Int Int))
+-- @
+--
+-- Every time you "step", you give it an 'Int' and get a resulting 'Int'
+-- (the cumulative sum) and the "updated 'Auto''", with the updated
+-- accumulator.
+--
+-- >>> let a0 :: Auto' Int Int
+--         a0 = sumFrom 0
+-- >>> let (res1, a1) = stepAuto' a0 4          -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let (res2, a2) = stepAuto' a1 5          -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let (res3, _ ) = stepAuto' a2 3          -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- If you think of an @'Auto'' a b@ as a "stateful function" @a -> b@,
+-- then 'stepAuto'' lets you "run" it.
+--
+-- In order to directly run an 'Auto'' on a stream, an @[a]@, use
+-- 'streamAuto''.  That gives you an @[a] -> [b]@.
+--
 stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
           -> (b, Auto' a b)   -- ^ the output, and the updated 'Auto''
--- stepAuto' a = runIdentity . stepAuto a
 stepAuto' a x = case a of
                   AutoFunc f        -> (f x, a)
                   AutoFuncM f       -> (runIdentity (f x), a)
-                  AutoState gp f s  -> let ~(y, s') = f x s
-                                           a'       = AutoState gp f s'
+                  AutoState gp f s  -> let (y, s') = f x s
+                                           a'      = AutoState gp f s'
                                        in  (y, a')
-                  AutoStateM gp f s -> let ~(y, s') = runIdentity (f x s)
-                                           a'       = AutoStateM gp f s'
+                  AutoStateM gp f s -> let (y, s') = runIdentity (f x s)
+                                           a'      = AutoStateM gp f s'
                                        in  (y, a')
                   AutoArb _ _ f     -> f x
                   AutoArbM _ _ f    -> runIdentity (f x)
 {-# INLINE stepAuto' #-}
 
--- | Playing around with an optimization hack.  If you have an 'Auto'', run
--- 'purifyAuto' on it before you "step" or "stream" it...you might get
--- performance benefits.  Benchmarks to be written!
+-- | In theory, "purifying" an 'Auto''" should prep it for faster
+-- evaluation when used with 'stepAuto'' or 'streamAuto''.  But the
+-- benchmarks have not been run yet, so stay tuned!
+--
+-- TODO: Benchmark
 purifyAuto :: Auto' a b -> Auto' a b
 purifyAuto a@(AutoFunc {})     = a
 purifyAuto (AutoFuncM f)       = AutoFunc (runIdentity . f)
@@ -486,36 +600,38 @@ purifyAuto (AutoArbM g p f)    = AutoArb (purifyAuto <$> g)
 -- | Like 'stepAuto', but drops the "next 'Auto'" and just gives the
 -- result.
 evalAuto :: Monad m
-         => Auto m a b
-         -> a
-         -> m b
+         => Auto m a b      -- ^ 'Auto' to run
+         -> a               -- ^ input
+         -> m b             -- ^ output
 evalAuto a = liftM fst . stepAuto a
 
 -- | Like 'stepAuto'', but drops the "next 'Auto''" and just gives the
 -- result.  'evalAuto' for 'Auto''.
-evalAuto' :: Auto' a b
-          -> a
-          -> b
+evalAuto' :: Auto' a b      -- ^ 'Auto' to run
+          -> a              -- ^ input
+          -> b              -- ^ output
 evalAuto' a = fst . stepAuto' a
 
--- | Like 'stepAuto', but drops the result and just gives the "next
+-- | Like 'stepAuto', but drops the result and just gives the "updated
 -- 'Auto'".
 execAuto :: Monad m
-         => Auto m a b
-         -> a
-         -> m (Auto m a b)
+         => Auto m a b      -- ^ 'Auto' to run
+         -> a               -- ^ input
+         -> m (Auto m a b)  -- ^ updated 'Auto'
 execAuto a = liftM snd . stepAuto a
 
--- | Like 'stepAuto'', but drops the result and just gives the "next
+-- | Like 'stepAuto'', but drops the result and just gives the "updated
 -- 'Auto''".  'execAuto' for 'Auto''.
-execAuto' :: Auto' a b
-          -> a
-          -> Auto' a b
+execAuto' :: Auto' a b      -- ^ 'Auto'' to run
+          -> a              -- ^ input
+          -> Auto' a b      -- ^ updated 'Auto''
 execAuto' a = snd . stepAuto' a
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
 -- 'Auto's.
+--
+-- TODO: Test if this really works
 forcer :: NFData a => Auto m a a
 forcer = mkAuto_ $ \x -> x `deepseq` (x, forcer)
 {-# INLINE forcer #-}
@@ -523,14 +639,36 @@ forcer = mkAuto_ $ \x -> x `deepseq` (x, forcer)
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be evaluated to Weak Head Normal Form, with 'seq',
 -- when composed with other 'Auto's.
+--
+-- TODO: Test if this really works
 seqer :: Auto m a a
 seqer = mkAuto_ $ \x -> x `seq` (x, seqer)
 {-# INLINE seqer #-}
 
-interceptO :: Monad m => ((b, Auto m a b) -> m c) -> Auto m a b -> Auto m a c
+-- | Abstraction over lower-level funging with serialization; lets you
+-- modify the result of an 'Auto' by being able to intercept the @(b,
+-- 'Auto' m a b)@ output and return a new output value @m c@.
+--
+-- Note that this is a lot like 'fmap':
+--
+-- @
+-- fmap :: (b -> c) -> Auto m a b -> Auto m a c
+-- @
+--
+-- Except gives you access to both the @b@ and the "updated 'Auto'";
+-- instead of an @b -> c@, you get to pass a @(b, 'Auto' m a b) -> m c@.
+--
+-- Basically experimenting with a bunch of abstractions over different
+-- lower-level modification of 'Auto's, because making sure the
+-- serialization works as planned can be a bit difficult.
+--
+interceptO :: Monad m
+           => ((b, Auto m a b) -> m c)      -- ^ intercepting function
+           -> Auto m a b
+           -> Auto m a c
 interceptO f = go
   where
-    go a0 = mkAutoM (go <$> loadAuto a0)
+    go a0 = mkAutoM (go <$> resumeAuto a0)
                     (saveAuto a0)
                   $ \x -> do
                         o@(_, a1) <- stepAuto a0 x
@@ -553,12 +691,12 @@ interceptO f = go
 --                         in  forceSerial a `seq` outp
 
 -- | Construct an 'Auto' by explicity giving its serialization,
--- deserialization, and the (pure) function from @a@ to @b@ and the "next
+-- deserialization, and the function from @a@ to a @b@ and "updated
 -- 'Auto'".
 --
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
--- primtives together.
+-- primtives together.  Working with serilization directly is hard.
 mkAuto :: Get (Auto m a b)          -- ^ resuming/loading 'Get'
        -> Put                       -- ^ saving 'Put'
        -> (a -> (b, Auto m a b))    -- ^ step function
@@ -567,8 +705,8 @@ mkAuto = AutoArb
 {-# INLINE mkAuto #-}
 
 -- | Construct an 'Auto' by explicitly giving its serializiation,
--- deserialization, and the (monadic) function from @a@ to @b@ and the
--- "next 'Auto'".
+-- deserialization, and the (monadic) function from @a@ to a @b@ and the
+-- "updated 'Auto'".
 --
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
@@ -588,7 +726,7 @@ mkAutoM = AutoArbM
 -- Be careful!  This 'Auto' can still carry arbitrary internal state, but
 -- it cannot be meaningfully serialized or re-loaded/resumed.  You can
 -- still pretend to do so using
--- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
+-- 'resumeAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be lost.
 mkAuto_ :: (a -> (b, Auto m a b))       -- ^ step function
@@ -602,7 +740,7 @@ mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
 -- Be careful!  This 'Auto' can still carry arbitrary internal state, but
 -- it cannot be meaningfully serialized or re-loaded/resumed.  You can
 -- still pretend to do so using
--- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
+-- 'resumeAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be reset.
 mkAutoM_ :: (a -> m (b, Auto m a b))    -- ^ (monadic) step function
@@ -610,8 +748,8 @@ mkAutoM_ :: (a -> m (b, Auto m a b))    -- ^ (monadic) step function
 mkAutoM_ f = mkAutoM (pure (mkAutoM_ f)) (return ()) f
 {-# INLINE mkAutoM_ #-}
 
--- | Construct the 'Auto' that always yields the given value, ignoring its
--- input.
+-- | Construct the 'Auto' whose output is always the given value, ignoring
+-- its input.
 --
 -- Provided for API constency, but you should really be using 'pure' from
 -- the 'Applicative' instance, from "Control.Applicative", which does the
@@ -622,7 +760,7 @@ mkConst = AutoFunc . const
 {-# INLINE mkConst #-}
 
 -- | Construct the 'Auto' that always "executes" the given monadic value at
--- every step, yielding the result and ignoring its input.
+-- every step, yielding the result as its output and ignoring its input.
 --
 -- Provided for API consistency, but you shold really be using 'effect'
 -- from "Control.Auto.Effects", which does the same thing.
@@ -632,7 +770,10 @@ mkConstM = AutoFuncM . const
 {-# INLINE mkConstM #-}
 
 -- | Construct a stateless 'Auto' that simply applies the given (pure)
--- function to every input, yielding the output.
+-- function to every input, yielding the output.  The output stream is just
+-- the result of applying the function to every input.
+--
+-- prop> streamAuto' (mkFunc f) = map f
 --
 -- This is rarely needed; you should be using 'arr' from the 'Arrow'
 -- instance, from "Control.Arrow".
@@ -641,8 +782,12 @@ mkFunc :: (a -> b)        -- ^ pure function
 mkFunc = AutoFunc
 {-# INLINE mkFunc #-}
 
--- | Construct a statelss 'Auto' that simply applies and executes the givne
--- (monadic) function to every input, yielding the output.
+-- | Construct a stateless 'Auto' that simply applies and executes the givne
+-- (monadic) function to every input, yielding the output.  The output
+-- stream is the result of applying the function to every input,
+-- executing/sequencing the action, and returning the returned value.
+--
+-- prop> streamAuto (mkFuncM f) = mapM f
 --
 -- It's recommended that you use 'arrM' from "Control.Auto.Effects".  This
 -- is only really provided for consistency.
@@ -657,13 +802,15 @@ mkFuncM = AutoFuncM
 -- state, returns the @b@ result, and now contains the new resulting state.
 -- You have to intialize it with an initial state, of course.
 --
+-- From the "stream transformer" point of view, this is rougly equivalent
+-- to 'mapAccumL' from "Data.List", with the function's arguments and
+-- results in the backwards order.
+--
+-- prop> streamAuto' (mkState f s0) = snd . mapAccumL (\s x -> swap (f x s))
+--
 -- Try not to use this if it's ever avoidable, unless you're a framework
 -- developer or something.  Try make something by combining/composing the
 -- various 'Auto' combinators.
---
--- This version is a wrapper around 'mkAuto', that keeps track of the
--- serialization and re-loading of the internal state for you, so you don't
--- have to deal with it explicitly.
 --
 -- If your state @s@ does not have a 'Serialize' instance, then you should
 -- either write a meaningful one, provide the serialization methods
@@ -704,6 +851,8 @@ mkStateM = AutoStateM (get, put)
 -- | A version of 'mkState', where the internal state doesn't have
 -- a 'Serialize' instance, so you provide your own instructions for getting
 -- and putting the state.
+--
+-- See 'mkState' for more details.
 mkState' :: Get s                     -- ^ 'Get'; strategy for reading and deserializing the state
          -> (s -> Put)                -- ^ 'Put'; strategy for serializing given state
          -> (a -> s -> (b, s))        -- ^ state transformer
@@ -715,6 +864,8 @@ mkState' = curry AutoState
 -- | A version of 'mkStateM', where the internal state doesn't have
 -- a 'Serialize' instance, so you provide your own instructions for getting
 -- and putting the state.
+--
+-- See 'mkStateM' for more details.
 mkStateM' :: Get s                      -- ^ 'Get'; strategy for reading and deserializing the state
           -> (s -> Put)                 -- ^ 'Put'; strategy for serializing given state
           -> (a -> s -> m (b, s))       -- ^ (monadic) state transformer
@@ -726,6 +877,8 @@ mkStateM' = curry AutoStateM
 -- | A version of 'mkState', where the internal state isn't serialized.  It
 -- can be "saved" and "loaded", but the state is lost in the process.
 --
+-- See 'mkState' for more details.
+--
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkState_ :: (a -> s -> (b, s))    -- ^ state transformer
          -> s                     -- ^ initial state
@@ -735,6 +888,8 @@ mkState_ f s0 = AutoState (return s0, \_ -> return ()) f s0
 
 -- | A version of 'mkStateM', where the internal state isn't serialized.
 -- It can be "saved" and "loaded", but the state is lost in the process.
+--
+-- See 'mkStateM' for more details.
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkStateM_ :: (a -> s -> m (b, s))   -- ^ (monadic) state transformer
@@ -751,20 +906,22 @@ mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 -- Example: an 'Auto' that sums up all of its input.
 --
 -- >>> let summer = accum (+) 0
--- >>> let Output sum1 summer' = stepAuto summer 3
+-- >>> let (sum1, summer')  = stepAuto' summer 3
 -- >>> sum1
 -- 3
--- >>> let Output sum2 _       = stepAuto summer'' 10
+-- >>> let (sum2, summer'') = stepAuto' summer' 10
 -- >>> sum2
 -- 13
+-- >>> streamAuto'  summer'' [1..10]
+-- [14,16,19,23,28,34,41,49,58,68]
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
 -- use 'accum_'.
 accum :: Serialize b
-        => (b -> a -> b)      -- ^ accumulating function
-        -> b                  -- ^ initial accumulator
-        -> Auto m a b
+      => (b -> a -> b)      -- ^ accumulating function
+      -> b                  -- ^ initial accumulator
+      -> Auto m a b
 accum f = mkState (\x s -> let y = f s x in (y, y))
 {-# INLINE accum #-}
 
@@ -774,19 +931,23 @@ accum f = mkState (\x s -> let y = f s x in (y, y))
 -- an input @a@ with the result of the executed @m b@ at every step.  Must
 -- be given an initial accumulator.
 --
+-- See 'accum' for more details.
+--
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
 -- use 'accumM_'.
 accumM :: (Serialize b, Monad m)
-         => (b -> a -> m b)       -- ^ (monadic) accumulating function
-         -> b                     -- ^ initial accumulator
-         -> Auto m a b
+       => (b -> a -> m b)       -- ^ (monadic) accumulating function
+       -> b                     -- ^ initial accumulator
+       -> Auto m a b
 accumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
 {-# INLINE accumM #-}
 
--- | A version of 'accum_, where the internal accumulator isn't
+-- | A version of 'accum', where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
+--
+-- See 'accum' for more details.
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
@@ -800,6 +961,8 @@ accum_ f = mkState_ (\x s -> let y = f s x in (y, y))
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
+-- See 'accumM' for more details.
+--
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
 accumM_ :: Monad m
@@ -809,8 +972,22 @@ accumM_ :: Monad m
 accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 {-# INLINE accumM_ #-}
 
--- | A "delayed" version of 'accum', where the first output is actually
--- the initial state of the accumulator.  Useful in recursive bindings.
+-- | A "delayed" version of 'accum', where the first output is the initial
+-- state of the accumulator, before applying the folding function. Useful
+-- in recursive bindings.
+--
+-- >>> let summerD = accumD (+) 0
+-- >>> let (sum1, summerD')  = stepAuto' summerD 3
+-- >>> sum1
+-- 0
+-- >>> let (sum2, summerD'') = stepAuto' summerD' 10
+-- >>> sum2
+-- 3
+-- >>> streamAuto'  summerD'' [1..10]
+-- [13,14,16,19,23,28,34,41,49,58]
+--
+-- (Compare with the example in 'accum')
+--
 accumD :: Serialize b
          => (b -> a -> b)      -- ^ accumulating function
          -> b                  -- ^ initial accumulator
@@ -818,8 +995,9 @@ accumD :: Serialize b
 accumD f = mkState (\x s -> (s, f s x))
 {-# INLINE accumD #-}
 
--- | A "delayed" version of 'accumM', where the first output is actually
--- the initial state of the accumulator.  Useful in recursive bindings.
+-- | A "delayed" version of 'accumM', where the first output is the initial
+-- state of the accumulator, before applying the folding function. Useful
+-- in recursive bindings.
 accumMD :: (Serialize b, Monad m)
           => (b -> a -> m b)       -- ^ (monadic) accumulating function
           -> b                     -- ^ initial accumulator
@@ -842,10 +1020,14 @@ accumMD_ :: Monad m
 accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
 {-# INLINE accumMD_ #-}
 
+-- | Maps over the output stream of the 'Auto'.
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
     {-# INLINE fmap #-}
 
+-- | Creates the "constant" 'Auto', and also gives the ability to "fork"
+-- an input stream, run it to two 'Auto's, and "recombine" the two output
+-- streams.
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
@@ -916,13 +1098,15 @@ instance Monad m => Applicative (Auto m a) where
 -- Should this even be here?  It might be kind of dangerous/unexpected.
 instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty     = mkConstM empty
-    a1 <|> a2 = mkAutoM ((<|>) <$> loadAuto a1 <*> loadAuto a2)
+    a1 <|> a2 = mkAutoM ((<|>) <$> resumeAuto a1 <*> resumeAuto a2)
                         (saveAuto a1 *> saveAuto a2)
                         $ \x -> let res1  = second (<|> a2) `liftM` stepAuto a1 x
                                     res2  = second (a1 <|>) `liftM` stepAuto a2 x
                                 in  res1 <|> res2
 
-
+-- | Gives the ability to "compose" two 'Auto's; feeds the input stream
+-- into the first, feeds that output stream into the second, and returns as
+-- a result the output stream of the second.
 instance Monad m => Category (Auto m) where
     id      = mkFunc id
     ag . af = case (ag, af) of
@@ -1103,6 +1287,9 @@ mergeStSt :: (Get s, s -> Put)
           -> (Get (s, s'), (s, s') -> Put)
 mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
 
+-- | 'lmap' lets you map over the /input/ stream, and 'rmap' lets you map
+-- over the /output/ stream.  Note that, as with all 'Profunctor's, 'rmap'
+-- is 'fmap'.
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
       where
@@ -1156,17 +1343,29 @@ instance Monad m => Profunctor (Auto m) where
                                                    return (g y, a_ a')
     {-# INLINE dimap #-}
 
+-- | See 'Arrow' instance.
 instance Monad m => Strong (Auto m) where
     first'  = first
     second' = second
 
+-- | See 'ArrowChoice' instance
 instance Monad m => Choice (Auto m) where
     left'  = left
     right' = right
 
+-- | See 'ArrowLoop' instance
 instance MonadFix m => Costrong (Auto m) where
     unfirst = loop
 
+-- | Allows you to have an 'Auto' run on only the "first" or "second" field
+-- in an input stream that is tuples...and also allows 'Auto's to run
+-- side-by-side on an input stream of tuples (run each on either tuple
+-- field).
+--
+-- Most importantly, however, allows for "proc" notation; see the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
+-- for more details.
+--
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
     first a = case a of
@@ -1210,6 +1409,10 @@ instance Monad m => Arrow (Auto m) where
                                 (y, a') <- f x
                                 return ((z, y), second a')
 
+-- | Allows you to have an 'Auto' only act on "some" inputs (only on
+-- 'Left's, for example), and be "paused" otherwise.
+--
+-- Again mostly useful for "proc" notation, with branching.
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
       where
@@ -1274,39 +1477,48 @@ instance Monad m => ArrowChoice (Auto m) where
                                    Right y -> liftM (Right *** right) (f y)
     {-# INLINE right #-}
 
+-- | Finds the fixed point of self-referential 'Auto's (for example,
+-- feeding the output stream of an 'Auto' to itself).  Mostly used with
+-- proc notation to allow recursive bindings.
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
                 AutoFunc f        ->
-                    AutoFunc (\x -> fst . fix $ \ ~(_, d) -> f (x, d))
+                    AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
                 AutoFuncM f       ->
-                    AutoFuncM (\x -> liftM fst . mfix $ \ ~(_, d) -> f (x, d))
+                    AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
                 AutoState gp f s  ->
-                    AutoState gp (\x s' -> first fst . fix $ \ ~(~(_, d), _) -> f (x, d) s') s
+                    AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
                 AutoStateM gp f s ->
-                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~(~(_, d), _) -> f (x, d) s') s
+                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
                 AutoArb l s f     ->
                     AutoArb (loop <$> l)
                             s
                           $ \x -> (fst *** loop)
                                 . fix
-                                $ \ ~(~(_, d), _) -> f (x, d)
+                                $ \ ~((_, d), _) -> f (x, d)
                 AutoArbM l s f    ->
                     AutoArbM (loop <$> l)
                              s
                            $ \x -> liftM (fst *** loop)
                                  . mfix
-                                 $ \ ~(~(_, d), _) -> f (x, d)
+                                 $ \ ~((_, d), _) -> f (x, d)
     {-# INLINE loop #-}
 
 -- Utility instances
 
+-- | Fork the input stream and '<>' the outputs.
 instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
     (<>) = liftA2 (<>)
 
+-- | Fork the input stream and mappend the outputs.  'mempty' is a constant
+-- stream of 'mempty's, ignoring its input.
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
 
+-- | Fork the input stream and add, multiply, etc. the outputs.  'negate'
+-- will negate the ouptput stream, 'fromInteger' will be a constant stream
+-- of that 'Integer'.
 instance (Monad m, Num b) => Num (Auto m a b) where
     (+)         = liftA2 (+)
     (*)         = liftA2 (*)
@@ -1316,11 +1528,16 @@ instance (Monad m, Num b) => Num (Auto m a b) where
     signum      = fmap signum
     fromInteger = pure . fromInteger
 
+-- | Fork the input stream and divide the outputs.  'recip' maps 'recip' to
+-- the output stream; 'fromRational' will be a constant stream of that
+-- 'Rational'.
 instance (Monad m, Fractional b) => Fractional (Auto m a b) where
     (/)          = liftA2 (/)
     recip        = fmap recip
     fromRational = pure . fromRational
 
+-- | A bunch of constant producers, mappers-of-output-streams, and
+-- forks-and-recombiners.
 instance (Monad m, Floating b) => Floating (Auto m a b) where
     pi      = pure pi
     exp     = fmap exp

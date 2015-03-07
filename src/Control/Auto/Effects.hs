@@ -258,7 +258,7 @@ sealState :: (Monad m, Serialize s)
           => Auto (StateT s m) a b
           -> s
           -> Auto m a b
-sealState a s0 = mkAutoM (sealState <$> loadAuto a <*> get)
+sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
                          (saveAuto a *> put s0)
                          $ \x -> do
                              ((y, a'), s1) <- runStateT (stepAuto a x) s0
@@ -269,7 +269,7 @@ sealState_ :: Monad m
            => Auto (StateT s m) a b
            -> s
            -> Auto m a b
-sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
+sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                           (saveAuto a)
                           $ \x -> do
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
@@ -301,7 +301,7 @@ sealReader :: (Monad m, Serialize r)
            => Auto (ReaderT r m) a b
            -> r
            -> Auto m a b
-sealReader a r = mkAutoM (sealReader <$> loadAuto a <*> get)
+sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                          (saveAuto a *> put r)
                          $ \x -> do
                              (y, a') <- runReaderT (stepAuto a x) r
@@ -312,7 +312,7 @@ sealReader_ :: Monad m
             => Auto (ReaderT r m) a b
             -> r
             -> Auto m a b
-sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
+sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
                           (saveAuto a)
                           $ \x -> do
                               (y, a') <- runReaderT (stepAuto a x) r
@@ -334,7 +334,7 @@ sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
 runStateA :: Monad m
           => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
           -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
-runStateA a = mkAutoM (runStateA <$> loadAuto a)
+runStateA a = mkAutoM (runStateA <$> resumeAuto a)
                       (saveAuto a)
                       $ \(x, s) -> do
                           ((y, a'), s') <- runStateT (stepAuto a x) s
@@ -356,7 +356,7 @@ runStateA a = mkAutoM (runStateA <$> loadAuto a)
 runReaderA :: Monad m
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
            -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
-runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
+runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                        (saveAuto a)
                        $ \(x, r) -> do
                            (y, a') <- runReaderT (stepAuto a x) r
@@ -375,7 +375,7 @@ runTraversableA :: (Monad f, Traversable f)
                 -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
 runTraversableA = go . return
   where
-    go a = mkAuto (go <$> mapM loadAuto a)
+    go a = mkAuto (go <$> mapM resumeAuto a)
                   (mapM_ saveAuto a)
                   $ \x -> let o  = a >>= (`stepAuto` x)
                               y  = liftM fst o
