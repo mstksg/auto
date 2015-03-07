@@ -89,18 +89,6 @@ a2' = sumFrom 0 &amp;&amp;&amp; (tagBlips (switchFrom_ a2') . inB 3)
 , 104, 209, 315  -- second 'sumFrom', on second three items
 , 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
 , 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
-</pre><p>If you're ever only going to use <code>a2</code> in &quot;switchy&quot; form, you could also
- do:</p><pre>a2s :: Auto' Int Int
-a2s = switchFrom_ $ proc x -&gt; do
-          sums       &lt;- sumFrom 0 -&lt; x
-          switchBlip &lt;- inB 3     -&lt; a2s
-          id -&lt; (c, switchBlip)
-
--- or
-a2s' = switchFrom_
-     $ sumFrom 0 &amp;&amp;&amp; (tagBlips a2s' . inB 3)
-</pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' a2s [101..112]
-</code></strong>[101, 203, 306, 104, 209, 315, 107, 215, 324, 110, 221, 333]
 </pre><p>Note that this combinator is inherently unserializable, so you are going
  to lose all serialization capabilities if you use this.  So sad, I know!
  :(  This fact is reflected in the underscore suffix, as per convention.</p><p>If you want to use switching <em>and</em> have serialization, you can use the
