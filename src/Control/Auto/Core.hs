@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
@@ -57,12 +56,6 @@ module Control.Auto.Core (
   , generalizeA
   -- ** Special modifiers
   , interceptO
-  -- * Auto output
-  , Output(..)
-  , Output'
-  , onOutput
-  , onOutRes
-  , onOutAuto
   -- * Auto constructors
   -- ** Lifting values and functions
   , mkConst
@@ -111,63 +104,7 @@ import Data.Semigroup
 import Data.Serialize
 import Data.Traversable
 import Data.Typeable
-import GHC.Generics
 import Prelude hiding         ((.), id, sequence)
-
--- | The output of a 'stepAuto'.  Contains the "result" value of the
--- stepping ('outRes'), and the "next 'Auto'", 'outAuto'.
---
--- An @'Auto' m a b@ will produce an @'Output' m a b@; when "stepped" with
--- an @a@, the "result" ('outRes') is a @b@.
---
--- Really, you can just think of this as a fancy tuple with a @b@ and an
--- @'Auto' m a b@.
-data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
-                           , outAuto :: Auto m a b    -- ^ The next 'Auto'
-                           } deriving ( Typeable
-                                      , Generic
-                                      )
-
-instance Monad m => Functor (Output m a) where
-    fmap f (Output y a) = Output (f y) (fmap f a)
-
-instance Monad m => Applicative (Output m a) where
-    pure x                      = Output x (pure x)
-    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
-
--- | Map two functions onto both fields of an 'Output'.
---
--- If you want to map an @a -> b@ onto both fields (the result and the
--- result of the next Auto), you can use the 'Functor' instance instead.
---
--- Really only useful for obfuscatingly point-free code.  I mean like,
--- really.
-onOutput :: (b -> b')                     -- ^ function over the result
-         -> (Auto m a b -> Auto m a' b')  -- ^ function over the resulting 'Auto'
-         -> Output m a b
-         -> Output m a' b'
-onOutput fx fa (Output x a) = Output (fx x) (fa a)
-{-# INLINE onOutput #-}
-
--- | Map a function onto the 'outAuto of an 'Output', the resulting
--- 'Auto'.  See note on 'onOutRes'.
---
--- Really only useful for obfuscatingly point-free code.
-onOutAuto :: (Auto m a b -> Auto m a' b)  -- ^ function over the resulting 'Auto'
-          -> Output m a b
-          -> Output m a' b
-onOutAuto fa (Output x a) = Output x (fa a)
-{-# INLINE onOutAuto #-}
-
--- | Map a function onto the 'outRes' of an 'Output': the "result" of
--- a 'stepAuto'.
---
--- Really only useful for obfuscatingly point-free code.
-onOutRes :: (b -> b)      -- ^ function over the result
-         -> Output m a b
-         -> Output m a b
-onOutRes fx (Output x a) = Output (fx x) a
-{-# INLINE onOutRes #-}
 
 
 -- | The 'Auto' type.  For this library, an 'Auto' semantically
@@ -262,16 +199,13 @@ data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
                 | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
                 | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
-                |           AutoArb     (Get (Auto m a b)) Put !(a -> Output m a b)
-                |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
+                |           AutoArb     (Get (Auto m a b)) Put !(a -> (b, Auto m a b))
+                |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (b, Auto m a b))
                 deriving ( Typeable )
 
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
 type Auto'   = Auto Identity
 
--- | Special case of 'Output' where the underlying 'Monad' of 'outAuto' is
--- 'Identity'.
-type Output' = Output Identity
 
 -- | Re-structure 'Auto' internals to use the 'Arb' ("arbitrary")
 -- constructors, as recursion-based mealy machines.  Almost always a bad
@@ -282,22 +216,22 @@ toArb a = a_
     a_ = case a of
            AutoFunc f  -> AutoArb  (pure a_)
                                    (return ())
-                                 $ \x -> Output (f x) a_
+                                 $ \x -> (f x, a_)
            AutoFuncM f -> AutoArbM (pure a_)
                                    (return ())
-                                 $ \x -> liftM (`Output` a_) (f x)
+                                 $ \x -> liftM (, a_) (f x)
            AutoState gp@(g,p) f s  ->
                           let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
                                                (p s')
                                              $ \x -> let (y, s'') = f x s'
-                                                     in  Output y (a__ s'')
+                                                     in  (y, a__ s'')
                           in  a__ s
            AutoStateM gp@(g,p) f s ->
                           let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
                                                 (p s)
                                               $ \x -> do
                                                   (y, s'') <- f x s'
-                                                  return (Output y (a__ s''))
+                                                  return (y, a__ s'')
                           in  a__ s
            _                       -> a
 
@@ -326,13 +260,13 @@ hoistA _ (AutoState gp f s)  = AutoState gp f s
 hoistA g (AutoStateM gp f s) = AutoStateM gp (\x s' -> g (f x s')) s
 hoistA g (AutoArb gt pt f)   = AutoArb (fmap (hoistA g) gt)
                                        pt
-                                       $ \x -> let Output y a' = f x
-                                               in  Output y (hoistA g a')
+                                       $ \x -> let (y, a') = f x
+                                               in  (y, hoistA g a')
 hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
                                         pt
                                         $ \x -> g $ do
-                                            Output y a' <- f x
-                                            return (Output y (hoistA g a'))
+                                            (y, a') <- f x
+                                            return (y, hoistA g a')
 
 -- | Generalizes an 'Auto'' to any 'Auto' m a b', using 'hoist'.
 --
@@ -467,8 +401,8 @@ unserialize a =
         AutoFuncM _      -> a
         AutoState _ f s  -> AutoState (pure s, const (put ())) f s
         AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
-        AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
-        AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
+        AutoArb _ _ f    -> AutoArb (pure a) (put ()) (second unserialize . f)
+        AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (second unserialize) . f)
 
 -- | "Runs" the 'Auto' through one step.
 --
@@ -491,39 +425,23 @@ unserialize a =
 stepAuto :: Monad m
          => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
-         -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
+         -> m (b, Auto m a b)  -- ^ the output, and the updated 'Auto''.
 stepAuto a x = case a of
                  AutoFunc f        ->
-                     return (Output (f x) a)
+                     return (f x, a)
                  AutoFuncM f       -> do
                      y <- f x
-                     return (Output y a)
+                     return (y, a)
                  AutoState gp f s  ->
                      let (y, s') = f x s
                          a'      = AutoState gp f s'
-                     in  return (Output y a')
+                     in  return (y, a')
                  AutoStateM gp f s -> do
                      (y, s') <- f x s
                      let a' = AutoStateM gp f s'
-                     return (Output y a')
+                     return (y, a')
                  AutoArb _ _ f     -> return (f x)
                  AutoArbM _ _ f    -> f x
--- stepAuto a x = case a of
---                  AutoFunc f     -> let y = f x in y `seq` return (Output y a)
---                  AutoFuncM f    -> do
---                      y <- f x
---                      y `seq` return (Output y a)
---                  AutoState gp f s  -> let (y, s') = f x s
---                                           a'      = AutoState gp f s'
---                                       in  y `seq` return (Output y a')
---                  AutoStateM gp f s -> do
---                      (y, s') <- f x s
---                      let a' = AutoStateM gp f s'
---                      y `seq` return (Output y a')
---                  AutoArb _ _ f   -> let o@(Output y _) = f x in y `seq` return o
---                  AutoArbM _ _ f  -> do
---                      o@(Output y _) <- f x
---                      y `seq` return o
 {-# INLINE stepAuto #-}
 
 -- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
@@ -533,17 +451,17 @@ stepAuto a x = case a of
 -- @a -> b@, then 'stepAuto'' lets you "run" it.
 stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
-          -> Output' a b      -- ^ the output, and the updated 'Auto''
+          -> (b, Auto' a b)   -- ^ the output, and the updated 'Auto''
 -- stepAuto' a = runIdentity . stepAuto a
 stepAuto' a x = case a of
-                  AutoFunc f        -> Output (f x) a
-                  AutoFuncM f       -> Output (runIdentity (f x)) a
+                  AutoFunc f        -> (f x, a)
+                  AutoFuncM f       -> (runIdentity (f x), a)
                   AutoState gp f s  -> let (y, s') = f x s
                                            a'      = AutoState gp f s'
-                                       in  Output y a'
+                                       in  (y, a')
                   AutoStateM gp f s -> let (y, s') = runIdentity (f x s)
                                            a'      = AutoStateM gp f s'
-                                       in  Output y a'
+                                       in  (y, a')
                   AutoArb _ _ f     -> f x
                   AutoArbM _ _ f    -> runIdentity (f x)
 {-# INLINE stepAuto' #-}
@@ -558,12 +476,12 @@ purifyAuto a@(AutoState {})    = a
 purifyAuto (AutoStateM gp f s) = AutoState gp (\x s' -> runIdentity (f x s')) s
 purifyAuto (AutoArb g p f)     = AutoArb (purifyAuto <$> g)
                                          p
-                                       $ \x -> let Output y a' = f x
-                                               in  Output y (purifyAuto a')
+                                       $ \x -> let (y, a') = f x
+                                               in  (y, purifyAuto a')
 purifyAuto (AutoArbM g p f)    = AutoArb (purifyAuto <$> g)
                                          p
-                                       $ \x -> let Output y a' = runIdentity (f x)
-                                               in  Output y (purifyAuto a')
+                                       $ \x -> let (y, a') = runIdentity (f x)
+                                               in  (y, purifyAuto a')
 
 -- | Like 'stepAuto', but drops the "next 'Auto'" and just gives the
 -- result.
@@ -571,14 +489,14 @@ evalAuto :: Monad m
          => Auto m a b
          -> a
          -> m b
-evalAuto a = liftM outRes . stepAuto a
+evalAuto a = liftM fst . stepAuto a
 
 -- | Like 'stepAuto'', but drops the "next 'Auto''" and just gives the
 -- result.  'evalAuto' for 'Auto''.
 evalAuto' :: Auto' a b
           -> a
           -> b
-evalAuto' a = outRes . stepAuto' a
+evalAuto' a = fst . stepAuto' a
 
 -- | Like 'stepAuto', but drops the result and just gives the "next
 -- 'Auto'".
@@ -586,38 +504,38 @@ execAuto :: Monad m
          => Auto m a b
          -> a
          -> m (Auto m a b)
-execAuto a = liftM outAuto . stepAuto a
+execAuto a = liftM snd . stepAuto a
 
 -- | Like 'stepAuto'', but drops the result and just gives the "next
 -- 'Auto''".  'execAuto' for 'Auto''.
 execAuto' :: Auto' a b
           -> a
           -> Auto' a b
-execAuto' a = outAuto . stepAuto' a
+execAuto' a = snd . stepAuto' a
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
 -- 'Auto's.
 forcer :: NFData a => Auto m a a
-forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
+forcer = mkAuto_ $ \x -> x `deepseq` (x, forcer)
 {-# INLINE forcer #-}
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be evaluated to Weak Head Normal Form, with 'seq',
 -- when composed with other 'Auto's.
 seqer :: Auto m a a
-seqer = mkAuto_ $ \x -> x `seq` Output x seqer
+seqer = mkAuto_ $ \x -> x `seq` (x, seqer)
 {-# INLINE seqer #-}
 
-interceptO :: Monad m => (Output m a b -> m c) -> Auto m a b -> Auto m a c
+interceptO :: Monad m => ((b, Auto m a b) -> m c) -> Auto m a b -> Auto m a c
 interceptO f = go
   where
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                   $ \x -> do
-                        o@(Output _ a1) <- stepAuto a0 x
+                        o@(_, a1) <- stepAuto a0 x
                         y <- f o
-                        return (Output y (go a1))
+                        return (y, go a1)
 
 -- compMAuto :: (Monad m, Monad m') => Auto m b (m' c) -> Auto m a (m' b) -> Auto m a (m' c)
 -- compMAuto g f = AutoArbM undefined
@@ -641,9 +559,9 @@ interceptO f = go
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
-mkAuto :: Get (Auto m a b)      -- ^ resuming/loading 'Get'
-       -> Put                   -- ^ saving 'Put'
-       -> (a -> Output m a b)   -- ^ step function
+mkAuto :: Get (Auto m a b)          -- ^ resuming/loading 'Get'
+       -> Put                       -- ^ saving 'Put'
+       -> (a -> (b, Auto m a b))    -- ^ step function
        -> Auto m a b
 mkAuto = AutoArb
 {-# INLINE mkAuto #-}
@@ -657,9 +575,9 @@ mkAuto = AutoArb
 -- primtives together.
 --
 -- TODO: Tutorial!!!!
-mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
-        -> Put                      -- ^ saving 'Put'
-        -> (a -> m (Output m a b))  -- ^ (monadic) step function
+mkAutoM :: Get (Auto m a b)             -- ^ resuming/loading 'Get'
+        -> Put                          -- ^ saving 'Put'
+        -> (a -> m (b, Auto m a b))     -- ^ (monadic) step function
         -> Auto m a b
 mkAutoM = AutoArbM
 {-# INLINE mkAutoM #-}
@@ -673,7 +591,7 @@ mkAutoM = AutoArbM
 -- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be lost.
-mkAuto_ :: (a -> Output m a b)      -- ^ step function
+mkAuto_ :: (a -> (b, Auto m a b))       -- ^ step function
         -> Auto m a b
 mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
 {-# INLINE mkAuto_ #-}
@@ -687,7 +605,7 @@ mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
 -- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be reset.
-mkAutoM_ :: (a -> m (Output m a b))   -- ^ (monadic) step function
+mkAutoM_ :: (a -> m (b, Auto m a b))    -- ^ (monadic) step function
          -> Auto m a b
 mkAutoM_ f = mkAutoM (pure (mkAutoM_ f)) (return ()) f
 {-# INLINE mkAutoM_ #-}
@@ -941,9 +859,9 @@ instance Monad m => Applicative (Auto m a) where
                   (AutoFunc f, AutoStateM gp x s) ->
                       AutoStateM gp (\i s' -> liftM (first (f i)) (x i s')) s
                   (AutoFunc f, AutoArb l s x) ->
-                      AutoArb (fmap (af <*>) l) s $ \i -> onOutput (f i) (af <*>) $ x i
+                      AutoArb (fmap (af <*>) l) s $ \i -> (f i *** (af <*>)) $ x i
                   (AutoFunc f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (onOutput (f i) (af <*>)) (x i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (f i *** (af <*>)) (x i)
                   (AutoFuncM f, AutoFunc x) ->
                       AutoFuncM $ \i -> liftM ($ x i) (f i)
                   (AutoFuncM f, AutoFuncM x) ->
@@ -953,9 +871,9 @@ instance Monad m => Applicative (Auto m a) where
                   (AutoFuncM f, AutoStateM gp x s) ->
                       AutoStateM gp (\i s' -> liftM2 first (f i) (x i s')) s
                   (AutoFuncM f, AutoArb l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . (`onOutput` (af <*>))) (f i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . (*** (af <*>))) (f i)
                   (AutoFuncM f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 (\f' -> onOutput f' (af <*>)) (f i) (x i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 (*** (af <*>)) (f i) (x i)
                   (AutoState gp f s, AutoFunc x) ->
                       AutoState gp (\i s' -> first ($ x i) (f i s')) s
                   (AutoState gp f s, AutoFuncM x) ->
@@ -1000,8 +918,8 @@ instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty     = mkConstM empty
     a1 <|> a2 = mkAutoM ((<|>) <$> loadAuto a1 <*> loadAuto a2)
                         (saveAuto a1 *> saveAuto a2)
-                        $ \x -> let res1  = onOutAuto (<|> a2) `liftM` stepAuto a1 x
-                                    res2  = onOutAuto (a1 <|>) `liftM` stepAuto a2 x
+                        $ \x -> let res1  = second (<|> a2) `liftM` stepAuto a1 x
+                                    res2  = second (a1 <|>) `liftM` stepAuto a2 x
                                 in  res1 <|> res2
 
 
@@ -1017,9 +935,9 @@ instance Monad m => Category (Auto m) where
                 (AutoFunc g, AutoStateM gpf f s)  ->
                     AutoStateM gpf (\x s' -> liftM (first g) (f x s')) s
                 (AutoFunc g, AutoArb l s f)       ->
-                    AutoArb (fmap (ag .) l) s $ \x -> fmap g (f x)
+                    AutoArb (fmap (ag .) l) s $ \x -> (g *** fmap g) (f x)
                 (AutoFunc g, AutoArbM l s f)      ->
-                    AutoArbM (fmap (ag .) l) s $ \x -> liftM (fmap g) (f x)
+                    AutoArbM (fmap (ag .) l) s $ \x -> liftM (g *** fmap g) (f x)
                 (AutoFuncM g, AutoFunc f)         ->
                     AutoFuncM (g <=< return . f)
                 (AutoFuncM g, AutoFuncM f)        ->
@@ -1032,16 +950,16 @@ instance Monad m => Category (Auto m) where
                     AutoArbM (fmap (ag .) l)
                              s
                            $ \x -> do
-                               let Output y af' = f x
+                               let (y, af') = f x
                                y' <- g y
-                               return (Output y' (ag . af'))
+                               return (y', ag . af')
                 (AutoFuncM g, AutoArbM l s f)     ->
                     AutoArbM (fmap (ag .) l)
                              s
                            $ \x -> do
-                               Output y af' <- f x
+                               (y, af') <- f x
                                y' <- g y
-                               return (Output y' (ag . af'))
+                               return (y', ag . af')
                 (AutoState gpg g sg, AutoFunc f)  ->
                     AutoState gpg (g . f) sg
                 (AutoState gpg g sg, AutoFuncM f) ->
@@ -1062,18 +980,18 @@ instance Monad m => Category (Auto m) where
                 (AutoState gpg@(gg,pg) g sg, AutoArb l s f) ->
                     AutoArb (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
                             (pg sg *> s)
-                            $ \x -> let Output y af' = f x
-                                        (z, sg')     = g y sg
-                                        ag'          = AutoState gpg g sg'
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, af') = f x
+                                        (z, sg') = g y sg
+                                        ag'      = AutoState gpg g sg'
+                                    in  (z, ag' . af')
                 (AutoState gpg@(gg,pg) g sg, AutoArbM l s f) ->
                     AutoArbM (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 Output y af' <- f x
+                                 (y, af') <- f x
                                  let (z, sg') = g y sg
                                      ag'      = AutoState gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoStateM gpg g sg, AutoFunc f)       ->
                     AutoStateM gpg (g <=< return . f) sg
                 (AutoStateM gpg g sg, AutoFuncM f)      ->
@@ -1096,90 +1014,88 @@ instance Monad m => Category (Auto m) where
                     AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 let Output y af' = f x
+                                 let (y, af') = f x
                                  (z, sg') <- g y sg
                                  let ag' = AutoStateM gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoStateM gpg@(gg,pg) g sg, AutoArbM l s f) ->
                     AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 Output y af' <- f x
+                                 (y, af') <- f x
                                  (z, sg') <- g y sg
                                  let ag' = AutoStateM gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoArb l s g, AutoFunc f)  ->
-                    AutoArb (fmap (. af) l) s (onOutAuto (. af) . g . f)
+                    AutoArb (fmap (. af) l) s (second (. af) . g . f)
                 (AutoArb l s g, AutoFuncM f) ->
-                    AutoArbM (fmap (. af) l) s (return . onOutAuto (. af) . g <=< f)
+                    AutoArbM (fmap (. af) l) s (return . second (. af) . g <=< f)
                 (AutoArb l s g, AutoState gpf@(gf,pf) f sf) ->
                     AutoArb (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
                             (s *> pf sf)
-                            $ \x -> let (y, sf')     = f x sf
-                                        af'          = AutoState gpf f sf'
-                                        Output z ag' = g y
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, sf') = f x sf
+                                        af'      = AutoState gpf f sf'
+                                        (z, ag') = g y
+                                    in  (z, ag' . af')
                 (AutoArb l s g, AutoStateM gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  (y, sf') <- f x sf
-                                 let af'          = AutoStateM gpf f sf'
-                                     Output z ag' = g y
-                                 return (Output z (ag' . af'))
+                                 let af'      = AutoStateM gpf f sf'
+                                     (z, ag') = g y
+                                 return (z, ag' . af')
                 (AutoArb lg sg g, AutoArb lf sf f) ->
                     AutoArb (liftA2 (.) lg lf)
                             (sg *> sf)
-                            $ \x -> let Output y af' = f x
-                                        Output z ag' = g y
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, af') = f x
+                                        (z, ag') = g y
+                                    in  (z, ag' . af')
                 (AutoArb lg sg g, AutoArbM lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 Output y af' <- f x
-                                 let Output z ag' = g y
-                                 return (Output z (ag' . af'))
+                                 (y, af') <- f x
+                                 let (z, ag') = g y
+                                 return (z, ag' . af')
                 (AutoArbM l s g, AutoFunc f)  ->
                     AutoArbM (fmap (. af) l)
                              s
-                             (liftM (onOutAuto (. af)) . g . f)
+                             (liftM (second (. af)) . g . f)
                 (AutoArbM l s g, AutoFuncM f) ->
                     AutoArbM (fmap (. af) l)
                              s
-                             (liftM (onOutAuto (. af)) . g <=< f)
+                             (liftM (second (. af)) . g <=< f)
                 (AutoArbM l s g, AutoState gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  let (y, sf') = f x sf
                                      af'      = AutoState gpf f sf'
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM l s g, AutoStateM gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  (y, sf') <- f x sf
                                  let af' = AutoStateM gpf f sf'
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM lg sg g, AutoArb lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 let Output y af' = f x
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 let (y, af') = f x
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM lg sg g, AutoArbM lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 Output y af' <- f x
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
-      -- where
-      --   mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
+                                 (y, af') <- f x
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
     {-# INLINE (.) #-}
 
 mergeStSt :: (Get s, s -> Put)
@@ -1197,13 +1113,13 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (fa . f) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa (f x)
-                                                      in  Output y (a_ a')
+                                              $ \x -> let (y, a') = fa (f x)
+                                                      in  (y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                               $ \x -> do
-                                                  Output y a' <- fa (f x)
-                                                  return (Output y (a_ a'))
+                                                  (y, a') <- fa (f x)
+                                                  return (y, a_ a')
     {-# INLINE lmap #-}
     rmap g = a_
       where
@@ -1214,13 +1130,13 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (\x -> liftM (first g) . fa x) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa x
-                                                      in  Output (g y) (a_ a')
+                                              $ \x -> let (y, a') = fa x
+                                                      in  (g y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                                $ \x -> do
-                                                   Output y a' <- fa x
-                                                   return (Output (g y) (a_ a'))
+                                                   (y, a') <- fa x
+                                                   return (g y, a_ a')
     {-# INLINE rmap #-}
     dimap f g = a_
       where
@@ -1231,13 +1147,13 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (\x -> liftM (first g) . fa (f x)) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa (f x)
-                                                      in  Output (g y) (a_ a')
+                                              $ \x -> let (y, a') = fa (f x)
+                                                      in  (g y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                                $ \x -> do
-                                                   Output y a' <- fa (f x)
-                                                   return (Output (g y) (a_ a'))
+                                                   (y, a') <- fa (f x)
+                                                   return (g y, a_ a')
     {-# INLINE dimap #-}
 
 instance Monad m => Strong (Auto m) where
@@ -1265,14 +1181,14 @@ instance Monad m => Arrow (Auto m) where
                 AutoArb l s f      ->
                     AutoArb (first <$> l)
                             s
-                          $ \(x, z) -> let Output y a' = f x
-                                       in  Output (y, z) (first a')
+                          $ \(x, z) -> let (y, a') = f x
+                                       in  ((y, z), first a')
                 AutoArbM l s f     ->
                     AutoArbM (first <$> l)
                              s
                            $ \(x, z) -> do
-                               Output y a' <- f x
-                               return (Output (y, z) (first a'))
+                               (y, a') <- f x
+                               return ((y, z), first a')
     second a = case a of
                  AutoFunc f         ->
                      AutoFunc (second f)
@@ -1285,14 +1201,14 @@ instance Monad m => Arrow (Auto m) where
                  AutoArb l s f      ->
                      AutoArb (second <$> l)
                              s
-                           $ \(z, x) -> let Output y a' = f x
-                                        in  Output (z, y) (second a')
+                           $ \(z, x) -> let (y, a') = f x
+                                        in  ((z, y), second a')
                  AutoArbM l s f     ->
                      AutoArbM (second <$> l)
                               s
                             $ \(z, x) -> do
-                                Output y a' <- f x
-                                return (Output (z, y) (second a'))
+                                (y, a') <- f x
+                                return ((z, y), second a')
 
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
@@ -1318,14 +1234,14 @@ instance Monad m => ArrowChoice (Auto m) where
                   AutoArb (left <$> l)
                           s
                         $ \x -> case x of
-                                  Right y -> Output (Right y) a
-                                  Left y  -> onOutput Left left (f y)
+                                  Right y -> (Right y, a)
+                                  Left y  -> (Left *** left) (f y)
               AutoArbM l s f    ->
                   AutoArbM (left <$> l)
                            s
                          $ \x -> case x of
-                                   Right y -> return (Output (Right y) a)
-                                   Left y  -> liftM (onOutput Left left) (f y)
+                                   Right y -> return (Right y, a)
+                                   Left y  -> liftM (Left *** left) (f y)
     {-# INLINE left #-}
     right a0 = a
       where
@@ -1348,38 +1264,38 @@ instance Monad m => ArrowChoice (Auto m) where
                   AutoArb (right <$> l)
                           s
                         $ \x -> case x of
-                                  Left y  -> Output (Left y) a
-                                  Right y -> onOutput Right right (f y)
+                                  Left y  -> (Left y, a)
+                                  Right y -> (Right *** right) (f y)
               AutoArbM l s f    ->
                   AutoArbM (right <$> l)
                            s
                          $ \x -> case x of
-                                   Left y  -> return (Output (Left y) a)
-                                   Right y -> liftM (onOutput Right right) (f y)
+                                   Left y  -> return (Left y, a)
+                                   Right y -> liftM (Right *** right) (f y)
     {-# INLINE right #-}
 
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
                 AutoFunc f        ->
-                    AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
+                    AutoFunc (\x -> fst . fix $ \ ~(_, d) -> f (x, d))
                 AutoFuncM f       ->
-                    AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
+                    AutoFuncM (\x -> liftM fst . mfix $ \ ~(_, d) -> f (x, d))
                 AutoState gp f s  ->
-                    AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
+                    AutoState gp (\x s' -> first fst . fix $ \ ~(~(_, d), _) -> f (x, d) s') s
                 AutoStateM gp f s ->
-                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
+                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~(~(_, d), _) -> f (x, d) s') s
                 AutoArb l s f     ->
                     AutoArb (loop <$> l)
                             s
-                          $ \x -> onOutput fst loop
+                          $ \x -> (fst *** loop)
                                 . fix
-                                $ \ ~(Output (_, d) _) -> f (x, d)
+                                $ \ ~(~(_, d), _) -> f (x, d)
                 AutoArbM l s f    ->
                     AutoArbM (loop <$> l)
                              s
-                           $ \x -> liftM (onOutput fst loop)
+                           $ \x -> liftM (fst *** loop)
                                  . mfix
-                                 $ \ ~(Output (_, d) _) -> f (x, d)
+                                 $ \ ~(~(_, d), _) -> f (x, d)
     {-# INLINE loop #-}
 
 -- Utility instances
@@ -1425,49 +1341,6 @@ instance (Monad m, Floating b) => Floating (Auto m a b) where
     atanh   = fmap atanh
     acosh   = fmap acosh
 
--- Semigroup, Monoid, Num, Fractional, and Floating instances for Output
--- because why not.
-
-instance (Monad m, Semigroup b) => Semigroup (Output m a b) where
-    (<>) = liftA2 (<>)
-
-instance (Monad m, Monoid b) => Monoid (Output m a b) where
-    mempty  = pure mempty
-    mappend = liftA2 mappend
-
-instance (Monad m, Num b) => Num (Output m a b) where
-    (+)         = liftA2 (+)
-    (*)         = liftA2 (*)
-    (-)         = liftA2 (-)
-    negate      = fmap negate
-    abs         = fmap abs
-    signum      = fmap signum
-    fromInteger = pure . fromInteger
-
-instance (Monad m, Fractional b) => Fractional (Output m a b) where
-    (/)          = liftA2 (/)
-    recip        = fmap recip
-    fromRational = pure . fromRational
-
-instance (Monad m, Floating b) => Floating (Output m a b) where
-    pi      = pure pi
-    exp     = fmap exp
-    sqrt    = fmap sqrt
-    log     = fmap log
-    (**)    = liftA2 (**)
-    logBase = liftA2 logBase
-    sin     = fmap sin
-    tan     = fmap tan
-    cos     = fmap cos
-    asin    = fmap asin
-    atan    = fmap atan
-    acos    = fmap acos
-    sinh    = fmap sinh
-    tanh    = fmap tanh
-    cosh    = fmap cosh
-    asinh   = fmap asinh
-    atanh   = fmap atanh
-    acosh   = fmap acosh
 
 -- Utility functions
 

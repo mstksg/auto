@@ -130,7 +130,7 @@ saving :: MonadIO m
        => FilePath          -- ^ filepath to write to
        -> Auto m a b        -- ^ 'Auto' to transform
        -> Auto m a b
-saving fp = interceptO $ \(Output y a') -> do
+saving fp = interceptO $ \(y, a') -> do
                              liftIO $ writeAuto fp a'
                              return y
 
@@ -157,8 +157,8 @@ loading fp a0 = mkAutoM (loading fp <$> loadAuto a0)
     loaded a = mkAutoM (loading' fp <$> loadAuto a)
                        (saveAuto a)
                        $ \x -> do
-                           Output y a' <- stepAuto a x
-                           return (Output y (loaded a'))
+                           (y, a') <- stepAuto a x
+                           return (y, loaded a')
 
 
 
@@ -184,8 +184,8 @@ loading' fp a0 = mkAutoM (loading' fp <$> loadAuto a0)
     loaded a = mkAutoM (loading' fp <$> loadAuto a)
                        (saveAuto a)
                        $ \x -> do
-                           Output y a' <- stepAuto a x
-                           return (Output y (loaded a'))
+                           (y, a') <- stepAuto a x
+                           return (y, loaded a')
 
 -- | A combination of 'saving' and 'loading'.  When the 'Auto' is first
 -- run, it loads the save state from the given 'FilePath' and fast forwards
@@ -268,7 +268,7 @@ saveFromB :: MonadIO m
                                             --   with a 'FilePath' to save
                                             --   to
           -> Auto m a b
-saveFromB = interceptO $ \(Output (y, b) a') -> do
+saveFromB = interceptO $ \((y, b), a') -> do
                              case b of
                                Blip p -> liftIO $ writeAuto p a'
                                _      -> return ()
@@ -316,11 +316,11 @@ loadFromB :: MonadIO m
 loadFromB a = mkAutoM (loadFromB' <$> loadAuto a)
                       (saveAuto a)
                       $ \x -> do
-                          Output (y, b) a' <- stepAuto a x
+                          ((y, b), a') <- stepAuto a x
                           a'' <- case b of
                                    Blip p -> liftIO $ readAutoErr p a'
                                    NoBlip -> return a'
-                          return (Output y (loadFromB' a''))
+                          return (y, loadFromB' a'')
 
 -- | Like 'loadFromB', except silently ignores errors.  When a load is
 -- requested, but there is an IO or parse error, the loading is skipped.
@@ -334,7 +334,7 @@ loadFromB' :: MonadIO m
 loadFromB' a0 = mkAutoM (loadFromB' <$> loadAuto a0)
                         (saveAuto a0)
                         $ \x -> do
-                            Output (y, b) a1 <- stepAuto a0 x
+                            ((y, b), a1) <- stepAuto a0 x
                             a2 <- case b of
                                     Blip p -> do
                                       ea3 <- liftIO $ readAutoDef p a1
@@ -342,7 +342,7 @@ loadFromB' a0 = mkAutoM (loadFromB' <$> loadAuto a0)
                                         Right a3 -> return a3
                                         Left _   -> return a1
                                     NoBlip -> return a1
-                            return (Output y (loadFromB' a2))
+                            return (y, loadFromB' a2)
 
 -- | Takes an 'Auto' and basically "wraps" it so that you can trigger saves
 -- with a blip stream.
@@ -373,8 +373,8 @@ saveOnB a = mkAutoM (saveOnB <$> loadAuto a)
                       case b of
                         Blip p -> liftIO $ writeAuto p a
                         NoBlip -> return ()
-                      Output y a' <- stepAuto a x
-                      return (Output y (saveOnB a'))
+                      (y, a') <- stepAuto a x
+                      return (y, saveOnB a')
 
 -- | Takes an 'Auto' and basically "wraps" it so that you can trigger
 -- loads/resumes from a file with a blip stream.
@@ -407,8 +407,8 @@ loadOnB a = mkAutoM (loadOnB' <$> loadAuto a)
                         a' <- case b of
                                 Blip p -> liftIO $ readAutoErr p a
                                 NoBlip -> return a
-                        Output y a'' <- stepAuto a' x
-                        return (Output y (loadOnB' a''))
+                        (y, a'') <- stepAuto a' x
+                        return (y, loadOnB' a'')
 
 -- | Like 'loadOnB', except silently ignores errors.  When a load is
 -- requested, but there is an IO or parse error, the loading is skipped.
@@ -425,6 +425,6 @@ loadOnB' a0 = mkAutoM (loadOnB' <$> loadAuto a0)
                                       Right a2 -> return a2
                                       Left _   -> return a0
                                   NoBlip -> return a0
-                          Output y a2 <- stepAuto a1 x
-                          return (Output y (loadOnB' a2))
+                          (y, a2) <- stepAuto a1 x
+                          return (y, loadOnB' a2)
 

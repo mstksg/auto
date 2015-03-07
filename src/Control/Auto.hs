@@ -24,12 +24,8 @@
 
 module Control.Auto (
   -- * Types
-  -- ** Output
-    Output(..)
-  , Output'
-  , onOutput
   -- ** Auto
-  , Auto
+    Auto
   , Auto'
   -- ** Misc
   , Blip

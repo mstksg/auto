@@ -135,9 +135,8 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
                         (mapM_ saveAuto as)
                         $ \xs -> do
                             res <- zipWithM stepAuto as (xs ++ repeat x0)
-                            let ys  = map outRes  res
-                                as' = map outAuto res
-                            return (Output ys (zipAuto x0 as'))
+                            let (ys, as') = unzip res
+                            return (ys, zipAuto x0 as')
 
 -- | Like 'zipAuto', but delay the input by one step.  The first input to
 -- all of them is the "default" value, and after that, feeds in the input
@@ -272,8 +271,8 @@ dynZip_ x0 = go []
     go as = mkAutoM_ $ \(xs, news) -> do
                          let newas = as ++ blip [] id news
                          res <- zipWithM stepAuto newas (xs ++ repeat x0)
-                         let (ys, as') = unzip [ (y, a) | (Output (Just y) a) <- res ]
-                         return (Output ys (go as'))
+                         let (ys, as') = unzip [ (y, a) | (Just y, a) <- res ]
+                         return (ys, go as')
 
 -- | A dynamic box of 'Auto's, indexed by an 'Int'.  Takes an 'IntMap' of
 -- inputs to feed into their corresponding 'Auto's, and collect all of the
@@ -323,10 +322,10 @@ dynMap_ x0 = go 0 mempty
                                newc   = i + length newas
                                resMap = zipIntMapWithDefaults stepAuto Nothing (Just x0) newas' xs
                            res <- sequence resMap
-                           let res' = IM.filter (isJust . outRes) res
-                               ys   = fromJust . outRes <$> res'
-                               as'  = outAuto <$> res'
-                           return (Output ys (go newc as'))
+                           let res' = IM.filter (isJust . fst) res
+                               ys   = fromJust . fst <$> res'
+                               as'  = snd <$> res'
+                           return (ys, go newc as')
 
 -- | 'Auto' multiplexer.  Stores a bunch of internal 'Auto's indexed by
 -- a key.  At every step, takes a key-input pair, feeds the input to the
@@ -387,16 +386,16 @@ mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 -- fromList [("foo", 8), ("world", 6)]
 --
 -- See 'mux' for more notes.
-muxMany :: forall m a b k. (Serialize k, Ord k, Monad m)
+muxMany :: (Serialize k, Ord k, Monad m)
         => (k -> Auto m a b)    -- ^ function to create a new 'Auto' if
                                 --   none at that key already exists
         -> Auto m (Map k a) (Map k b)
 muxMany f = go mempty
   where
-    go :: Map k (Auto m a b) -> Auto m (Map k a) (Map k b)
+    -- go :: Map k (Auto m a b) -> Auto m (Map k a) (Map k b)
     go as = mkAutoM l (s as) (t as)
     l     = do
-      ks <- get :: Get [k]
+      ks <- get
       let as = M.fromList (map (id &&& f) ks)
       go <$> mapM loadAuto as
     s as  = put (M.keys as) *> mapM_ saveAuto as
@@ -412,29 +411,29 @@ muxMany_ f = go mempty
     go :: Map k (Auto m a b) -> Auto m (Map k a) (Map k b)
     go = mkAutoM_ . _muxManyF f go
 
-_muxManyF :: forall k m a b inMap.  (Ord k, Monad m, inMap ~ (Auto m a b))
-          => (k -> inMap)                                -- ^ f : make new Autos
-          -> (Map k inMap -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
-          -> Map k inMap                                 -- ^ as: all current Autos
+_muxManyF :: forall k m a b. (Ord k, Monad m)
+          => (k -> Auto m a b)                           -- ^ f : make new Autos
+          -> (Map k (Auto m a b) -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
+          -> Map k (Auto m a b)                                 -- ^ as: all current Autos
           -> Map k a                                     -- ^ xs: Inputs
-          -> m (Output m (Map k a) (Map k b))            -- ^ Outputs, and next Auto.
+          -> m (Map k b, Auto m (Map k a) (Map k b))           -- ^ Outputs, and next Auto.
 _muxManyF f go as xs = do
     -- all the outputs of the autos with the present inputs; autos without
     --   inputs are ignored.
     outs <- sequence steps
-    let ys     = fmap outRes outs
-        allas' = M.union (fmap outAuto outs) allas
-    return (Output ys (go allas'))
+    let ys     = fmap fst outs
+        allas' = M.union (fmap snd outs) allas
+    return (ys, go allas')
   where
     -- new Autos, from the function.  Only on new ones not found in `as`.
-    newas :: Map k inMap
+    newas :: Map k (Auto m a b)
     newas = M.mapWithKey (\k _ -> f k) (M.difference xs as)
     -- all Autos, new and old.  Prefer the old ones.
-    allas :: Map k inMap
+    allas :: Map k (Auto m a b)
     allas = M.union as newas
     -- Step all the autos with all the inputs.  Lose the Autos that have no
     --   corresponding input.
-    steps :: Map k (m (Output m a b))
+    steps :: Map k (m (b, Auto m a b))
     steps = M.intersectionWith stepAuto allas xs
 
 e2m :: Either (a, b) b -> (Maybe a, b)
@@ -662,7 +661,7 @@ _gatherFManyF :: forall k m a b c inAuto outAuto outOut.
                   , Monad m
                   , inAuto  ~ (Interval m a b)
                   , outAuto ~ (Auto m (Map k (Either (c, a) a)) (Map k b))
-                  , outOut  ~ (Output m (Map k (Either (c, a) a)) (Map k b))
+                  , outOut  ~ (Map k b, Auto m (Map k (Either (c, a) a)) (Map k b))
                   )
               => (k -> Maybe c -> inAuto)                 -- f
               -> (Map k (Maybe c, inAuto) -> Map k b -> outAuto)     -- go
@@ -671,24 +670,24 @@ _gatherFManyF :: forall k m a b c inAuto outAuto outOut.
               -> Map k (Either (c, a) a)                  -- xs
               -> m outOut
 _gatherFManyF f go as ys xs = do
-    outs <- sequence steps :: m (Map k (Maybe c, Output m a (Maybe b)))
-    let outs', rems   :: Map k (Maybe c, Output m a (Maybe b))
-        (outs', rems) = M.partition (isJust . outRes . snd) outs
+    outs <- sequence steps :: m (Map k (Maybe c, (Maybe b, Auto m a (Maybe b))))
+    let outs', rems   :: Map k (Maybe c, (Maybe b, Auto m a (Maybe b)))
+        (outs', rems) = M.partition (isJust . fst . snd) outs
         as'           = M.difference allas rems
         ys'           = M.difference ys rems
-        as''          = M.union (fmap (second outAuto) outs') as'
-        newys         = fmap (fromJust . outRes . snd) outs'
+        as''          = M.union (fmap (second snd) outs') as'
+        newys         = fmap (fromJust . fst . snd) outs'
         ys''          = M.union newys ys'
-    return (Output ys'' (go as'' ys''))
+    return (ys'', go as'' ys'')
   where
     _mzxs = fmap e2m xs
     newas = M.mapWithKey (_muxgathermapF f) (M.difference _mzxs as)
     allas = M.union as newas
-    steps :: Map k (m (Maybe c, Output m a (Maybe b)))
+    steps :: Map k (m (Maybe c, (Maybe b, Auto m a (Maybe b))))
     steps = M.intersectionWith interf allas _mzxs
     interf :: (Maybe c, Auto m a (Maybe b))
            -> (Maybe c, a)
-           -> m (Maybe c, Output m a (Maybe b))
+           -> m (Maybe c, (Maybe b, Auto m a (Maybe b)))
     interf (mc, a) (_, x) = sequence (mc, stepAuto a x)
 
 type MapMerge m k a b c = (k -> a -> b -> Maybe c)

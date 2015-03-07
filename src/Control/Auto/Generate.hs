@@ -96,12 +96,12 @@ fromLongList xs = go 0 xs
           return (go i (drop i xs))
     finished = mkAuto loader
                       (put True)
-                      $ \_ -> Output Nothing finished
+                      (const (Nothing, finished))
     go i ys  = mkAuto loader
                       (put (False, i))
-                      $ \_ -> case ys of
-                                (y':ys') -> Output (Just y') (go (i + 1) ys')
-                                []       -> Output Nothing finished
+                    $ \_ -> case ys of
+                              (y':ys') -> (Just y', go (i + 1) ys')
+                              []       -> (Nothing, finished)
 
 -- | The non-resuming/non-serializing version of 'fromList'.
 fromList_ :: [b]                -- ^ list to output element-by-element

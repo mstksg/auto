@@ -95,7 +95,7 @@ overList :: Monad m
          -> m ([b], Auto m a b)   -- ^ list of outputs and the updated 'Auto'
 overList a []     = return ([], a)
 overList a (x:xs) = do
-    Output y a' <- stepAuto a  x
+    (y, a') <- stepAuto a  x
     (ys, a'')   <- overList a' xs
     return (y:ys, a'')
 
@@ -117,8 +117,8 @@ overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
 overList' a []     = ([], a)
-overList' a (x:xs) = let Output y a' = stepAuto' a x
-                         (ys, a'')   = overList' a' xs
+overList' a (x:xs) = let (y, a')   = stepAuto' a x
+                         (ys, a'') = overList' a' xs
                      in  (y:ys, a'')
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
@@ -150,8 +150,8 @@ streamAuto :: Monad m
            -> m [b]             -- ^ output stream
 streamAuto _ []     = return []
 streamAuto a (x:xs) = do
-    Output y a' <- stepAuto a x
-    ys <- streamAuto a' xs
+    (y, a') <- stepAuto a x
+    ys      <- streamAuto a' xs
     return (y:ys)
 
 -- | Stream an 'Auto'' over a list, returning the list of results.  Does
@@ -175,8 +175,8 @@ streamAuto' :: Auto' a b        -- ^ 'Auto'' to stream
             -> [a]              -- ^ input stream
             -> [b]              -- ^ output stream
 streamAuto' _ []     = []
-streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
-                           ys          = streamAuto' a' xs
+streamAuto' a (x:xs) = let (y, a') = stepAuto' a x
+                           ys      = streamAuto' a' xs
                        in  y:ys
 
 -- | Streams (in the context of the underlying monad) the given 'Auto' with
@@ -219,8 +219,8 @@ stepAutoN n a0 x = go (max n 0) a0
   where
     go 0 a = return ([], a)
     go i a = do
-      Output y a' <- stepAuto a x
-      (ys, a'')   <- go (i - 1)  a'
+      (y , a')  <- stepAuto a x
+      (ys, a'') <- go (i - 1)  a'
       return (y:ys, a'')
 
 -- | Streams the given 'Auto'' with a stream of constant values as input,
@@ -327,7 +327,7 @@ runM :: (Monad m, Monad m')
      -> Interval m' a b           -- ^ Auto in monad @m'@
      -> m (Interval m' a b)       -- ^ Return the resulting/run Auto in @m@
 runM x0 f nt a = do
-    Output my a' <- nt $ stepAuto a x0
+    (my, a') <- nt $ stepAuto a x0
     case my of
       Just y  -> do
         x1 <- f y

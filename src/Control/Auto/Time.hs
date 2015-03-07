@@ -223,10 +223,10 @@ stretch n = go (1, undefined)
                           $ \x ->
                               if i <= 1
                                  then do
-                                   Output y' a' <- stepAuto a x
-                                   return (Output y' (go (n    , y') a'))
+                                   (y', a') <- stepAuto a x
+                                   return (y', go (n    , y') a')
                                  else
-                                   return (Output y  (go (i - 1, y ) a ))
+                                   return (y , go (i - 1, y ) a )
 
 
 -- | The non-resuming/non-serializing version of 'stretch'.
@@ -239,10 +239,10 @@ stretch_ n = go (1, undefined)
     go (i, y) a = mkAutoM_ $ \x ->
                                if i <= 1
                                   then do
-                                    Output y' a' <- stepAuto a x
-                                    return $ Output y (go (n    , y') a')
+                                    (y', a') <- stepAuto a x
+                                    return (y, go (n    , y') a')
                                   else
-                                    return $ Output y (go (i - 1, y ) a )
+                                    return (y, go (i - 1, y ) a )
 
 -- | Like 'stretch', but instead of holding the the "stretched" outputs,
 -- outputs a blip stream that emits every time the stretched 'Auto'
@@ -265,10 +265,10 @@ stretchB (max 1 -> n) = go 1
                      $ \x ->
                          if i <= 1
                            then do
-                             Output y a' <- stepAuto a x
-                             return $ Output (Blip y) (go n       a')
+                             (y, a') <- stepAuto a x
+                             return (Blip y, go n       a')
                            else
-                             return $ Output NoBlip   (go (i - 1) a )
+                             return (NoBlip, go (i - 1) a )
 
 -- | "Accelerates" the 'Auto', so instead of taking an @a@ and returning
 -- a @b@, it takes a list of @a@, "streams" the 'Auto' over each one, and
@@ -302,10 +302,10 @@ accelOverList = go
                     $ \xs -> do
                         (a1, ysEndo) <- runWriterT (wr a0 xs)
                         let ys = appEndo ysEndo []
-                        return $ Output ys (go a1)
+                        return (ys, go a1)
     wr a0 []     = return a0
     wr a0 (x:xs) = do
-        Output y a1 <- lift $ stepAuto a0 x
+        (y, a1) <- lift $ stepAuto a0 x
         tell $ Endo (y:)      -- using a diff list for performace;
                               -- this is basically `tell [y]`
         wr a1 xs
@@ -332,11 +332,11 @@ accelerate n = go
                     $ \x0 -> do
                         yas <- flip (iterateM n') (undefined, a0)
                                $ \(_, a) -> do
-                                   Output x a' <- stepAuto a x0
+                                   (x, a') <- stepAuto a x0
                                    x `seq` return (x, a')
                         let ys = map fst yas
                             a' = snd (last yas)
-                        return (Output ys (go a'))
+                        return (ys, go a')
 {-# INLINE accelerate #-}
 
 -- | @'accelerateWith' xd n a@ is like @'accelerate' n a@, except instead
@@ -360,14 +360,14 @@ accelerateWith xd n | n <= 1    = fmap (:[])
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     $ \x0 -> do
-                        Output y0 a1  <- stepAuto a0 x0
+                        (y0, a1) <- stepAuto a0 x0
                         yas <- flip (iterateM n') (undefined, a1)
                                $ \(_, a) -> do
-                                   Output x a' <- stepAuto a xd
+                                   (x, a') <- stepAuto a xd
                                    return (x, a')
                         let ys = y0 : map fst yas
                             a' = snd (last yas)
-                        return (Output ys (go a'))
+                        return (ys, go a')
 
 -- | Takes an 'Auto' that produces @(b, 'Blip' c)@, and turns it into an
 -- 'Auto' that produces @([b], c)@.
@@ -413,13 +413,13 @@ skipTo x0 = go
                     (saveAuto a0)
                     $ \x -> do
                       ((ys, z), a1) <- skipOut a0 x []
-                      return (Output (reverse ys, z) (go a1))
+                      return ((reverse ys, z), go a1)
     -- skipOut :: Auto m a (b, Blip c)
     --         -> a
     --         -> [b]
     --         -> m (([b], c), Auto m a (b, Blip c))
     skipOut a0 x ys = do
-      Output (y, bz) a1 <- stepAuto a0 x
+      ((y, bz), a1) <- stepAuto a0 x
       let ys' = y:ys
       case bz of
         Blip z -> return ((ys', z), a1)
@@ -462,10 +462,10 @@ fastForward x0 = go
                     (skipNothings a0)
     -- skipNothings :: Auto m a (Maybe b) -> a -> m (Output m a b)
     skipNothings a0 x = do
-      Output my a1 <- stepAuto a0 x
+      (my, a1) <- stepAuto a0 x
       case my of
         Nothing -> skipNothings a1 x0
-        Just y  -> return (Output y (go a1))
+        Just y  -> return (y, go a1)
 
 -- | Same behavior as 'fastForward', except accumulates all of the @'Left'
 -- c@ outputs in a list.
@@ -485,10 +485,10 @@ fastForwardEither x0 = fmap (second reverse) . go
     --              -> a
     --              -> m (Output m a (b, [c]))
     skipNothings a0 zs x = do
-      Output ey a1 <- stepAuto a0 x
+      (ey, a1) <- stepAuto a0 x
       case ey of
         Left z  -> skipNothings a1 (z:zs) x0
-        Right y -> return (Output (y, zs) (go a1))
+        Right y -> return ((y, zs), go a1)
 
 iterateM :: Monad m => Int -> (a -> m a) -> a -> m [a]
 iterateM n f = go (max n 0)
@@ -534,14 +534,14 @@ priming xs a0 = mkAutoM l
                         (put False)
                       $ \x -> do
                           (_, a1) <- overList a0 xs
-                          Output y a2 <- stepAuto a1 x
-                          return (Output y (primed a2))
+                          (y, a2) <- stepAuto a1 x
+                          return (y, primed a2)
   where
     primed a1 = mkAutoM l
                 (put True *> saveAuto a1)
               $ \x -> do
-                  Output y a2 <- stepAuto a1 x
-                  return (Output y (primed a2))
+                  (y, a2) <- stepAuto a1 x
+                  return (y, primed a2)
     l = do
       flag <- get
       if flag

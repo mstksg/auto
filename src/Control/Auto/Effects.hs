@@ -261,8 +261,8 @@ sealState :: (Monad m, Serialize s)
 sealState a s0 = mkAutoM (sealState <$> loadAuto a <*> get)
                          (saveAuto a *> put s0)
                          $ \x -> do
-                             (Output y a', s1) <- runStateT (stepAuto a x) s0
-                             return $ Output y (sealState a' s1)
+                             ((y, a'), s1) <- runStateT (stepAuto a x) s0
+                             return (y, sealState a' s1)
 
 -- | The non-resuming/non-serializing version of 'sealState'.
 sealState_ :: Monad m
@@ -272,8 +272,8 @@ sealState_ :: Monad m
 sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
                           (saveAuto a)
                           $ \x -> do
-                              (Output y a', s1) <- runStateT (stepAuto a x) s0
-                              return $ Output y (sealState_ a' s1)
+                              ((y, a'), s1) <- runStateT (stepAuto a x) s0
+                              return (y, sealState_ a' s1)
 
 -- | Takes an 'Auto' that operates under the context of a read-only
 -- environment, an environment value, and turns it into a normal 'Auto'
@@ -304,8 +304,8 @@ sealReader :: (Monad m, Serialize r)
 sealReader a r = mkAutoM (sealReader <$> loadAuto a <*> get)
                          (saveAuto a *> put r)
                          $ \x -> do
-                             Output y a' <- runReaderT (stepAuto a x) r
-                             return $ Output y (sealReader a' r)
+                             (y, a') <- runReaderT (stepAuto a x) r
+                             return (y, sealReader a' r)
 
 -- | The non-resuming/non-serializing version of 'sealReader'.
 sealReader_ :: Monad m
@@ -315,8 +315,8 @@ sealReader_ :: Monad m
 sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
                           (saveAuto a)
                           $ \x -> do
-                              Output y a' <- runReaderT (stepAuto a x) r
-                              return $ Output y (sealReader_ a' r)
+                              (y, a') <- runReaderT (stepAuto a x) r
+                              return (y, sealReader_ a' r)
 
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
 -- takes in an input state every turn (in addition to the normal input) and
@@ -337,8 +337,8 @@ runStateA :: Monad m
 runStateA a = mkAutoM (runStateA <$> loadAuto a)
                       (saveAuto a)
                       $ \(x, s) -> do
-                          (Output y a', s') <- runStateT (stepAuto a x) s
-                          return (Output (y, s') (runStateA a'))
+                          ((y, a'), s') <- runStateT (stepAuto a x) s
+                          return ((y, s'), runStateA a')
 
 -- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
 -- takes in the input "environment" every turn in addition to the normal
@@ -359,8 +359,8 @@ runReaderA :: Monad m
 runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
                        (saveAuto a)
                        $ \(x, r) -> do
-                           Output y a' <- runReaderT (stepAuto a x) r
-                           return (Output y (runReaderA a'))
+                           (y, a') <- runReaderT (stepAuto a x) r
+                           return (y, runReaderA a')
 
 -- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
 -- 'Traversable' ('[]', 'Maybe', etc.).
@@ -378,7 +378,7 @@ runTraversableA = go . return
     go a = mkAuto (go <$> mapM loadAuto a)
                   (mapM_ saveAuto a)
                   $ \x -> let o  = a >>= (`stepAuto` x)
-                              y  = liftM outRes o
-                              a' = liftM outAuto o
-                          in  Output y (go a')
+                              y  = liftM fst o
+                              a' = liftM snd o
+                          in  (y, go a')
 

@@ -137,18 +137,18 @@ a1 -?> a2 = mkAutoM l s t
         else liftA2 (-?>) (loadAuto a1) (loadAuto a2)
     s = put False *> saveAuto a1 *> saveAuto a2
     t x = do
-      Output y1 a1' <- stepAuto a1 x
+      (y1, a1') <- stepAuto a1 x
       case y1 of
         Just _  ->
-          return (Output y1 (a1' -?> a2))
+          return (y1, a1' -?> a2)
         Nothing -> do
-          Output y a2' <- stepAuto a2 x
-          return (Output y (switched a2'))
+          (y, a2') <- stepAuto a2 x
+          return (y, switched a2')
     switched a = mkAutoM (switched <$> loadAuto a)
                          (put True  *> saveAuto a)
-                         $ \x -> do
-                             Output y a' <- stepAuto a x
-                             return (Output y (switched a'))
+                       $ \x -> do
+                           (y, a') <- stepAuto a x
+                           return (y, switched a')
 -- TODO: Add tests for the serialization here.
 
 -- | Takes an 'Auto' who has both a normal output stream and a blip stream
@@ -229,10 +229,10 @@ switchFrom_ :: Monad m
                                                 --   with.
             -> Auto m a b
 switchFrom_ a0 = mkAutoM_ $ \x -> do
-                              Output (y, ea1) a0' <- stepAuto a0 x
+                              ((y, ea1), a0') <- stepAuto a0 x
                               return $ case ea1 of
-                                Blip a1 -> Output y a1
-                                NoBlip  -> Output y (switchFrom_ a0')
+                                Blip a1 -> (y, a1)
+                                NoBlip  -> (y, switchFrom_ a0')
 
 -- | You can think of this as a little box containing a single 'Auto'
 -- inside.  Takes two input streams: an input stream of normal values, and
@@ -282,8 +282,8 @@ switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
                             let a = case ea1 of
                                       NoBlip  -> a0
                                       Blip a1 -> a1
-                            Output y a' <- stepAuto a x
-                            return (Output y (switchOn_ a'))
+                            (y, a') <- stepAuto a x
+                            return (y, switchOn_ a')
 
 -- | Essentially identical to 'switchFrom_', except insead of the 'Auto'
 -- outputting a blip stream of new 'Auto's to replace itself with, it emits
@@ -367,10 +367,10 @@ switchFromF f = go Nothing
         s   = put mz
            *> saveAuto a
         t x = do
-          Output (y, ez) a' <- stepAuto a x
+          ((y, ez), a') <- stepAuto a x
           return $ case ez of
-            Blip z -> Output y (go (Just z) (f z))
-            NoBlip -> Output y (go mz       a'   )
+            Blip z -> (y, go (Just z) (f z))
+            NoBlip -> (y, go mz       a'   )
     l a = do
       mz <- get
       case mz of
@@ -388,10 +388,10 @@ switchFromF_ :: Monad m
                                             --   one.
              -> Auto m a b
 switchFromF_ f a0 = mkAutoM_ $ \x -> do
-                                 Output (y, ez) a0' <- stepAuto a0 x
+                                 ((y, ez), a0') <- stepAuto a0 x
                                  return $ case ez of
-                                   Blip z -> Output y (switchFromF_ f (f z))
-                                   NoBlip -> Output y (switchFromF_ f a0')
+                                   Blip z -> (y, switchFromF_ f (f z))
+                                   NoBlip -> (y, switchFromF_ f a0'  )
 
 -- | Gives an 'Auto' the ability to "reset" itself on command
 --
@@ -489,11 +489,11 @@ switchOnF f = go Nothing
     t mz a0 (x, ez) =
       case ez of
         NoBlip -> do
-          Output y a0' <- stepAuto a0 x
-          return (Output y (go mz a0'))
+          (y, a0') <- stepAuto a0 x
+          return (y, go mz a0')
         Blip z -> do
-          Output y a1  <- stepAuto (f z) x
-          return (Output y (go (Just z) a1))
+          (y, a1)  <- stepAuto (f z) x
+          return (y, go (Just z) a1)
 
 -- | The non-serializing/non-resuming version of 'switchOnF'.
 switchOnF_ :: Monad m
@@ -505,11 +505,11 @@ switchOnF_ :: Monad m
 switchOnF_ f a0 = mkAutoM_ $ \(x, ez) ->
                               case ez of
                                 NoBlip -> do
-                                  Output y a0' <- stepAuto a0 x
-                                  return (Output y (switchOnF_ f a0'))
+                                  (y, a0') <- stepAuto a0 x
+                                  return (y, switchOnF_ f a0')
                                 Blip z -> do
-                                  Output y a1 <- stepAuto (f z) x
-                                  return (Output y (switchOnF_ f a1))
+                                  (y, a1) <- stepAuto (f z) x
+                                  return (y, switchOnF_ f a1)
 
 -- | Takes an innocent 'Auto' and wraps a "reset button" around it.  It
 -- behaves just like the original 'Auto' at first, but when the input blip
