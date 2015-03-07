@@ -6,7 +6,7 @@
 -- Module      : Control.Auto.Blip.Internal
 -- Description : Exposing internal unsafe functions for working with
 --               'Blip'.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable

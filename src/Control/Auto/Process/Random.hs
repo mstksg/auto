@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 -- |
 -- Module      : Control.Auto.Process.Random
 -- Description : Entropy generationg 'Auto's.
@@ -220,21 +218,19 @@ randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
 
 -- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
--- a process where, at every trial, the result is "on" with the given
--- probability @p@, and "off" otherwise.  Every step is independent from
--- the last.
+-- a process of sequential independent trials each with a success of
+-- probability @p@.
 --
--- Basically, the result of every trial is an independent weighted coin
--- flip.
---
--- It is implemented here as a 'Blip' stream that emits whenever the
--- Bernoulli trial succeeds and does not emit otherwise.
+-- Implemented here is an 'Auto' producing a blip stream that emits
+-- whenever the bernoulli process succeeds with the value of the received
+-- input of the 'Auto', with its probability of succuss per each trial as
+-- the 'Double' parameter.
 --
 -- It is expected that, for probability @p@, the stream will emit a value
 -- on average once every @1/p@ ticks.
 --
 bernoulli :: (Serialize g, RandomGen g)
-          => Double       -- ^ probability of any step emitting
+          => Double       -- ^ probability of success per step
           -> g            -- ^ initial seed
           -> Auto m a (Blip a)
 bernoulli p = mkState (_bernoulliF p)
@@ -257,14 +253,14 @@ bernoulli_ :: RandomGen g
            -> Auto m a (Blip a)
 bernoulli_ p = mkState_ (_bernoulliF p)
 
-_bernoulliF :: forall a g. RandomGen g
+_bernoulliF :: RandomGen g
             => Double
             -> a
             -> g
             -> (Blip a, g)
 _bernoulliF p x g = (outp, g')
   where
-    (roll, g') = randomR (0, 1) g :: (Double, g)
+    (roll, g') = randomR (0, 1 :: Double) g
     outp | roll <= p = Blip x
          | otherwise = NoBlip
 
@@ -311,14 +307,14 @@ randIntervals_ :: RandomGen g
                -> Interval m a a
 randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
-_randIntervalsF :: forall a g. RandomGen g
+_randIntervalsF :: RandomGen g
                 => Double
                 -> a
                 -> (g, Bool)
                 -> (Maybe a, (g, Bool))
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    (roll, g') = randomR (0, 1) g :: (Double, g)
+    (roll, g') = randomR (0, 1 :: Double) g
     onoff' = onoff `xor` (roll <= thresh)
     outp | onoff     = Just x
          | otherwise = Nothing

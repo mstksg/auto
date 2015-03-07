@@ -7,25 +7,27 @@
 -- |
 -- Module      : Control.Auto.Core
 -- Description : Core types, constructors, and utilities.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
 -- Portability : portable
 --
 -- This module defines and provides the core types, (smart) constructors,
--- and general utilities used by the 'Auto' library.
+-- and general high and low-level utilities used by the /auto/ library.
 --
 -- A lot of low-level functionality is provided here which is most likely
 -- unnecessary for most applications; many are mostly for internal usage or
--- advanced/fine-grained usage; it also isn't really enough to do many
--- things with, either.  It's recommended that you import "Control.Auto"
+-- advanced/fine-grained usage.  It also isn't really enough to do too many
+-- useful things, either.  It's recommended that you import "Control.Auto"
 -- instead, which re-organizes the more useful parts of this module in
 -- addition with useful parts of others to provide a nice packaged entry
--- point.
+-- point.  If something in here becomes useful for more than just
+-- fine-tuning or low-level tweaking, it is probably supposed to be in
+-- "Control.Auto" anyway.
 --
--- For information on how to actually use these types, see
--- "Control.Auto.Tutorial".
+-- Information on how to use these types is available in the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
 --
 
 module Control.Auto.Core (
@@ -118,7 +120,8 @@ import Prelude hiding         ((.), id, sequence)
 -- An @'Auto' m a b@ will produce an @'Output' m a b@; when "stepped" with
 -- an @a@, the "result" ('outRes') is a @b@.
 --
--- Really, you can just think of this as a fancy tuple.
+-- Really, you can just think of this as a fancy tuple with a @b@ and an
+-- @'Auto' m a b@.
 data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
                            , outAuto :: Auto m a b    -- ^ The next 'Auto'
                            } deriving ( Typeable
@@ -148,6 +151,8 @@ onOutput fx fa (Output x a) = Output (fx x) (fa a)
 
 -- | Map a function onto the 'outAuto of an 'Output', the resulting
 -- 'Auto'.  See note on 'onOutRes'.
+--
+-- Really only useful for obfuscatingly point-free code.
 onOutAuto :: (Auto m a b -> Auto m a' b)  -- ^ function over the resulting 'Auto'
           -> Output m a b
           -> Output m a' b
@@ -157,7 +162,7 @@ onOutAuto fa (Output x a) = Output x (fa a)
 -- | Map a function onto the 'outRes' of an 'Output': the "result" of
 -- a 'stepAuto'.
 --
--- Useful for completely pointless and probably obfuscating point free code :D
+-- Really only useful for obfuscatingly point-free code.
 onOutRes :: (b -> b)      -- ^ function over the result
          -> Output m a b
          -> Output m a b
@@ -165,31 +170,94 @@ onOutRes fx (Output x a) = Output (fx x) a
 {-# INLINE onOutRes #-}
 
 
-
--- | The Auto type.  Basically represents a function containing its own
--- localized internal state.  If you have an @'Auto' a b@, you can "step"
--- it with 'stepAuto' and an @a@, to get a @b@ and a "next 'Auto'".  The
--- @a@ is the input, and the @b@ is the output, and the next 'Auto' is the
--- 'Auto' with updated internal state.
+-- | The 'Auto' type.  For this library, an 'Auto' semantically
+-- represents/denotes a /a relationship/ between an input and an
+-- output that is preserved over multiple steps, where that relationship is
+-- (optionally) maintained within the context of a monad.
 --
--- The "stepping" process can be monadic:
+-- A lot of fancy words, I know...but you can think of an 'Auto' as nothing
+-- more than a "stream transformer".  A stream of sequential inputs come in
+-- one at a time, and a stream of outputs pop out one at a time, as well.
 --
--- > stepAuto :: Auto m a b -> a -> m (Output m a b)
+-- Using the 'streamAuto' function, you can "unwrap" the inner stream
+-- transformer from any 'Auto': if @a :: 'Auto' m a b@, 'streamAuto' lets
+-- you turn it into an @[a] -> m [b]@.  "Give me a stream of @a@s, one at
+-- a time, and I'll give you a list of @b@s, matching a relationship to
+-- your stream of @a@s."
 --
--- So you can have access to, say, a shared environment using 'Reader' or
--- something like that.
+-- @
+-- -- unwrap your inner [a] -> m [b]!
+-- 'streamAuto' :: Monad m => 'Auto' m a b -> ([a] -> m [b])
+-- @
 --
--- 'Auto' is mostly useful because of its 'Functor', 'Applicative',
--- 'Category', and 'Arrow' (and Arrow-related) instances.  These allow you
--- to modify, combine, chain, and side-chain Autos in expressive way,
--- allowing you to build up complex ones from combinations of simple,
--- primitive ones.
+-- There's a handy type synonym 'Auto'' for relationships that don't really
+-- need a monadic context; the @m@ is just 'Identity':
 --
--- TODO: see tutorial
+-- @
+-- type Auto' = Auto Identity
+-- @
 --
--- The 'Auto' also contains information on its own serialization, so you
--- can serialize and re-load the internal state without actually accessing
--- it.
+-- So if you had an @a :: 'Auto'' a b@, you can use 'streamAuto'' to
+-- "unwrap" the inner stream transformer, @[a] -> [b]@.
+--
+-- @
+-- -- unwrap your inner [a] -> [b]!
+-- 'streamAuto'' :: 'Auto'' a b -> ([a] -> [b])
+-- @
+--
+-- All of the 'Auto's given in this library maintain some sort of semantic
+-- relationship between streams --- for some, the outputs might be the
+-- inputs with a function applied; for others, the outputs might be the
+-- cumulative sum of the inputs.
+--
+-- See the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>
+-- for more information!
+--
+-- Operationally, an  @'Auto' m a b@ is implemented as a "stateful
+-- function".  A function from an @a@ where, every time you "apply" it, you
+-- get a @b@ and an "updated 'Auto'"/function with updated state.
+--
+-- You can get this function using 'stepAuto':
+--
+-- @
+-- 'stepAuto' :: Auto m a b -> (a -> (b, Auto m a b))
+-- @
+--
+-- --
+-- --
+-- --
+-- --
+-- -- 
+-- -- In a way, you can think about 'Auto's as /stream transformers/.
+-- -- A stream of sequential inputs come in one at a time, and a stream of
+-- -- outputs pop out one at a time as well.  You can think of 'streamAuto''
+-- -- as taking an `Auto' a b` and "unwrapping" its internal `[a] -> [b]`.
+-- -- 
+-- -- The Auto type.  Basically represents a function containing its own
+-- -- localized internal state.  If you have an @'Auto' a b@, you can "step"
+-- -- it with 'stepAuto' and an @a@, to get a @b@ and a "next 'Auto'".  The
+-- -- @a@ is the input, and the @b@ is the output, and the next 'Auto' is the
+-- -- 'Auto' with updated internal state.
+-- --
+-- -- The "stepping" process can be monadic:
+-- --
+-- -- > stepAuto :: Auto m a b -> a -> m (Output m a b)
+-- --
+-- -- So you can have access to, say, a shared environment using 'Reader' or
+-- -- something like that.
+-- --
+-- -- 'Auto' is mostly useful because of its 'Functor', 'Applicative',
+-- -- 'Category', and 'Arrow' (and Arrow-related) instances.  These allow you
+-- -- to modify, combine, chain, and side-chain Autos in expressive way,
+-- -- allowing you to build up complex ones from combinations of simple,
+-- -- primitive ones.
+-- --
+-- -- TODO: see tutorial
+-- --
+-- -- The 'Auto' also contains information on its own serialization, so you
+-- -- can serialize and re-load the internal state without actually accessing
+-- -- it.
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
                 | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
