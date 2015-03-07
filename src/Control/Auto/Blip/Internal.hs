@@ -38,7 +38,7 @@
 module Control.Auto.Blip.Internal (
     Blip(..)
   , merge
-  -- , merge'
+  , merge'
   , mergeL
   , mergeR
   , blip

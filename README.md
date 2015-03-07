@@ -3,6 +3,120 @@ Auto
 
 (Working name)
 
+~~~haskell
+import qualified Data.Map as M
+import Data.Map (Map)
+
+-- Let's build a big chat bot by combining small chat bots.
+-- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
+-- message, and timestamp at every step; the result is a "blip stream" that
+-- emits with messages whenever it wants to respond.
+
+type Message   = String
+type Nick      = String
+type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
+
+-- Keeps track of last time a nick has spoken
+seenBot :: Monad m => ChatBot m
+seenBot = proc (nick, msg, time) -> do
+    -- seens :: Map Nick UTCTime
+    -- Map containing last time each nick has spoken
+    seens   <- accum addToMap M.empty -< (nick, time)
+
+    -- query :: Blip String
+    -- blip stream that emits whenever someone queries, with the query
+    query <- emitJusts getRequest -< words msg
+
+        -- a function to get a response from a query
+    let respond :: Nick -> [Message]
+        respond qry = case M.lookup qry seens of
+                        Just t  -> [req ++ " last seen at " ++ show t ++ "."]
+                        Nothing -> ["No record of " ++ req ++ "."]
+
+    -- output is, whenever the `query` stream emits, map `respond` to it.
+    id -< respond <$> query
+  where
+    addToMap :: Map Nick UTCTime -> (Nick, UTCTime) -> Map Nick UTCTime
+    addToMap mp (nick, time) = M.insert n t m
+    getRequest ("@seen":request:_) = Just request
+    getRequest _                   = Nothing
+
+-- Users can increase and decrease imaginary internet points for other users
+karmaBot :: Monad m => ChatBot m
+karmaBot = proc (nick, msg, _) -> do
+    -- karmaBlip :: Blip (Nick, Int)
+    -- blip stream emits when someone modifies karma, with nick and increment
+    karmaBlip <- emitJusts getComm -< msg
+
+    -- karmas :: Map Nick Int
+    -- keeps track of the total karma for each user by updating with karmaBlip
+    karmas <- scanB updateMap M.empty -< karmaBlip
+
+    -- function to look up a nick, if one is asked for
+    let lookupKarma :: Nick -> [Message]
+        lookupKarma nck = let karm = M.findWithDefault 0 nck karmas
+                          in  [nck ++ " has a karma of " ++ show karm ++ "."]
+
+    -- output is, whenever `karmaBlip` stream emits, look up the result
+    id -< lookupName . fst <$> karmaBlip
+  where
+    getComm :: String -> Maybe (Nick, Int)
+    getComm msg = case words msg of
+                    "@addKarma":nick:_ -> Just (nick, 1 )
+                    "@subKarma":nick:_ -> Just (nick, -1)
+                    "@karma":nick:_    -> Just (nick, 0)
+                    _                  -> Nothing
+    updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
+    updateMap mp (nick, change) = M.insertWith (+) nick change mp
+
+-- Echos inputs prefaced with "@echo"...unless flood limit has been reached
+echoBot :: Monad m => ChatBot m
+echoBot = proc (nick, msg, time) -> do
+    -- echoBlip :: Blip [Message]
+    -- blip stream emits when someone wants an echo, with the message
+    echoBlip   <- emitJusts getEcho  -< msg
+
+    -- newDayBlip :: Blip UTCTime
+    -- blip stream emits whenever the day changes
+    newDayBlip <- onChange           -< utctDay time
+
+    -- echoCounts :: Map Nick Int
+    -- `countEchos` counts the number of times each user asks for an echo, and
+    -- `resetOn` makes it "reset" itself whenever `newDayBlip` emits.
+    echoCounts <- resetOn countEchos -< (nick <$ echoBlip, newDayBlip)
+
+        -- has this user flooded today...?
+    let hasFlooded = M.lookup nick echoCounts > Just floodLimit
+        -- output :: Blip [Message]
+        -- blip stream emits whenever someone asks for an echo, limiting flood
+        output | hasFlooded = ["No flooding!"] <$ echoBlip
+               | otherwise  = echoBlip
+
+    -- output is the `output` blip stream
+    id -< output
+  where
+    floodLimit = 5
+    isEcho msg = case words msg of
+                   "@echo":xs -> Just [unwords xs]
+                   _          -> Nothing
+    countEchos = scanB (\mp nick -> M.insertWith (+) nick 1 mp) M.empty
+
+-- Our final chat bot is the `mconcat` of all the small ones...it forks the
+-- input between all three, and mconcats the outputs.
+chatBot :: Monad m => ChatBot m
+chatBot = mconcat [seenBot, karmaBot, echoBot]
+
+-- Now our chatbot will automatically serialize itself to "data.dat" whenever
+-- it is run.
+chatBotSerialized :: ChatBot IO
+chatBotSerialized = serializing' "data.dat" chatBot
+~~~
+
+
+
+What is it?
+-----------
+
 **Auto** is a Haskell DSL/library providing declarative, compositional,
 denotative semantics for discrete-step, locally stateful, interactive
 programs, games, and automations, with implicitly derived serialization.
@@ -81,25 +195,27 @@ programs, games, and automations, with implicitly derived serialization.
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
-A good place to get started is with [the tutorial][tutorial], which is a part
-of this package directory and also on github at the above link.  The current
-development documentation server is found at <https://mstksg.github.io/auto>.
-You can find examples and demonstrations in the [auto-examples][] repo on
-github; they are constantly being kept up-to-date with the currently super
-unstable API.
+Intrigued?  Excited?  Start at [the tutorial][tutorial]!
+
+[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
+
+It's a part of this package directory and also on github at the above link.
+The current development documentation server is found at
+<https://mstksg.github.io/auto>. You can find examples and demonstrations in
+the [auto-examples][] repo on github; they are constantly being kept
+up-to-date with the currently super unstable API.
 
 [auto-examples]: https://github.com/mstksg/auto-examples
-[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
 
 More examples and further descriptions will appear here as development
 continues.
 
-## Support
+### Support
 
 Though this library is not officially released yet, the official support and
 discussion channel is #haskell-auto on freenode.  You can also usually find me
-as *jle`* on #haskell and #haskell-game.  Also, contributions to documentation
-and tests are welcome! :D
+(the maintainer and developer) as *jle`* on #haskell and #haskell-game.  Also,
+contributions to documentation and tests are welcome! :D
 
 Why Auto?
 ---------

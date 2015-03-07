@@ -37,6 +37,7 @@ module Control.Auto.Blip (
   , onJusts
   -- ** Blip stream collapse
   , fromBlips
+  , fromBlipsWith
   , holdWith
   , holdWith_
   -- * Step/"time" based Blip streams and generators
@@ -675,13 +676,24 @@ _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
 onJusts :: Auto m (Maybe a) (Blip a)
 onJusts = mkFunc (maybe NoBlip Blip)
 
--- | @'fromBlips' d@ is an 'Auto' that decomposes the incoming blip
+-- | @'fromBlipsWith' d@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
 -- outputs the emitted value when it does.
-fromBlips :: a  -- ^ the "default value" to output when the input is not
-                --   emitting.
-          -> Auto m (Blip a) a
-fromBlips d = mkFunc (blip d id)
+fromBlipsWith :: a  -- ^ the "default value" to output when the input is not
+                    --   emitting.
+              -> Auto m (Blip a) a
+fromBlipsWith d = mkFunc (blip d id)
+
+-- | @'fromBlips' d f@ is an 'Auto' that decomposes the incoming blip
+-- stream by constantly outputting @d@ except when the stream emits, and
+-- outputs the result of applying @f@ to the emitted value when it does.
+fromBlips :: b          -- ^ the 'default value" to output when the input is not
+                        --   emitting.
+          -> (a -> b)   -- ^ the function to apply to the emitted value
+                        --   whenever input is emitting.
+          -> Auto m (Blip a) b
+fromBlips d f = mkFunc (blip d f)
+
 
 -- | @'holdWith' y0@ is an 'Auto' whose output is always the /most recently
 -- emitted/ value from the input blip stream.  Before anything is emitted,
