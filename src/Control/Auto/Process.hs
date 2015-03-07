@@ -61,10 +61,10 @@ sumFrom_ = accum_ (+)
 -- | Like 'sumFrom', except the first output is the starting count.
 --
 -- >>> let a = sumFromD 5
--- >>> let Output y1 a' = stepAuto' a 10
+-- >>> let (y1, a') = stepAuto' a 10
 -- >>> y1
 -- 5
--- >>> let Output y2 _  = stepAuto' a' 3
+-- >>> let (y2, _ ) = stepAuto' a' 3
 -- >>> y2
 -- 10
 --

@@ -117,13 +117,13 @@ import qualified Data.Map.Strict    as M
 --
 -- Now let's try it out!
 --
--- >>> let Output r1 summings1 = stepAuto' summings0 [1,2,3,4]
+-- >>> let (r1, summings1) = stepAuto' summings0 [1,2,3,4]
 -- >>> r1
 -- [ 1, 12, 23, 34]
--- >>> let Output r2 summings2 = stepAuto' summings1 [5,5]
+-- >>> let (r2, summings2) = stepAuto' summings1 [5,5]
 -- >>> r2
 -- [ 6, 17, 23, 34]
--- >>> let Output r3 _         = stepAuto' summings2 [10,1,10,1,10000]
+-- >>> let (r3, _        ) = stepAuto' summings2 [10,1,10,1,10000]
 -- >>> r3
 -- [16, 18, 33, 35]
 --
@@ -154,16 +154,16 @@ zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM loadAuto as)
 --
 -- Trying it out:
 --
--- >>> let Output r1 summings1 = stepAuto' summings0 [1,2,3,4]
+-- >>> let (r1, summings1) = stepAuto' summings0 [1,2,3,4]
 -- >>> r1
 -- [ 0, 10, 20, 30]
--- >>> let Output r2 summings2 = stepAuto' summings1 [5,5]
+-- >>> let (r2, summings2) = stepAuto' summings1 [5,5]
 -- >>> r2
 -- [ 1, 12, 23, 34]
--- >>> let Output r3 summings3 = stepAuto' summings2 [10,1,10,1,10000]
+-- >>> let (r3, summings3) = stepAuto' summings2 [10,1,10,1,10000]
 -- >>> r3
 -- [ 6, 17, 23, 34]
--- >>> let Output r4 _         = stepAuto' summings3 [100,100,100,100]
+-- >>> let (r4, _        ) = stepAuto' summings3 [100,100,100,100]
 -- >>> r4
 -- [16, 18, 33, 35]
 --
@@ -292,16 +292,16 @@ dynZip_ x0 = go []
 --                                              , Just <$> sumFrom 10 ]
 --                   newIs    <- every 3     -< [ Just <$> sumFrom 0  ]
 --                   dynMap_ (-1) -< (x, initials `mergeL` newIs)
--- >>> let Output res1 dm1 = stepAuto' dm0 mempty
+-- >>> let (res1, dm1) = stepAuto' dm0 mempty
 -- >>> res1
 -- fromList [(0, -1), (1, 9)]
--- >>> let Output res2 dm2 = stepAuto' dm1 (IM.fromList [(0,100),(1,50)])
+-- >>> let (res2, dm2) = stepAuto' dm1 (IM.fromList [(0,100),(1,50)])
 -- >>> res2
 -- fromList [(0, 99), (1, 59)]
--- >>> let Output res3 dm3 = stepAuto' dm2 (IM.fromList [(0,10),(1,5)])
+-- >>> let (res3, dm3) = stepAuto' dm2 (IM.fromList [(0,10),(1,5)])
 -- >>> res3
 -- fromList [(0, 109), (1, 64), (2, -1)]
--- >>> let Output res4 _   = stepAuto' dm3 (IM.fromList [(1,5),(2,5)])
+-- >>> let (res4, _  ) = stepAuto' dm3 (IM.fromList [(1,5),(2,5)])
 -- >>> res4
 -- fromList [(0, 108), (1, 69), (2, 4)]
 --
@@ -342,13 +342,13 @@ dynMap_ x0 = go 0 mempty
 -- here too in neat ways.
 --
 -- >>> let mx0 = mux (\_ -> sumFrom 0)
--- >>> let Output res1 mx1 = stepAuto' mx0 ("hello", 5)
+-- >>> let (res1, mx1) = stepAuto' mx0 ("hello", 5)
 -- >>> res1
 -- 5
--- >>> let Output res2 mx2 = stepAuto' mx1 ("world", 3)
+-- >>> let (res2, mx2) = stepAuto' mx1 ("world", 3)
 -- >>> res2
 -- 3
--- >>> let Output res3 mx3 = stepAuto' mx2 ("hello", 4)
+-- >>> let (res3, mx3) = stepAuto' mx2 ("hello", 4)
 -- >>> res3
 -- 9
 -- >>> streamAuto' mx3 [("world", 2), ("foo", 6), ("foo", 1), ("hello", 2)]
@@ -373,15 +373,15 @@ mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 --
 -- >>> import qualified Data.Map as M
 -- >>> let mx0 = mux (\_ -> sumFrom 0)
--- >>> let Output res1 mx1 = stepAuto' mx0 (M.fromList [ ("hello", 5)
---                                                     , ("world", 3) ])
+-- >>> let (res1, mx1) = stepAuto' mx0 (M.fromList [ ("hello", 5)
+--                                                 , ("world", 3) ])
 -- >>> res1
 -- fromList [("hello", 5), ("world", 3)]
--- >>> let Output res2 mx2 = stepAuto' mx1 (M.fromList [ ("hello", 4)
---                                                     , ("foo"  , 7) ])
+-- >>> let (res2, mx2) = stepAuto' mx1 (M.fromList [ ("hello", 4)
+--                                                 , ("foo"  , 7) ])
 -- >>> res2
 -- fromList [("foo", 7), ("hello", 9)]
--- >>> let Output res3 _   = mx2 (M.fromList [("world", 3), ("foo", 1)])
+-- >>> let (res3, _  ) = mx2 (M.fromList [("world", 3), ("foo", 1)])
 -- >>> res3
 -- fromList [("foo", 8), ("world", 6)]
 --
@@ -414,9 +414,9 @@ muxMany_ f = go mempty
 _muxManyF :: forall k m a b. (Ord k, Monad m)
           => (k -> Auto m a b)                           -- ^ f : make new Autos
           -> (Map k (Auto m a b) -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
-          -> Map k (Auto m a b)                                 -- ^ as: all current Autos
+          -> Map k (Auto m a b)                          -- ^ as: all current Autos
           -> Map k a                                     -- ^ xs: Inputs
-          -> m (Map k b, Auto m (Map k a) (Map k b))           -- ^ Outputs, and next Auto.
+          -> m (Map k b, Auto m (Map k a) (Map k b))     -- ^ Outputs, and next Auto.
 _muxManyF f go as xs = do
     -- all the outputs of the autos with the present inputs; autos without
     --   inputs are ignored.
@@ -464,16 +464,16 @@ _muxgathermapF f k (mz, _) = (mz, f k mz)
 --                        before -< (sums, stop)
 --     -- (a running sum, "on" until the sum is greater than 10)
 -- >>> let gt0 = gather (\_ -> sumUntil)
--- >>> let Output res1 gt1 = stepAuto' gt0 ("hello", 5)
+-- >>> let (res1, gt1) = stepAuto' gt0 ("hello", 5)
 -- >>> res1
 -- fromList [("hello", 5)]
--- >>> let Output res2 gt2 = stepAuto' gt1 ("world", 7)
+-- >>> let (res2, gt2) = stepAuto' gt1 ("world", 7)
 -- >>> res2
 -- fromList [("hello", 5), ("world", 7)]
--- >>> let Output res3 gt3 = stepAuto' gt2 ("foo", 4)
+-- >>> let (res3, gt3) = stepAuto' gt2 ("foo", 4)
 -- >>> res3
 -- fromList [("foo", 4), ("hello", 5), ("world", 7)]
--- >>> let Output res4 gt4 = stepAuto' gt3 ("world", 8)
+-- >>> let (res4, gt4) = stepAuto' gt3 ("world", 8)
 -- >>> res4
 -- fromList [("foo", 4), ("hello", 5)]
 -- >>> streamAuto' gt4 [("world", 2),("bar", 9),("world", 6),("hello", 11)]
@@ -540,24 +540,24 @@ gather__ = lmap (uncurry M.singleton) . gatherMany__
 --                        before -< (sums, stop)
 --     -- (a running sum, "on" until the sum is greater than 10)
 -- >>> let gm0 = gatherMany (\_ -> sumUntil)
--- >>> let Output res1 gm1 = stepAuto' gm0 (M.fromList [ ("hello", 5)
---                                                     , ("world", 7)
---                                                     ])
+-- >>> let (res1, gm1) = stepAuto' gm0 (M.fromList [ ("hello", 5)
+--                                                 , ("world", 7)
+--                                                 ])
 -- >>> res1
 -- fromList [("hello", 5), ("world", 7)]
--- >>> let Output res2 gm2 = stepAuto' gm1 (M.fromList [ ("foo", 4)
---                                                     , ("hello", 3)
---                                                     ])
+-- >>> let (res2, gm2) = stepAuto' gm1 (M.fromList [ ("foo", 4)
+--                                                 , ("hello", 3)
+--                                                 ])
 -- >>> res2
 -- fromList [("foo", 4), ("hello", 8), ("world", 7)]
--- >>> let Output res3 gm3 = stepAuto' gm2 (M.fromList [ ("world", 8)
---                                                     , ("bar", 9)
---                                                     ])
+-- >>> let (res3, gm3) = stepAuto' gm2 (M.fromList [ ("world", 8)
+--                                                 , ("bar", 9)
+--                                                 ])
 -- >>> res3
 -- fromList [("bar", 9), ("foo", 4), ("hello", 8)]
--- >>> let Output res4 _   = stepAuto' gm3 (M.fromList [ ("world", 2)
---                                                     , ("bar", 10)
---                                                     ])
+-- >>> let (res4, _  ) = stepAuto' gm3 (M.fromList [ ("world", 2)
+--                                                 , ("bar", 10)
+--                                                 ])
 -- >>> res4
 -- fromList [("foo", 4), ("hello", 8), ("world", 2)]
 --

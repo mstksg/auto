@@ -387,17 +387,15 @@ accelerateWith xd n | n <= 1    = fmap (:[])
 --                                              -- with the running sum
 -- >>> let skipA :: Auto' Int ([Int], String)
 --         skipA = skipTo (-1) a
--- >>> let Output res1 skipA' = stepAuto' skipA 8
+-- >>> let (res1, skipA') = stepAuto' skipA 8
 -- >>> res1
 -- ([8,7,6], 6)     -- fed 8 first, then (-1) repeatedly
--- >>> let Output res2 _      = evalAuto skipA' 5
+-- >>> let (res2, _     ) = evalAuto skipA' 5
 -- >>> res2
 -- ([11,10,9], 9)   -- fed 5 first, then (-1) repeatedly
 --
 -- If the blip stream never emits then stepping this and getting the result
 -- or the next/updated 'Auto' never terminates...so watch out!
---
--- >>> let Output res _ = stepAuto' (skipTo 0 never) [1..]
 --
 skipTo :: Monad m
        => a                       -- ^ default input value, during
@@ -460,7 +458,7 @@ fastForward x0 = go
     go a0 = mkAutoM (go <$> loadAuto a0)
                     (saveAuto a0)
                     (skipNothings a0)
-    -- skipNothings :: Auto m a (Maybe b) -> a -> m (Output m a b)
+    -- skipNothings :: Auto m a (Maybe b) -> a -> m (b, Auto m a b)
     skipNothings a0 x = do
       (my, a1) <- stepAuto a0 x
       case my of
@@ -483,7 +481,7 @@ fastForwardEither x0 = fmap (second reverse) . go
     -- skipNothings :: Auto m a (Either c b)
     --              -> [c]
     --              -> a
-    --              -> m (Output m a (b, [c]))
+    --              -> m ((b, [c]), Auto m a (b, [c]))
     skipNothings a0 zs x = do
       (ey, a1) <- stepAuto a0 x
       case ey of

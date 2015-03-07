@@ -95,8 +95,8 @@ overList :: Monad m
          -> m ([b], Auto m a b)   -- ^ list of outputs and the updated 'Auto'
 overList a []     = return ([], a)
 overList a (x:xs) = do
-    (y, a') <- stepAuto a  x
-    (ys, a'')   <- overList a' xs
+    ~(y, a') <- stepAuto a  x
+    ~(ys, a'')   <- overList a' xs
     return (y:ys, a'')
 
 -- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]
@@ -401,13 +401,13 @@ interactM f nt a = do
 -- on that step.
 --
 -- >>> let a0 = duringRead (accum (+) (0 :: Int))
--- >>> let Output y1 a1 = stepAuto' a0 "12"
+-- >>> let (y1, a1) = stepAuto' a0 "12"
 -- >>> y1
 -- Just 12
--- >>> let Output y2 a2 = stepAuto' a1 "orange"
+-- >>> let (y2, a2) = stepAuto' a1 "orange"
 -- >>> y2
 -- Nothing
--- >>> let Output y3 _  = stepAuto' a2 "4"
+-- >>> let (y3, _ ) = stepAuto' a2 "4"
 -- >>> y3
 -- Just 16
 --

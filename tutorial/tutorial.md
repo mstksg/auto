@@ -73,11 +73,11 @@ Operationally, an `Auto` does this by acting as a "stateful function" that we
 can "run" with `stepAuto`.  A function with "internal state".
 
 ~~~haskell
--- stepAuto' :: Auto' a b -> a -> Output' a b
-ghci> let Output x nextAuto  = stepAuto' (sumFrom 0) 5
+-- stepAuto' :: Auto' a b -> a -> (b, Auto' a b)
+ghci> let (x, nextAuto ) = stepAuto' (sumFrom 0) 5
 ghci> x
 5
-ghci> let Output y nextAuto2 = stepAuto' nextAuto 3
+ghci> let (y, nextAuto2) = stepAuto' nextAuto 3
 ghci> y
 8
 ghci> evalAuto' nextAuto2 4
@@ -90,15 +90,6 @@ returns an `b` as the output, and a "next/updated `Auto'`", which is the
 continue along with the new updated state.  (`evalAuto'` is like `stepAuto'`
 but throws away the "next `Auto`")   In this case, the "internal state" is an
 accumulator, the sum of all received elements so far.
-
-It returns the output and the next `Auto` in an `Output'` data type, which is
-just a glorified tuple for convenience:
-
-~~~haskell
-data Output' a b = Output' { outRes  :: b
-                           , outAuto :: Auto' a b
-                           }
-~~~
 
 In practice, this is usually going to be your "main loop", or "game loop":
 
@@ -161,11 +152,6 @@ Working with `Monad m => Auto m a b` is practically identical to working with
 `Auto' a b`, so there really isn't ever a real point to actually *write* an
 `Auto'`.  However, specializing to `Auto'` lets us use simple "running"
 functions like `streamAuto'` and `stepAuto'`.
-
-You probably also already know about `Output m a b`, which is a glorified `(b,
-Auto m a b)` tuple, and `Output' a b`, which is a glorified `(b, Auto' a b)`
-tuple.  You can pattern match on it using the `Output` constructor, or just
-access them using `outRes` and `outAuto`.
 
 While we're on the subject, there is another type alias for `Auto`s: an
 `Interval m a b` is an `Auto m a (Maybe b)` (they're just type aliases).
@@ -461,8 +447,8 @@ accum     :: (b -> a -> b)        -> b -> Auto m a b
 accumM    :: (b -> a -> m b)      -> b -> Auto m a b
 mkState   :: (a -> s -> (b, s))   -> s -> Auto m a b
 mkStateM  :: (a -> s -> m (b, s)) -> s -> Auto m a b
-mkAuto_   :: (a -> Output m a b)       -> Auto m a b
-mkAutoM_  :: (a -> m (Output m a b))   -> Auto m a b
+mkAuto_   :: (a -> (b, Auto m a b))    -> Auto m a b
+mkAutoM_  :: (a -> m (b, Auto m a b))  -> Auto m a b
 ~~~
 
 You can look at the documentation for all of these, but these all basically
@@ -802,9 +788,9 @@ internal accumulator as 13, keeping track of all the numbers it has seen so
 far.
 
 ~~~haskell
-ghci> let a             = sumFrom 0
-ghci> let Output _ a'   = stepAuto' a  3
-ghci> let Output _ a''  = stepAuto' a' 10
+ghci> let a         = sumFrom 0
+ghci> let (_, a')   = stepAuto' a  3
+ghci> let (_, a'')  = stepAuto' a' 10
 ~~~
 
 `encodeAuto` can be used to "freeze"/"save" the `Auto` into the `ByteString`
@@ -821,7 +807,7 @@ accumulator at 13.
 
 ~~~haskell
 ghci> let Right resumed = decodeAuto a bs
-ghci> let Output y _    = stepAuto' resumed 0
+ghci> let (y, _)        = stepAuto' resumed 0
 13
 ~~~
 

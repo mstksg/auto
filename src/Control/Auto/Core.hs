@@ -220,13 +220,13 @@ toArb a = a_
            AutoFuncM f -> AutoArbM (pure a_)
                                    (return ())
                                  $ \x -> liftM (, a_) (f x)
-           AutoState gp@(g,p) f s  ->
+           AutoState ~gp@(g,p) f s  ->
                           let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
                                                (p s')
                                              $ \x -> let (y, s'') = f x s'
                                                      in  (y, a__ s'')
                           in  a__ s
-           AutoStateM gp@(g,p) f s ->
+           AutoStateM ~gp@(g,p) f s ->
                           let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
                                                 (p s)
                                               $ \x -> do
@@ -425,7 +425,7 @@ unserialize a =
 stepAuto :: Monad m
          => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
-         -> m (b, Auto m a b)  -- ^ the output, and the updated 'Auto''.
+         -> m (b, Auto m a b) -- ^ the output, and the updated 'Auto''.
 stepAuto a x = case a of
                  AutoFunc f        ->
                      return (f x, a)
@@ -433,11 +433,11 @@ stepAuto a x = case a of
                      y <- f x
                      return (y, a)
                  AutoState gp f s  ->
-                     let (y, s') = f x s
-                         a'      = AutoState gp f s'
+                     let ~(y, s') = f x s
+                         a'       = AutoState gp f s'
                      in  return (y, a')
                  AutoStateM gp f s -> do
-                     (y, s') <- f x s
+                     ~(y, s') <- f x s
                      let a' = AutoStateM gp f s'
                      return (y, a')
                  AutoArb _ _ f     -> return (f x)
@@ -456,11 +456,11 @@ stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
 stepAuto' a x = case a of
                   AutoFunc f        -> (f x, a)
                   AutoFuncM f       -> (runIdentity (f x), a)
-                  AutoState gp f s  -> let (y, s') = f x s
-                                           a'      = AutoState gp f s'
+                  AutoState gp f s  -> let ~(y, s') = f x s
+                                           a'       = AutoState gp f s'
                                        in  (y, a')
-                  AutoStateM gp f s -> let (y, s') = runIdentity (f x s)
-                                           a'      = AutoStateM gp f s'
+                  AutoStateM gp f s -> let ~(y, s') = runIdentity (f x s)
+                                           a'       = AutoStateM gp f s'
                                        in  (y, a')
                   AutoArb _ _ f     -> f x
                   AutoArbM _ _ f    -> runIdentity (f x)
