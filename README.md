@@ -3,115 +3,55 @@ Auto
 
 (Working name)
 
+Check it out!
+-------------
+
 ~~~haskell
-import qualified Data.Map as M
-import Data.Map (Map)
+-- Let's impliement a PID feedback controller over a black box system.
 
--- Let's build a big chat bot by combining small chat bots.
--- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
--- message, and timestamp at every step; the result is a "blip stream" that
--- emits with messages whenever it wants to respond.
+-- We represent a system as an `Auto` that takes stream of `Double`s as input
+-- and a stream of `Double`s as output.  A `System IO` might do IO in the
+-- process of creating its results.
 
-type Message   = String
-type Nick      = String
-type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
+type System m = Auto m Double Double
 
--- Keeps track of last time a nick has spoken
-seenBot :: Monad m => ChatBot m
-seenBot = proc (nick, msg, time) -> do
-    -- seens :: Map Nick UTCTime
-    -- Map containing last time each nick has spoken
-    seens   <- accum addToMap M.empty -< (nick, time)
+-- A PID controller adjusts the input to the black box system until the response
+-- matches the target.  It does this by adjusting the input based on the
+-- current error, the cumulative sum, and the consecutative differences.
+--
+-- See http://en.wikipedia.org/wiki/PID_controller
+--
+-- Here, we just lay out the "concepts"/time-varying values in our system as a
+-- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
 
-    -- query :: Blip String
-    -- blip stream that emits whenever someone queries, with the query
-    query <- emitJusts getRequest -< words msg
+pid :: (Double, Double, Double) -> System m -> System m
+pid (kp, ki, kd) blackbox = proc target -> do
+    rec --  error :: Double
+        --  the difference of the response from the target
+        let error      = target - response
 
-        -- a function to get a response from a query
-    let respond :: Nick -> [Message]
-        respond qry = case M.lookup qry seens of
-                        Just t  -> [req ++ " last seen at " ++ show t ++ "."]
-                        Nothing -> ["No record of " ++ req ++ "."]
+        -- cumulativeSum :: Double
+        -- the cumulative sum of the errors
+        cumulativeSum <- sumFrom 0 -< error
 
-    -- output is, whenever the `query` stream emits, map `respond` to it.
-    id -< respond <$> query
-  where
-    addToMap :: Map Nick UTCTime -> (Nick, UTCTime) -> Map Nick UTCTime
-    addToMap mp (nick, time) = M.insert n t m
-    getRequest ("@seen":request:_) = Just request
-    getRequest _                   = Nothing
+        -- changes :: Maybe Double
+        -- the consecutive differences of the errors, with 'Nothing' at first.
+        changes       <- deltas    -< error
 
--- Users can increase and decrease imaginary internet points for other users
-karmaBot :: Monad m => ChatBot m
-karmaBot = proc (nick, msg, _) -> do
-    -- karmaBlip :: Blip (Nick, Int)
-    -- blip stream emits when someone modifies karma, with nick and increment
-    karmaBlip <- emitJusts getComm -< msg
+        --  adjustment :: Double
+        --  the adjustment term, from the PID algorithm
+        let adjustment = kp * error
+                       + ki * cumulativeSum
+                       + kd * fromMaybe 0 changes
 
-    -- karmas :: Map Nick Int
-    -- keeps track of the total karma for each user by updating with karmaBlip
-    karmas <- scanB updateMap M.empty -< karmaBlip
+        -- the control input is the cumulative sum of the adjustments
+        control  <- sumFromD 0 -< adjustment
 
-    -- function to look up a nick, if one is asked for
-    let lookupKarma :: Nick -> [Message]
-        lookupKarma nck = let karm = M.findWithDefault 0 nck karmas
-                          in  [nck ++ " has a karma of " ++ show karm ++ "."]
+        --  the response of the system, feeding the control into the blackbox
+        response <- blackbox   -< control
 
-    -- output is, whenever `karmaBlip` stream emits, look up the result
-    id -< lookupName . fst <$> karmaBlip
-  where
-    getComm :: String -> Maybe (Nick, Int)
-    getComm msg = case words msg of
-                    "@addKarma":nick:_ -> Just (nick, 1 )
-                    "@subKarma":nick:_ -> Just (nick, -1)
-                    "@karma":nick:_    -> Just (nick, 0)
-                    _                  -> Nothing
-    updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
-    updateMap mp (nick, change) = M.insertWith (+) nick change mp
-
--- Echos inputs prefaced with "@echo"...unless flood limit has been reached
-echoBot :: Monad m => ChatBot m
-echoBot = proc (nick, msg, time) -> do
-    -- echoBlip :: Blip [Message]
-    -- blip stream emits when someone wants an echo, with the message
-    echoBlip   <- emitJusts getEcho  -< msg
-
-    -- newDayBlip :: Blip UTCTime
-    -- blip stream emits whenever the day changes
-    newDayBlip <- onChange           -< utctDay time
-
-    -- echoCounts :: Map Nick Int
-    -- `countEchos` counts the number of times each user asks for an echo, and
-    -- `resetOn` makes it "reset" itself whenever `newDayBlip` emits.
-    echoCounts <- resetOn countEchos -< (nick <$ echoBlip, newDayBlip)
-
-        -- has this user flooded today...?
-    let hasFlooded = M.lookup nick echoCounts > Just floodLimit
-        -- output :: Blip [Message]
-        -- blip stream emits whenever someone asks for an echo, limiting flood
-        output | hasFlooded = ["No flooding!"] <$ echoBlip
-               | otherwise  = echoBlip
-
-    -- output is the `output` blip stream
-    id -< output
-  where
-    floodLimit = 5
-    isEcho msg = case words msg of
-                   "@echo":xs -> Just [unwords xs]
-                   _          -> Nothing
-    countEchos = scanB (\mp nick -> M.insertWith (+) nick 1 mp) M.empty
-
--- Our final chat bot is the `mconcat` of all the small ones...it forks the
--- input between all three, and mconcats the outputs.
-chatBot :: Monad m => ChatBot m
-chatBot = mconcat [seenBot, karmaBot, echoBot]
-
--- Now our chatbot will automatically serialize itself to "data.dat" whenever
--- it is run.
-chatBotSerialized :: ChatBot IO
-chatBotSerialized = serializing' "data.dat" chatBot
+    id -< response
 ~~~
-
 
 
 What is it?
@@ -323,3 +263,117 @@ superior semantics and set of concepts for working in such contexts.
 
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
+
+A chatbot
+---------
+
+~~~haskell
+import qualified Data.Map as M
+import Data.Map (Map)
+
+-- Let's build a big chat bot by combining small chat bots.
+-- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
+-- message, and timestamp at every step; the result is a "blip stream" that
+-- emits with messages whenever it wants to respond.
+
+type Message   = String
+type Nick      = String
+type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
+
+-- Keeps track of last time a nick has spoken
+seenBot :: Monad m => ChatBot m
+seenBot = proc (nick, msg, time) -> do
+    -- seens :: Map Nick UTCTime
+    -- Map containing last time each nick has spoken
+    seens <- accum addToMap M.empty -< (nick, time)
+
+    -- query :: Blip String
+    -- blip stream that emits whenever someone queries, with the query
+    query <- emitJusts getRequest -< words msg
+
+        -- a function to get a response from a query
+    let respond :: Nick -> [Message]
+        respond qry = case M.lookup qry seens of
+                        Just t  -> [req ++ " last seen at " ++ show t ++ "."]
+                        Nothing -> ["No record of " ++ req ++ "."]
+
+    -- output is, whenever the `query` stream emits, map `respond` to it.
+    id -< respond <$> query
+  where
+    addToMap :: Map Nick UTCTime -> (Nick, UTCTime) -> Map Nick UTCTime
+    addToMap mp (nick, time) = M.insert n t m
+    getRequest ("@seen":request:_) = Just request
+    getRequest _                   = Nothing
+
+-- Users can increase and decrease imaginary internet points for other users
+karmaBot :: Monad m => ChatBot m
+karmaBot = proc (nick, msg, _) -> do
+    -- karmaBlip :: Blip (Nick, Int)
+    -- blip stream emits when someone modifies karma, with nick and increment
+    karmaBlip <- emitJusts getComm -< msg
+
+    -- karmas :: Map Nick Int
+    -- keeps track of the total karma for each user by updating with karmaBlip
+    karmas    <- scanB updateMap M.empty -< karmaBlip
+
+    -- function to look up a nick, if one is asked for
+    let lookupKarma :: Nick -> [Message]
+        lookupKarma nck = let karm = M.findWithDefault 0 nck karmas
+                          in  [nck ++ " has a karma of " ++ show karm ++ "."]
+
+    -- output is, whenever `karmaBlip` stream emits, look up the result
+    id -< lookupKarma . fst <$> karmaBlip
+  where
+    getComm :: String -> Maybe (Nick, Int)
+    getComm msg = case words msg of
+                    "@addKarma":nick:_ -> Just (nick, 1 )
+                    "@subKarma":nick:_ -> Just (nick, -1)
+                    "@karma":nick:_    -> Just (nick, 0)
+                    _                  -> Nothing
+    updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
+    updateMap mp (nick, change) = M.insertWith (+) nick change mp
+
+-- Echos inputs prefaced with "@echo"...unless flood limit has been reached
+echoBot :: Monad m => ChatBot m
+echoBot = proc (nick, msg, time) -> do
+    -- echoBlip :: Blip [Message]
+    -- blip stream emits when someone wants an echo, with the message
+    echoBlip   <- emitJusts getEcho  -< msg
+
+    -- newDayBlip :: Blip UTCTime
+    -- blip stream emits whenever the day changes
+    newDayBlip <- onChange           -< utctDay time
+
+    -- echoCounts :: Map Nick Int
+    -- `countEchos` counts the number of times each user asks for an echo, and
+    -- `resetOn` makes it "reset" itself whenever `newDayBlip` emits.
+    echoCounts <- resetOn countEchos -< (nick <$ echoBlip, newDayBlip)
+
+        -- has this user flooded today...?
+    let hasFlooded = M.lookup nick echoCounts > Just floodLimit
+        -- output :: Blip [Message]
+        -- blip stream emits whenever someone asks for an echo, limiting flood
+        output | hasFlooded = ["No flooding!"] <$ echoBlip
+               | otherwise  = echoBlip
+
+    -- output is the `output` blip stream
+    id -< output
+  where
+    floodLimit = 5
+    isEcho msg = case words msg of
+                   "@echo":xs -> Just [unwords xs]
+                   _          -> Nothing
+    countEchos = scanB (\mp nick -> M.insertWith (+) nick 1 mp) M.empty
+
+-- Our final chat bot is the `mconcat` of all the small ones...it forks the
+-- input between all three, and mconcats the outputs.
+chatBot :: Monad m => ChatBot m
+chatBot = mconcat [seenBot, karmaBot, echoBot]
+
+-- Now our chatbot will automatically serialize itself to "data.dat" whenever
+-- it is run.
+chatBotSerialized :: ChatBot IO
+chatBotSerialized = serializing' "data.dat" chatBot
+~~~
+
+
