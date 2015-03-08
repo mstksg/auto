@@ -881,10 +881,10 @@ directory and peruse over the examples, which each highlight a different
 aspect of the library, so you can see how all of these ideas work together.
 There will also be writeups on [my blog][blog] coming up too!
 
-Help is always available on the *#auto* channel on freenode IRC; you can also
-email me at <justin@jle.im>, or find me on twitter as [mstk][twitter].  There
-is no mailing list or message board yet, but for now, feel free to abuse the
-[github issue tracker][issues].
+Help is always available on the *#haskell-auto* channel on freenode IRC; you
+can also email me at <justin@jle.im>, or find me on twitter as
+[mstk][twitter].  There is no mailing list or message board yet, but for now,
+feel free to abuse the [github issue tracker][issues].
 
 [twitter]: https://twitter.com/mstk
 [issues]: https://github.com/mstksg/auto/issues

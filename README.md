@@ -27,21 +27,21 @@ type System m = Auto m Double Double
 --
 pid :: (Double, Double, Double) -> System m -> System m
 pid (kp, ki, kd) blackbox = proc target -> do
-    rec --  error :: Double
+    rec --  err :: Double
         --  the difference of the response from the target
-        let error      = target - response
+        let err        = target - response
 
         -- cumulativeSum :: Double
-        -- the cumulative sum of the errors
-        cumulativeSum <- sumFrom 0 -< error
+        -- the cumulative sum of the errs
+        cumulativeSum <- sumFrom 0 -< err
 
         -- changes :: Maybe Double
         -- the consecutive differences of the errors, with 'Nothing' at first.
-        changes       <- deltas    -< error
+        changes       <- deltas    -< err
 
         --  adjustment :: Double
         --  the adjustment term, from the PID algorithm
-        let adjustment = kp * error
+        let adjustment = kp * err
                        + ki * cumulativeSum
                        + kd * fromMaybe 0 changes
 
@@ -281,34 +281,35 @@ type Message   = String
 type Nick      = String
 type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
 
--- Keeps track of last time a nick has spoken
+-- Keeps track of last time a nick has spoken, and allows queries
 seenBot :: Monad m => ChatBot m
 seenBot = proc (nick, msg, time) -> do
     -- seens :: Map Nick UTCTime
     -- Map containing last time each nick has spoken
     seens <- accum addToMap M.empty -< (nick, time)
 
-    -- query :: Blip String
-    -- blip stream that emits whenever someone queries, with the query
+    -- query :: Blip Nick
+    -- blip stream emits whenever someone queries for a last time seen;
+    -- emits with the nick queried for
     query <- emitJusts getRequest -< words msg
 
-        -- a function to get a response from a query
+        -- a function to get a response from a nick query
     let respond :: Nick -> [Message]
         respond qry = case M.lookup qry seens of
-                        Just t  -> [req ++ " last seen at " ++ show t ++ "."]
-                        Nothing -> ["No record of " ++ req ++ "."]
+                        Just t  -> [qry ++ " last seen at " ++ show t ++ "."]
+                        Nothing -> ["No record of " ++ qry ++ "."]
 
     -- output is, whenever the `query` stream emits, map `respond` to it.
     id -< respond <$> query
   where
     addToMap :: Map Nick UTCTime -> (Nick, UTCTime) -> Map Nick UTCTime
-    addToMap mp (nick, time) = M.insert n t m
+    addToMap mp (nick, time) = M.insert nick time mp
     getRequest ("@seen":request:_) = Just request
     getRequest _                   = Nothing
 
 -- Users can increase and decrease imaginary internet points for other users
 karmaBot :: Monad m => ChatBot m
-karmaBot = proc (nick, msg, _) -> do
+karmaBot = proc (_, msg, _) -> do
     -- karmaBlip :: Blip (Nick, Int)
     -- blip stream emits when someone modifies karma, with nick and increment
     karmaBlip <- emitJusts getComm -< msg
@@ -319,8 +320,8 @@ karmaBot = proc (nick, msg, _) -> do
 
     -- function to look up a nick, if one is asked for
     let lookupKarma :: Nick -> [Message]
-        lookupKarma nck = let karm = M.findWithDefault 0 nck karmas
-                          in  [nck ++ " has a karma of " ++ show karm ++ "."]
+        lookupKarma nick = let karm = M.findWithDefault 0 nick karmas
+                           in  [nick ++ " has a karma of " ++ show karm ++ "."]
 
     -- output is, whenever `karmaBlip` stream emits, look up the result
     id -< lookupKarma . fst <$> karmaBlip
@@ -361,20 +362,21 @@ echoBot = proc (nick, msg, time) -> do
     id -< output
   where
     floodLimit = 5
-    isEcho msg = case words msg of
-                   "@echo":xs -> Just [unwords xs]
-                   _          -> Nothing
-    countEchos = scanB (\mp nick -> M.insertWith (+) nick 1 mp) M.empty
+    getEcho msg = case words msg of
+                    "@echo":xs -> Just [unwords xs]
+                    _          -> Nothing
+    countEchos :: Auto m Nick (Map Nick Int)
+    countEchos = scanB countingFunction M.empty
+    countingFunction :: Map Nick Int -> Nick -> Map Nick Int
+    countingFunction mp nick = M.insertWith (+) nick 1 mp
 
 -- Our final chat bot is the `mconcat` of all the small ones...it forks the
 -- input between all three, and mconcats the outputs.
 chatBot :: Monad m => ChatBot m
 chatBot = mconcat [seenBot, karmaBot, echoBot]
 
--- Now our chatbot will automatically serialize itself to "data.dat" whenever
--- it is run.
+-- Here, our chatbot will automatically serialize itself to "data.dat"
+-- whenever it is run.
 chatBotSerialized :: ChatBot IO
 chatBotSerialized = serializing' "data.dat" chatBot
 ~~~
-
-

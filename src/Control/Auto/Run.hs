@@ -299,11 +299,11 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 -- execAutoN' n a0 = snd . stepAutoN' n a0
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
--- input and a function from an output to the next input to feed in, and
--- the 'Interval', and you get a feedback loop that constantly feeds back
--- in the result of the function applied to the previous output.  "Stops"
--- when said function returns 'Nothing', or when the 'Interval' turns "off"
--- for the first time.
+-- input action, a (possibly side-effecting) function from an output to
+-- the next input to feed in, and the 'Auto', and you get a feedback
+-- loop that constantly feeds back in the result of the function applied to
+-- the previous output. "Stops" when the "next input" function returns
+-- 'Nothing'.
 --
 -- Note that the none of the results are actually returned from the loop.
 -- Instead, if you want to process the results, they must be utilized in
@@ -311,31 +311,28 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 -- a file, or an accumulation to a state).
 --
 run :: Monad m
-    => a
-    -> (b -> m (Maybe a))
-    -> Interval m a b
-    -> m (Interval m a b)
+    => m a                -- ^ action to retrieve starting input
+    -> (b -> m (Maybe a)) -- ^ handling output and next input in @m@
+    -> Auto m a b         -- ^ 'Auto'
+    -> m (Auto m a b)     -- ^ return the ran/updated 'Auto' in @m@
 run x0 f = runM x0 f id
 
 -- | A generalized version of 'run' where the 'Monad' you are "running" the
 -- 'Auto' in is different than the 'Monad' underneath the 'Auto'.  You just
 -- need to provide the natural transformation.
 runM :: (Monad m, Monad m')
-     => a                         -- ^ Starting input
-     -> (b -> m (Maybe a))        -- ^ Handling output and next input in @m@
-     -> (forall c. m' c -> m c)   -- ^ Natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
-     -> Interval m' a b           -- ^ Auto in monad @m'@
-     -> m (Interval m' a b)       -- ^ Return the resulting/run Auto in @m@
+     => m a                       -- ^ action to retrieve starting input
+     -> (b -> m (Maybe a))        -- ^ handling output and next input in @m@
+     -> (forall c. m' c -> m c)   -- ^ natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
+     -> Auto m' a b               -- ^ 'Auto' in monad @m'@
+     -> m (Auto m' a b)           -- ^ return the resulting/run Auto in @m@
 runM x0 f nt a = do
-    (my, a') <- nt $ stepAuto a x0
-    case my of
-      Just y  -> do
-        x1 <- f y
-        case x1 of
-          Just x  -> runM x f nt a'
-          Nothing -> return a'
-      Nothing ->
-        return a'
+    (y, a') <- nt . stepAuto a =<< x0
+    x1 <- f y
+    case x1 of
+      -- TODO: optimize for no return x
+      Just x  -> runM (return x) f nt a'
+      Nothing -> return a'
 
 -- | Run an 'Auto'' "interactively".  Every step grab a string from stdin,
 -- and feed it to the 'Interval''.  If the 'Interval'' is "off", ends the
@@ -358,7 +355,10 @@ runM x0 f nt a = do
 -- Outputs the final 'Interval'' when the interaction terminates.
 interactAuto :: Interval' String String         -- ^ 'Interval'' to run interactively
              -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
-interactAuto = interactM putStrLn (return . runIdentity)
+interactAuto = interactM f (return . runIdentity)
+  where
+    f (Just str) = True <$ putStrLn str
+    f Nothing    = return False
 
 -- | Like 'interact', but instead of taking @'Interval'' 'String'
 -- 'String'@, takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@
@@ -378,21 +378,24 @@ interactRS = interactAuto . bindRead . fmap (fmap show)
 -- of any underlying 'Monad', as long as you provide the natural
 -- transformation from that 'Monad' to 'IO'.
 --
--- The 'Auto' can also output any @'Maybe' b@; you have to provide
--- a function to "handle" it yourself; a @b -> 'IO' '()'@ (if you don't
--- want to print it and you wanted to, say, write it to a file.)
+-- The 'Auto' can any @'Maybe' b@; you have to provide
+-- a function to "handle" it yourself; a @b -> 'IO' 'Bool'@.  You can print
+-- the result, or write the result to a file, etc.; the 'Bool' parameter
+-- determines whether or not to "continue running", or to stop and return
+-- the final updated 'Auto'.
 interactM :: Monad m
-          => (b -> IO ())             -- ^ function to "handle" each succesful 'Auto' output
-          -> (forall c. m c -> IO c)  -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
-          -> Interval m String b      -- ^ 'Auto' to run "interactively"
-          -> IO (Interval m String b) -- ^ final 'Auto' after it all
-interactM f nt a = do
-    x <- getLine
-    runM x f' nt a
+          => (b -> IO Bool)          -- ^ function to "handle" each succesful 'Auto' output
+          -> (forall c. m c -> IO c) -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
+          -> Auto m String b         -- ^ 'Auto' to run "interactively"
+          -> IO (Auto m String b)    -- ^ final 'Auto' after it all
+interactM f = runM getLine f'
   where
     f' y = do
-      f y
-      Just <$> getLine
+      cont <- f y
+      if cont
+        then Just <$> getLine
+        else return Nothing
+
 
 -- | Turn an 'Auto' that takes a "readable" @a@ and outputs a @b@ into an
 -- 'Auto' that takes a 'String' and outputs a @'Maybe' b@.  When the

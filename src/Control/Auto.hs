@@ -93,6 +93,11 @@ module Control.Auto (
   , count
   -- ** Switches
   , (-->)
+  -- ** Blips
+  , emitJusts
+  , emitOn
+  , fromBlipsWith
+  , fromBlips
   -- * Running
   , interactAuto
   , interactRS
