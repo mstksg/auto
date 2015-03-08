@@ -4,7 +4,7 @@
 -- Module      : Control.Auto.Effects
 -- Description : Accessing, executing, and manipulating underyling monadic
 --               effects.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -15,13 +15,11 @@
 -- and manipulating such effects.
 --
 
-
 module Control.Auto.Effects (
   -- * Running effects
   -- ** Continually
     arrM
   , effect
-  , exec
   -- ** From inputs
   , effects
   -- ** On 'Blip's
@@ -33,11 +31,19 @@ module Control.Auto.Effects (
   , execOnce
   , cache_
   , execOnce_
-  -- * "Sealing off" monadic 'Auto's
+  -- * Manipulating underlying monads
+  -- ** "Sealing off" monadic 'Auto's
   , sealState
   , sealState_
   , sealReader
   , sealReader_
+  -- ** "Unrolling"/"reifying" monadic 'Auto's
+  , runStateA
+  , runReaderA
+  , runTraversableA
+  -- ** Hoists
+  , hoistA
+  , generalizeA
   ) where
 
 import Control.Applicative
@@ -45,11 +51,13 @@ import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
-import Control.Monad
+import Control.Monad hiding       (mapM, mapM_)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.State  (StateT, runStateT)
+import Data.Foldable
 import Data.Serialize
-import Prelude hiding             ((.), id)
+import Data.Traversable
+import Prelude hiding             ((.), id, mapM, mapM_)
 
 -- | The very first output executes a monadic action and uses the result as
 -- the output, ignoring all input.  From then on, it persistently outputs
@@ -115,42 +123,6 @@ _execOnceF m = go
     go False = liftM (const ((), True)) m
     go _     = return ((), True)
 
--- | To get every output, executes the monadic action and returns the
--- result as the output.  Always ignores input.
---
--- This is basically like an "effectful" 'pure':
---
--- @
--- 'pure'   :: b   -> 'Auto' m a b
--- 'effect' :: m b -> 'Auto' m a b
--- @
---
--- The output of 'pure' is always the same, and the output of 'effect' is
--- always the result of the same monadic action.  Both ignore their inputs.
---
--- Fun times when the underling 'Monad' is, for instance, 'Reader'.
---
--- >>> let a = effect ask    :: Auto (Reader b) a b
--- >>> let r = evalAuto a () :: Reader b b
--- >>> runReader r "hello"
--- "hello"
--- >>> runReader r 100
--- 100
---
-effect :: m b           -- ^ monadic action to contually execute.
-       -> Auto m a b
-effect = mkConstM
-{-# INLINE effect #-}
-
--- | Acts like 'id', in that the output stream is identical to the input
--- stream.  However, at each retrieval of output, executes the given
--- monadic action and ignores the result.
-exec :: Monad m
-     => m b           -- ^ monadic action to contually execute.
-     -> Auto m a a
-exec m = mkFuncM $ \x -> m >> return x
-{-# INLINE exec #-}
-
 -- | The input stream is a stream of monadic actions, and the output stream
 -- is the result of their executions, through executing them.
 effects :: Monad m => Auto m (m a) a
@@ -169,6 +141,24 @@ effects = arrM id
 -- @
 --
 -- prop> arrM f . arrM g == arrM (f <=< g)
+--
+-- One neat trick you can do is that you can "tag on effects" to a normal
+-- 'Auto' by using '*>' from "Control.Applicative".  For example:
+--
+-- >>> let a = arrM print *> sumFrom 0
+-- >>> ys <- streamAuto a [1..5]
+-- 1                -- IO output
+-- 2
+-- 3
+-- 4
+-- 5
+-- >>> ys
+-- [1,3,6,10,15]    -- the result
+--
+-- Here, @a@ behaves "just like" @'sumFrom' 0@...except, when you step it,
+-- it prints out to stdout as a side-effect.  We just gave automatic
+-- stdout logging behavior!
+--
 arrM :: (a -> m b)    -- ^ monadic function
      -> Auto m a b
 arrM = mkFuncM
@@ -197,7 +187,7 @@ effectB = perBlip . effect
 execB :: Monad m
       => m b
       -> Auto m (Blip a) (Blip a)
-execB = perBlip . exec
+execB mx = perBlip (arrM $ \x -> mx >> return x)
 {-# INLINE execB #-}
 
 -- | Takes an 'Auto' that works with underlying global, mutable state, and
@@ -268,30 +258,30 @@ sealState :: (Monad m, Serialize s)
           => Auto (StateT s m) a b
           -> s
           -> Auto m a b
-sealState a s0 = mkAutoM (sealState <$> loadAuto a <*> get)
+sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
                          (saveAuto a *> put s0)
                          $ \x -> do
-                             (Output y a', s1) <- runStateT (stepAuto a x) s0
-                             return $ Output y (sealState a' s1)
+                             ((y, a'), s1) <- runStateT (stepAuto a x) s0
+                             return (y, sealState a' s1)
 
 -- | The non-resuming/non-serializing version of 'sealState'.
 sealState_ :: Monad m
            => Auto (StateT s m) a b
            -> s
            -> Auto m a b
-sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
+sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                           (saveAuto a)
                           $ \x -> do
-                              (Output y a', s1) <- runStateT (stepAuto a x) s0
-                              return $ Output y (sealState_ a' s1)
+                              ((y, a'), s1) <- runStateT (stepAuto a x) s0
+                              return (y, sealState_ a' s1)
 
 -- | Takes an 'Auto' that operates under the context of a read-only
 -- environment, an environment value, and turns it into a normal 'Auto'
 -- that always "sees" that value when it asks for one.
 --
--- ghci> let a   = effect ask :: Auto (Reader b) a b
--- ghci> let rdr = streamAuto' a [1..5] :: Reader b [b]
--- ghci> runReader rdr "hey"
+-- >>> let a   = effect ask :: Auto (Reader b) a b
+-- >>> let rdr = streamAuto' a [1..5] :: Reader b [b]
+-- >>> runReader rdr "hey"
 -- ["hey", "hey", "hey", "hey", "hey"]
 --
 -- Useful if you wanted to use it inside/composed with an 'Auto' that does
@@ -304,26 +294,91 @@ sealState_ a s0 = mkAutoM (sealState_ <$> loadAuto a <*> pure s0)
 --     id -< hey ++ show x
 -- @
 --
--- ghci> streamAuto' bar [1..5]
+-- >>> streamAuto' bar [1..5]
 -- ["hey1", "hey2", "hey3", "hey4", "hey5"]
 --
 sealReader :: (Monad m, Serialize r)
            => Auto (ReaderT r m) a b
            -> r
            -> Auto m a b
-sealReader a r = mkAutoM (sealReader <$> loadAuto a <*> get)
+sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                          (saveAuto a *> put r)
                          $ \x -> do
-                             Output y a' <- runReaderT (stepAuto a x) r
-                             return $ Output y (sealReader a' r)
+                             (y, a') <- runReaderT (stepAuto a x) r
+                             return (y, sealReader a' r)
 
 -- | The non-resuming/non-serializing version of 'sealReader'.
 sealReader_ :: Monad m
             => Auto (ReaderT r m) a b
             -> r
             -> Auto m a b
-sealReader_ a r = mkAutoM (sealReader_ <$> loadAuto a <*> pure r)
+sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
                           (saveAuto a)
                           $ \x -> do
-                              Output y a' <- runReaderT (stepAuto a x) r
-                              return $ Output y (sealReader_ a' r)
+                              (y, a') <- runReaderT (stepAuto a x) r
+                              return (y, sealReader_ a' r)
+
+-- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
+-- takes in an input state every turn (in addition to the normal input) and
+-- outputs, along with the original result, the modified state.
+--
+-- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
+-- you want to compose and create some isolated 'Auto's with access to an
+-- underlying state, but not your entire program.
+--
+-- Also just simply useful as a convenient way to use an 'Auto' over
+-- 'State' with 'stepAuto' and friends.
+--
+-- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
+-- @'Auto'' (a, s) (b, s)@.
+runStateA :: Monad m
+          => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
+          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
+runStateA a = mkAutoM (runStateA <$> resumeAuto a)
+                      (saveAuto a)
+                      $ \(x, s) -> do
+                          ((y, a'), s') <- runStateT (stepAuto a x) s
+                          return ((y, s'), runStateA a')
+
+-- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
+-- takes in the input "environment" every turn in addition to the normal
+-- input.
+--
+-- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
+-- want to compose and create some isolated 'Auto's with access to an
+-- underlying environment, but not your entire program.
+--
+-- Also just simply useful as a convenient way to use an 'Auto' over
+-- 'Reader' with 'stepAuto' and friends.
+--
+-- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
+-- an @'Auto'' (a, r) b@.
+runReaderA :: Monad m
+           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
+           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
+runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
+                       (saveAuto a)
+                       $ \(x, r) -> do
+                           (y, a') <- runReaderT (stepAuto a x) r
+                           return (y, runReaderA a')
+
+-- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
+-- 'Traversable' ('[]', 'Maybe', etc.).
+--
+-- It can turn, for example, an @'Auto' [] a b@ into an @'Auto'' a [b]@; it
+-- collects all of the results together.  Or an @'Auto' 'Maybe' a b@ into
+-- an @'Auto'' a ('Maybe' b)@.
+--
+-- If you find a good use for this, let me know :)
+runTraversableA :: (Monad f, Traversable f)
+                => Auto f a b           -- ^ 'Auto' run over traversable structure
+                -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
+runTraversableA = go . return
+  where
+    go a = mkAuto (go <$> mapM resumeAuto a)
+                  (mapM_ saveAuto a)
+                  $ \x -> let o  = a >>= (`stepAuto` x)
+                              y  = liftM fst o
+                              a' = liftM snd o
+                          in  (y, go a')
+

@@ -6,31 +6,31 @@
 -- Module      : Control.Auto.Blip.Internal
 -- Description : Exposing internal unsafe functions for working with
 --               'Blip'.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
 -- Portability : portable
 --
 -- This module exposes an "unsafe" interface for working with the internal
--- representation of "'Blip' streams".  If you are programming at the logic
+-- representation of "blip streams".  If you are programming at the logic
 -- level or the application level, you should thoroughly be able to avoid
 -- importing this, and should be happy with importing the 'Blip' type from
--- "Control.Auto" and 'Blip' stream manipulators from "Control.Auto.Blip".
+-- "Control.Auto" and blip stream manipulators from "Control.Auto.Blip".
 --
 -- If, however, you are programming a framework, library, or backend, you
--- might find it useful to manually create your own 'Blip' streams/sources.
+-- might find it useful to manually create your own blip streams/sources.
 -- In this case, this module will be useful.
 --
 -- It is important, as with most of this library in general, to always keep
 -- in mind when you are programming at the "logic" level, and when you are
 -- programming at the "backend" level.  If you can justify that you are at
 -- the backend level and not at the logic level of whatever you are
--- programming, then this is useful.  See more on "Control.Auto.Tutorial".
+-- programming, then this is useful.
 --
--- Be sure, of course, that whatever 'Blip' streams you do manually
--- construct preserve "'Blip' semantics", which is further defined in
--- "Control.Auto.Blip" and "Control.Auto.Tutorial".
+-- Be sure, of course, that whatever blip streams you do manually
+-- construct and export preserve "Blip semantics", which is further
+-- defined in "Control.Auto.Blip".
 --
 -- You have been warned!
 --
@@ -38,6 +38,9 @@
 module Control.Auto.Blip.Internal (
     Blip(..)
   , merge
+  , merge'
+  , mergeL
+  , mergeR
   , blip
   ) where
 
@@ -47,16 +50,22 @@ import Data.Serialize
 import Data.Typeable
 import GHC.Generics
 
--- | A type representing a "discrete" sort of event-like thing.  It's
--- supposed to represent something that happens alone, and one at a time,
--- as opposed to things that are "on" or "off" for large intervals at
--- a time.
+infixr 5 `mergeL`
+infixl 5 `mergeR`
+
+-- | When used in the context of an input or output of an 'Auto', a @'Blip'
+-- a@ represents a stream that occasionally, at "independent" or "discrete"
+-- points, emits a value of type @a@.
+--
+-- Contrast this to 'Interval', where things are meant to be "on" or "off"
+-- for contiguous chunks at a time; blip streams are "blippy", and
+-- 'Interval's are "chunky".
 --
 -- It's here mainly because it's a pretty useful abstraction in the context
 -- of the many combinators found in various modules of this library.  If
--- you think of an @'Auto' m a ('Blip' b)@ as a "'Blip' stream", then there
--- are various combinators and functions that are specifically designed to
--- manipulate "'Blip' streams".
+-- you think of an @'Auto' m a ('Blip' b)@ as producing a "blip stream",
+-- then there are various combinators and functions that are specifically
+-- designed to manipulate blip streams.
 --
 -- For the purposes of the semantics of what 'Blip' is supposed to
 -- represent, its constructors are hidden.  (Almost) all of the various
@@ -66,7 +75,7 @@ import GHC.Generics
 -- to the constructor is not needed.
 --
 -- If you are creating a framework, library, or backend, you might want to
--- manually create 'Blip' stream-producing 'Auto's for your users to
+-- manually create blip stream-producing 'Auto's for your users to
 -- access.  In this case, you can import the constructors and useful
 -- internal (and, of course, semantically unsafe) functions from
 -- "Control.Auto.Blip.Internal".
@@ -78,29 +87,82 @@ data Blip a =  NoBlip
                       , Generic
                       )
 
+-- | Merge two blip streams together; the result emits with /either/ of the
+-- two merged streams emit.  When both emit at the same time, emit the
+-- result of '<>'-ing the values together.
 instance Semigroup a => Semigroup (Blip a) where
     (<>) = merge (<>)
 
+-- | Merge two blip streams together; the result emits with /either/ of the
+-- two merged streams emit.  When both emit at the same time, emit the
+-- result of '<>'-ing the values together.
 instance Semigroup a => Monoid (Blip a) where
     mempty  = NoBlip
     mappend = merge (<>)
 
 instance Serialize a => Serialize (Blip a)
+
+-- TODO: Am I allowed to do this?
 instance NFData a => NFData (Blip a)
 
--- TODO: I don't think i can instance NFData like that?
-
--- | Merge two 'Blip's with a merging function.  Is only a occuring 'Blip'
--- if *both* 'Blip's are simultaneously occuring.
+-- | Merge two blip streams together; the result emits with /either/ of the
+-- two merged streams emit.  When both emit at the same time, emit the
+-- result of applying the given function on the two emitted values.
+--
+-- Note that this might be too strict for some purposes; see 'mergeL' and
+-- 'mergeR' for lazier alternatives.
 merge :: (a -> a -> a)      -- ^ merging function
-      -> Blip a
-      -> Blip a
-      -> Blip a
-merge _ ex NoBlip          = ex
-merge _ NoBlip ey          = ey
-merge f (Blip x) (Blip y) = Blip (f x y)
+      -> Blip a             -- ^ first stream
+      -> Blip a             -- ^ second stream
+      -> Blip a             -- ^ merged stream
+merge = merge' id id
 
--- | Destruct a 'Blip' by giving a default result if the 'Blip' is
+-- | Slightly more powerful 'merge', but I can't imagine a situation where
+-- this power is necessary.
+--
+-- If only the first stream emits, emit with the first function applied to the
+-- value.  If only the second stream emits, emit with the second function
+-- applied to the value.  If both emit, then emit with the third function
+-- applied to both emitted values.
+merge' :: (a -> c)          -- ^ function for first stream
+       -> (b -> c)          -- ^ function for second stream
+       -> (a -> b -> c)     -- ^ merging function
+       -> Blip a            -- ^ first stream
+       -> Blip b            -- ^ second stream
+       -> Blip c            -- ^ merged stream
+merge' f _ _ (Blip x) NoBlip   = Blip (f x)
+merge' _ g _ NoBlip   (Blip y) = Blip (g y)
+merge' _ _ h (Blip x) (Blip y) = Blip (h x y)
+merge' _ _ _ NoBlip   NoBlip   = NoBlip
+
+-- | Merges two blip streams together into one, which emits
+-- /either/ of the original blip streams emit.  If both emit at the same
+-- time, the left (first) one is favored.
+--
+-- Lazy on the second stream if the first stream is emitting.
+--
+-- If we discount laziness, this is @'merge' 'const'@.
+mergeL :: Blip a    -- ^ first stream
+       -> Blip a    -- ^ second stream (higher priority)
+       -> Blip a
+mergeL b1@(Blip _) _  = b1
+mergeL _           b2 = b2
+
+-- | Merges two blip streams together into one, which emits
+-- /either/ of the original blip streams emit.  If both emit at the same
+-- time, the right (second) one is favored.
+--
+-- Lazy on the first stream if the second stream is emitting.
+--
+-- If we discout laziness, this is @'merge' ('flip' 'const')@.
+--
+mergeR :: Blip a        -- ^ first stream (higher priority)
+       -> Blip a        -- ^ second stream
+       -> Blip a
+mergeR _  b2@(Blip _) = b2
+mergeR b1 _           = b1
+
+-- | Deconstruct a 'Blip' by giving a default result if the 'Blip' is
 -- non-occuring and a function to apply on the contents, if the 'Blip' is
 -- occuring.
 --
@@ -110,7 +172,9 @@ merge f (Blip x) (Blip y) = Blip (f x y)
 -- what it means to be 'Blip'py.
 --
 -- Analogous to 'maybe' from "Prelude".
-blip :: b -> (a -> b) -> Blip a -> b
+blip :: b           -- ^ default value
+     -> (a -> b)    -- ^ function to apply on value
+     -> Blip a      -- ^ 'Blip' to deconstruct
+     -> b
 blip d _ NoBlip   = d
 blip _ f (Blip x) = f x
-

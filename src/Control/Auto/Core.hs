@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
@@ -7,25 +6,27 @@
 -- |
 -- Module      : Control.Auto.Core
 -- Description : Core types, constructors, and utilities.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
 -- Portability : portable
 --
 -- This module defines and provides the core types, (smart) constructors,
--- and general utilities used by the 'Auto' library.
+-- and general high and low-level utilities used by the /auto/ library.
 --
 -- A lot of low-level functionality is provided here which is most likely
 -- unnecessary for most applications; many are mostly for internal usage or
--- advanced/fine-grained usage; it also isn't really enough to do many
--- things with, either.  It's recommended that you import "Control.Auto"
+-- advanced/fine-grained usage.  It also isn't really enough to do too many
+-- useful things, either.  It's recommended that you import "Control.Auto"
 -- instead, which re-organizes the more useful parts of this module in
 -- addition with useful parts of others to provide a nice packaged entry
--- point.
+-- point.  If something in here becomes useful for more than just
+-- fine-tuning or low-level tweaking, it is probably supposed to be in
+-- "Control.Auto" anyway.
 --
--- For information on how to actually use these types, see
--- "Control.Auto.Tutorial".
+-- Information on how to use these types is available in the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
 --
 
 module Control.Auto.Core (
@@ -48,16 +49,13 @@ module Control.Auto.Core (
   , encodeAuto
   , decodeAuto
   , saveAuto
-  , loadAuto
+  , resumeAuto
+  , unserialize
   -- ** Underlying monad
   , hoistA
   , generalizeA
-  -- * Auto output
-  , Output(..)
-  , Output'
-  , onOutput
-  , onOutRes
-  , onOutAuto
+  -- ** Special modifiers
+  , interceptO
   -- * Auto constructors
   -- ** Lifting values and functions
   , mkConst
@@ -73,15 +71,15 @@ module Control.Auto.Core (
   , mkStateM'
   -- ** from Accumulators
   -- *** Result-first
-  , mkAccum
-  , mkAccum_
-  , mkAccumM
-  , mkAccumM_
+  , accum
+  , accum_
+  , accumM
+  , accumM_
   -- *** Initial accumulator-first
-  , mkAccumD
-  , mkAccumD_
-  , mkAccumMD
-  , mkAccumMD_
+  , accumD
+  , accumD_
+  , accumMD
+  , accumMD_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAuto_
@@ -106,134 +104,124 @@ import Data.Semigroup
 import Data.Serialize
 import Data.Traversable
 import Data.Typeable
-import GHC.Generics
 import Prelude hiding         ((.), id, sequence)
 
--- | The output of a 'stepAuto'.  Contains the "result" value of the
--- stepping ('outRes'), and the "next 'Auto'", 'outAuto'.
---
--- An @'Auto' m a b@ will produce an @'Output' m a b@; when "stepped" with
--- an @a@, the "result" ('outRes') is a @b@.
---
--- Really, you can just think of this as a fancy tuple.
-data Output m a b = Output { outRes  :: b             -- ^ Result value of a step
-                           , outAuto :: Auto m a b    -- ^ The next 'Auto'
-                           } deriving ( Typeable
-                                      , Generic
-                                      )
 
-instance Monad m => Functor (Output m a) where
-    fmap f (Output y a) = Output (f y) (fmap f a)
-
-instance Monad m => Applicative (Output m a) where
-    pure x                      = Output x (pure x)
-    Output fx ft <*> Output x t = Output (fx x) (ft <*> t)
-
--- | Map two functions onto both fields of an 'Output'.
+-- | The 'Auto' type.  For this library, an 'Auto' semantically
+-- represents/denotes a /a relationship/ between an input and an
+-- output that is preserved over multiple steps, where that relationship is
+-- (optionally) maintained within the context of a monad.
 --
--- If you want to map an @a -> b@ onto both fields (the result and the
--- result of the next Auto), you can use the 'Functor' instance instead.
+-- A lot of fancy words, I know...but you can think of an 'Auto' as nothing
+-- more than a "stream transformer".  A stream of sequential inputs come in
+-- one at a time, and a stream of outputs pop out one at a time, as well.
 --
--- Really only useful for obfuscatingly point-free code.  I mean like,
--- really.
-onOutput :: (b -> b')                     -- ^ function over the result
-         -> (Auto m a b -> Auto m a' b')  -- ^ function over the resulting 'Auto'
-         -> Output m a b
-         -> Output m a' b'
-onOutput fx fa (Output x a) = Output (fx x) (fa a)
-{-# INLINE onOutput #-}
-
--- | Map a function onto the 'outAuto of an 'Output', the resulting
--- 'Auto'.  See note on 'onOutRes'.
-onOutAuto :: (Auto m a b -> Auto m a' b)  -- ^ function over the resulting 'Auto'
-          -> Output m a b
-          -> Output m a' b
-onOutAuto fa (Output x a) = Output x (fa a)
-{-# INLINE onOutAuto #-}
-
--- | Map a function onto the 'outRes' of an 'Output': the "result" of
--- a 'stepAuto'.
+-- Using the 'streamAuto' function, you can "unwrap" the inner stream
+-- transformer from any 'Auto': if @a :: 'Auto' m a b@, 'streamAuto' lets
+-- you turn it into an @[a] -> m [b]@.  "Give me a stream of @a@s, one at
+-- a time, and I'll give you a list of @b@s, matching a relationship to
+-- your stream of @a@s."
 --
--- Useful for completely pointless and probably obfuscating point free code :D
-onOutRes :: (b -> b)      -- ^ function over the result
-         -> Output m a b
-         -> Output m a b
-onOutRes fx (Output x a) = Output (fx x) a
-{-# INLINE onOutRes #-}
-
-
-
--- | The Auto type.  Basically represents a function containing its own
--- localized internal state.  If you have an @'Auto' a b@, you can "step"
--- it with 'stepAuto' and an @a@, to get a @b@ and a "next 'Auto'".  The
--- @a@ is the input, and the @b@ is the output, and the next 'Auto' is the
--- 'Auto' with updated internal state.
+-- @
+-- -- unwrap your inner [a] -> m [b]!
+-- 'streamAuto' :: Monad m => 'Auto' m a b -> ([a] -> m [b])
+-- @
 --
--- The "stepping" process can be monadic:
+-- There's a handy type synonym 'Auto'' for relationships that don't really
+-- need a monadic context; the @m@ is just 'Identity':
 --
--- > stepAuto :: Auto m a b -> a -> m (Output m a b)
+-- @
+-- type Auto' = Auto Identity
+-- @
 --
--- So you can have access to, say, a shared environment using 'Reader' or
--- something like that.
+-- So if you had an @a :: 'Auto'' a b@, you can use 'streamAuto'' to
+-- "unwrap" the inner stream transformer, @[a] -> [b]@.
 --
--- 'Auto' is mostly useful because of its 'Functor', 'Applicative',
--- 'Category', and 'Arrow' (and Arrow-related) instances.  These allow you
--- to modify, combine, chain, and side-chain Autos in expressive way,
--- allowing you to build up complex ones from combinations of simple,
--- primitive ones.
+-- @
+-- -- unwrap your inner [a] -> [b]!
+-- 'streamAuto'' :: 'Auto'' a b -> ([a] -> [b])
+-- @
 --
--- TODO: see tutorial
+-- All of the 'Auto's given in this library maintain some sort of semantic
+-- relationship between streams --- for some, the outputs might be the
+-- inputs with a function applied; for others, the outputs might be the
+-- cumulative sum of the inputs.
 --
--- The 'Auto' also contains information on its own serialization, so you
--- can serialize and re-load the internal state without actually accessing
--- it.
+-- See the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>
+-- for more information!
+--
+-- Operationally, an  @'Auto' m a b@ is implemented as a "stateful
+-- function".  A function from an @a@ where, every time you "apply" it, you
+-- get a @b@ and an "updated 'Auto'"/function with updated state.
+--
+-- You can get this function using 'stepAuto':
+--
+-- @
+-- 'stepAuto' :: 'Auto' m a b -> (a -> m (b, 'Auto' m a b))
+-- @
+--
+-- Or, for 'Auto'', 'stepAuto'':
+--
+-- @
+-- 'stepAuto'' :: 'Auto'' a b -> (a -> (b, 'Auto'' a b))
+-- @
+--
+-- "Give me an @a@ and I'll give you a @b@ and your "updated" 'Auto'".
+--
+-- 'Auto's really are mostly useful because they can be composed, chained,
+-- and modified using their various typeclass instances, like 'Category',
+-- 'Applicative', 'Functor', 'Arrow', etc., and also with the combinators
+-- in this library.  You can build complex programs as a complex 'Auto' by
+-- building up smaller and smaller components.  See the tutorial for more
+-- information on this.
+--
+-- This type also contains information on its own serialization, so you can
+-- serialize and re-load the internal state to binary or disk.
+--
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
                 | forall s. AutoState   (Get s, s -> Put) !(a -> s -> (b, s))   !s
                 | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
-                |           AutoArb     (Get (Auto m a b)) Put !(a -> Output m a b)
-                |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (Output m a b))
+                |           AutoArb     (Get (Auto m a b)) Put !(a -> (b, Auto m a b))
+                |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (b, Auto m a b))
                 deriving ( Typeable )
 
--- data Auto m a b = Auto { _loadAuto :: Get (Auto m a b)
---                        , _saveAuto :: Put
---                        , _stepAuto :: !(a -> m (Output m a b))
---                        } deriving ( Typeable
---                                   , Generic
---                                   )
-
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
+--
+-- Instead of "wrapping" an @[a] -> m [b]@, it "wraps" an @[a] -> [b]@.
 type Auto'   = Auto Identity
 
--- | Special case of 'Output' where the underlying 'Monad' of 'outAuto' is
--- 'Identity'.
-type Output' = Output Identity
 
 -- | Re-structure 'Auto' internals to use the 'Arb' ("arbitrary")
--- constructors, as recursion-based mealy machines.  Almost always a bad
--- idea in every conceivable situation.  Why is it even here?
+-- constructors, as recursion-based mealy machines.
+--
+-- Almost always a bad idea in every conceivable situation.  Why is it even
+-- here?
+--
+-- I'm sorry.
 toArb :: Monad m => Auto m a b -> Auto m a b
 toArb a = a_
   where
     a_ = case a of
            AutoFunc f  -> AutoArb  (pure a_)
                                    (return ())
-                                 $ \x -> Output (f x) a_
+                                 $ \x -> (f x, a_)
            AutoFuncM f -> AutoArbM (pure a_)
                                    (return ())
-                                 $ \x -> liftM (`Output` a_) (f x)
+                                 $ \x -> liftM (, a_) (f x)
            AutoState gp@(g,p) f s  ->
                           let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
                                                (p s')
                                              $ \x -> let (y, s'') = f x s'
-                                                     in  Output y (a__ s'')
+                                                     in  (y, a__ s'')
                           in  a__ s
            AutoStateM gp@(g,p) f s ->
                           let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
                                                 (p s)
                                               $ \x -> do
                                                   (y, s'') <- f x s'
-                                                  return (Output y (a__ s''))
+                                                  return (y, a__ s'')
                           in  a__ s
            _                       -> a
 
@@ -241,6 +229,15 @@ toArb a = a_
 -- | Returns a string representation of the internal constructor of the
 -- 'Auto'.  Useful for debugging the result of compositions and functions
 -- and seeing how they affect the internal structure of the 'Auto'.
+--
+-- In the order of efficiency, "AutoFunc"s tend to be faster than
+-- "AutoState"s tend to be faster than "AutoArb"s.  However, when composing
+-- one with the other (using 'Category' or 'Applicative'), the two have to
+-- be "reduced" to the greatest common denominator; composing an "AutoFunc"
+-- with an "AutoArb" produces an "AutoArb".
+--
+-- More benchmarking is to be done to be able to rigorously say what these
+-- really mean, performance wise.
 autoConstr :: Auto m a b -> String
 autoConstr (AutoFunc {})   = "AutoFunc"
 autoConstr (AutoFuncM {})  = "AutoFuncM"
@@ -250,33 +247,45 @@ autoConstr (AutoArb {})    = "AutoArb"
 autoConstr (AutoArbM {})   = "AutoArbM"
 
 -- | Swaps out the underlying 'Monad' of an 'Auto' using the given monad
--- morphism "transforming function".
+-- morphism "transforming function", a natural transformation.
 --
--- Should be free for non-monadic functions.
+-- Basically, given a function to "swap out" any @m a@ with an @m' a@, it
+-- swaps out the underlying monad of the 'Auto'.
+--
+-- This forms a functor, so you rest assured in things like this:
+--
+-- @
+-- hoistA id == id
+-- hoistA f a1 . hoistA f a2 == hoistA f (a1 . a2)
+-- @
 hoistA :: (Monad m, Monad m')
-       => (forall c. m c -> m' c)
-       -> Auto m a b -> Auto m' a b
+       => (forall c. m c -> m' c)   -- ^ monad morphism;
+                                    --     the natural transformation
+       -> Auto m a b
+       -> Auto m' a b
 hoistA _ (AutoFunc f)        = AutoFunc f
 hoistA g (AutoFuncM f)       = AutoFuncM (g . f)
 hoistA _ (AutoState gp f s)  = AutoState gp f s
 hoistA g (AutoStateM gp f s) = AutoStateM gp (\x s' -> g (f x s')) s
 hoistA g (AutoArb gt pt f)   = AutoArb (fmap (hoistA g) gt)
                                        pt
-                                       $ \x -> let Output y a' = f x
-                                               in  Output y (hoistA g a')
+                                       $ \x -> let (y, a') = f x
+                                               in  (y, hoistA g a')
 hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
                                         pt
                                         $ \x -> g $ do
-                                            Output y a' <- f x
-                                            return (Output y (hoistA g a'))
+                                            (y, a') <- f x
+                                            return (y, hoistA g a')
 
--- | Generalizes an 'Auto'' to any 'Auto' m a b', using 'hoist'.
+-- | Generalizes an @'Auto'' a b@ to an @'Auto' m a b'@ for any 'Monad'
+-- @m@, using 'hoist'.
 --
--- Should be free for non-monadic functions.
 generalizeA :: Monad m => Auto' a b -> Auto m a b
 generalizeA = hoistA (return . runIdentity)
 
 -- | Force the serializing components of an 'Auto'.
+--
+-- TODO: Test if this really works
 forceSerial :: Auto m a b -> Auto m a b
 forceSerial a = case a of
                   AutoArb _ l s  -> l `seq` s `seq` a
@@ -293,21 +302,21 @@ forceSerial a = case a of
 -- there's 'saveAuto'.
 --
 -- You can "resume" any 'Auto' from a 'ByteString' using 'decodeAuto' (or,
--- if you want the raw 'Get' for some reason, there's 'loadAuto').
+-- if you want the raw 'Get' for some reason, there's 'resumeAuto').
 --
--- Note 'decodeAuto' and 'loadAuto' "resume" a /given 'Auto'/.  That is, if
--- you call 'decodeAuto' on a "fresh 'Auto'", it'll decode a 'ByteString'
--- into /that 'Auto', but "resumed"/.  That is, it'll "fast forward" that
--- 'Auto' into the state it was when it was saved.
+-- Note 'decodeAuto' and 'resumeAuto' "resume" a /given 'Auto'/.  That is,
+-- if you call 'decodeAuto' on a "fresh 'Auto'", it'll decode
+-- a 'ByteString' into /that 'Auto', but "resumed"/.  That is, it'll "fast
+-- forward" that 'Auto' into the state it was when it was saved.
 --
--- For example, let's say I have @a = 'mkAccum' (+) 0@, the 'Auto' that
--- returns the sum of everything it has received so far.  If I feed it
--- 3 and 10, it'll have its internal accumulator as 13, keeping track of
--- all the numbers it has seen so far.
+-- For example, let's say I have @a = 'sumFrom' 0@, the 'Auto' whose output
+-- is the cumulative sum of all of its inputs so far. If I feed it 3 and
+-- 10, it'll have its internal accumulator as 13, keeping track of all the
+-- numbers it has seen so far.
 --
--- >>> let a             = mkAccum (+) 0
--- >>> let Output _ a'   = stepAuto' a  3
--- >>> let Output _ a''  = stepAuto' a' 10
+-- >>> let a = sumFrom 0
+-- >>> let (_, a' ) = stepAuto' a  3
+-- >>> let (_, a'') = stepAuto' a' 10
 --
 -- I can then use 'encodeAuto' to "freeze"/"save" the 'Auto' into the
 -- 'ByteString' @bs@:
@@ -319,25 +328,25 @@ forceSerial a = case a of
 -- 'Auto' with a starting accumulator of 0.  We use 'decodeAuto' to
 -- "resume" it, with and resume it with its internal accumulator at 13.
 --
--- >>> let Right resumed = decodeAuto a bs
--- >>> let Output y _    = stepAuto' resumed 0
+-- >>> let (Right resumed) = decodeAuto a bs
+-- >>> let (y, _) = stepAuto' resumed 0
 -- 13
 --
 -- Note that all of these would have had the same result:
 --
--- >>> let Right resumed = decodeAuto a'  bs
--- >>> let Right resumed = decodeAuto a'' bs
--- >>> let Right resumed = decodeAuto (mkAccum (+) 0) bs
+-- >>> let (Right resumed) = decodeAuto a'  bs
+-- >>> let (Right resumed) = decodeAuto a'' bs
+-- >>> let (Right resumed) = decodeAuto (sumFrom 0) bs
 --
 -- I mean, after all, if 'decodeAuto' "fast forwards" an 'Auto' to the
 -- state it was at when it was frozen...then all of these should really be
 -- resumed to the same point, right?
 --
--- One way you can think about it is that 'loadAuto' / 'decodeAuto' takes
+-- One way you can think about it is that 'resumeAuto' / 'decodeAuto' takes
 -- an 'Auto' and creates a "blueprint" from that 'Auto', on how to "load
 -- it"; the blueprint contains what the form of the internal state is, and
 -- their offets in the 'ByteString'.  So in the above, 'a', 'a'', 'a''',
--- and 'mkAccum (+) 0' all have the same "blueprint" --- their internal
+-- and @'sumFrom' 0@ all have the same "blueprint" --- their internal
 -- states are of the same structure.
 --
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
@@ -355,8 +364,6 @@ forceSerial a = case a of
 -- have to worry about this!  You shouldn't really ever be "surprised",
 -- because you'll always explicitly chose the resuming version for 'Auto's
 -- you want to resume, and the non-resuming version for those you don't.
---
--- TODO: replace "decode" with "resume".
 
 -- | Encode an 'Auto' and its internal state into a 'ByteString'.
 encodeAuto :: Auto m a b -> ByteString
@@ -366,26 +373,25 @@ encodeAuto = runPut . saveAuto
 -- | "Resume" an 'Auto' from its 'ByteString' serialization, giving
 -- a 'Left' if the deserialization is not possible.
 decodeAuto :: Auto m a b -> ByteString -> Either String (Auto m a b)
-decodeAuto = runGet . loadAuto
+decodeAuto = runGet . resumeAuto
 {-# INLINE decodeAuto #-}
 
 -- | Returns a 'Get' from an 'Auto' ---  instructions (from
 -- "Data.Serialize") on taking a ByteString and "restoring" the originally
 -- saved 'Auto', in the originally saved state.
-loadAuto :: Auto m a b -> Get (Auto m a b)
-loadAuto a = case a of
-               AutoState gp f _  -> AutoState  gp f <$> fst gp
-               AutoStateM gp f _ -> AutoStateM gp f <$> fst gp
-               AutoArb g _ _     -> g
-               AutoArbM g _ _    -> g
-               _                 -> return a
--- loadAuto = return
-{-# INLINE loadAuto #-}
+resumeAuto :: Auto m a b -> Get (Auto m a b)
+resumeAuto a = case a of
+                 AutoState gp f _  -> AutoState  gp f <$> fst gp
+                 AutoStateM gp f _ -> AutoStateM gp f <$> fst gp
+                 AutoArb g _ _     -> g
+                 AutoArbM g _ _    -> g
+                 _                 -> return a
+{-# INLINE resumeAuto #-}
 
 -- | Returns a 'Put' --- instructions (from "Data.Serialize") on how to
 -- "freeze" the 'Auto', with its internal state, and save it to a binary
 -- encoding.  It can later be reloaded and "resumed" by
--- 'loadAuto'/'decodeAuto'.
+-- 'resumeAuto'/'decodeAuto'.
 saveAuto :: Auto m a b -> Put
 saveAuto a = case a of
                AutoState (_, p) _ s  -> p s
@@ -393,103 +399,190 @@ saveAuto a = case a of
                AutoArb _ p _         -> p
                AutoArbM _ p _        -> p
                _                     -> return ()
--- saveAuto _ = return ()
 {-# INLINE saveAuto #-}
 
--- -- does this even do anything?
--- --
--- -- probably should profile this to see
--- unserialize :: Monad m => Auto m a b -> Auto m a b
--- unserialize a =
---     case a of
---         AutoFunc _       -> a
---         AutoFuncM _      -> a
---         AutoState _ f s  -> AutoState (pure s, const (put ())) f s
---         AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
---         AutoArb _ _ f    -> AutoArb (pure a) (put ()) (onOutAuto unserialize . f)
---         AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (onOutAuto unserialize) . f)
+-- | Takes an 'Auto' that is serializable/resumable and returns an 'Auto'
+-- that is not.  That is, when it is "saved", saves no data, and when it is
+-- "resumed", resets itself back to the initial configuration every time;
+-- in other words, @'decodeAuto' (unserialize a) bs = Right (unserialize
+-- a)@.  Trying to "resume" it will just always give itself, unchanged.
+unserialize :: Monad m => Auto m a b -> Auto m a b
+unserialize a =
+    case a of
+        AutoFunc _       -> a
+        AutoFuncM _      -> a
+        AutoState _ f s  -> AutoState (pure s, const (put ())) f s
+        AutoStateM _ f s -> AutoStateM (pure s, const (put ())) f s
+        AutoArb _ _ f    -> AutoArb (pure a) (put ()) (second unserialize . f)
+        AutoArbM _ _ f   -> AutoArbM (pure a) (put ()) (liftM (second unserialize) . f)
 
 -- | "Runs" the 'Auto' through one step.
 --
--- Remember that at every step for an @'Auto' m a b@, you provide an @a@
--- input and receive a @b@ output with an "updated"/"next" 'Auto'.
+-- That is, given an @'Auto' m a b@, returns a function that takes an @a@
+-- and returns a @b@ and an "updated"/"next" 'Auto'; an @a -> m (b, 'Auto'
+-- m a b)@.
 --
--- >>> let a = mkAccum (+) 0 :: Auto Identity Int Int
---             -- an Auto that sums all of its input.
--- >>> let Identity (Output y a') = stepAuto a 3
--- >>> y      -- the result
--- 3 :: Int
--- >>> :t a'   -- the updated 'Auto'
--- a' :: Auto Identity Int Int
+-- This is the main way of running an 'Auto' "step by step", so if you have
+-- some sort of game loop that updates everything every "tick", this is
+-- what you're looking for.  At every loop, gather input @a@, feed it into
+-- the 'Auto', "render" the result @b@, and get your new 'Auto' to run the
+-- next time.
 --
--- ('Identity', from "Data.Functor.Identity", is the "dumb Functor": @data
--- 'Identity' a = 'Identity' a@)
+-- Here is an example with @'sumFrom' 0@, the 'Auto' whose output is the
+-- cumulative sum of the inputs, and an underying monad of @Identity@.
+-- Here,
 --
--- If you think of an @'Auto' m a b@ as a "stateful function" of type @a ->
--- m b@, then 'stepAuto' lets you "run" it.
+-- @
+-- stepAuto :: Auto Identity Int Int
+--          -> (Int -> Identity (Int, Auto Identity Int Int))
+-- @
+--
+-- Every time you "step", you give it an 'Int' and get a resulting 'Int'
+-- (the cumulative sum) and the "updated 'Auto'", with the updated
+-- accumulator.
+--
+-- >>> let a0 :: Auto Identity Int Int
+--         a0 = sumFrom 0
+-- >>> let Identity (res1, a1) = stepAuto a0 4      -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let Identity (res2, a2) = stepAuto a1 5      -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let Identity (res3, _ ) = stepAuto a2 3      -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- By the way, for the case where your 'Auto' is under 'Identity', we have
+-- a type synomym 'Auto''...and a convenience function to make "running" it
+-- more streamlined:
+--
+-- >>> let a0 :: Auto' Int Int
+--         a0 = sumFrom 0
+-- >>> let (res1, a1) = stepAuto' a0 4          -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let (res2, a2) = stepAuto' a1 5          -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let (res3, _ ) = stepAuto' a2 3          -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- But, if your 'Auto' actaully has effects when being stepped, 'stepAuto'
+-- will execute them:
+--
+-- >>> let a0 :: Auto IO Int Int
+--         a0 = effect (putStrLn "hey!") *> sumFrom 0
+-- >>> (res1, a1) <- stepAuto a0 4              -- run with 4
+-- hey!         -- IO effect
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> (res2, a2) <- stepAuto a1 5              -- run with 5
+-- hey!         -- IO effect
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> (res3, _ ) <- stepAuto a2 3              -- run with 3
+-- hey!         -- IO effect
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- (Here, @'effect' ('putStrLn' "hey")@ is an @'Auto' IO Int ()@, which
+-- ignores its input and just executes @'putStrLn' "hey"@ every time it is
+-- run.  When we use '*>' from "Control.Applicative", we "combine" the two
+-- 'Auto's together and run them /both/ on each input (4, 5, 3...)...but
+-- for the "final" output at the end, we only return the output of the
+-- second one, @'sumFrom' 0@ (5, 9, 12...))
+--
+-- If you think of an @'Auto' m a b@ as a "stateful function" @a -> m b@,
+-- then 'stepAuto' lets you "run" it.
+--
+-- In order to directly run an 'Auto' on a stream, an @[a]@, use
+-- 'streamAuto'.  That gives you an @[a] -> m [b]@.
+--
 stepAuto :: Monad m
          => Auto m a b        -- ^ the 'Auto' to step
          -> a                 -- ^ the input
-         -> m (Output m a b)  -- ^ the output, and the updated 'Auto''.
+         -> m (b, Auto m a b) -- ^ the output, and the updated 'Auto''.
 stepAuto a x = case a of
                  AutoFunc f        ->
-                     return (Output (f x) a)
+                     return (f x, a)
                  AutoFuncM f       -> do
                      y <- f x
-                     return (Output y a)
+                     return (y, a)
                  AutoState gp f s  ->
                      let (y, s') = f x s
                          a'      = AutoState gp f s'
-                     in  return (Output y a')
+                     in  return (y, a')
                  AutoStateM gp f s -> do
                      (y, s') <- f x s
                      let a' = AutoStateM gp f s'
-                     return (Output y a')
+                     return (y, a')
                  AutoArb _ _ f     -> return (f x)
                  AutoArbM _ _ f    -> f x
--- stepAuto a x = case a of
---                  AutoFunc f     -> let y = f x in y `seq` return (Output y a)
---                  AutoFuncM f    -> do
---                      y <- f x
---                      y `seq` return (Output y a)
---                  AutoState gp f s  -> let (y, s') = f x s
---                                           a'      = AutoState gp f s'
---                                       in  y `seq` return (Output y a')
---                  AutoStateM gp f s -> do
---                      (y, s') <- f x s
---                      let a' = AutoStateM gp f s'
---                      y `seq` return (Output y a')
---                  AutoArb _ _ f   -> let o@(Output y _) = f x in y `seq` return o
---                  AutoArbM _ _ f  -> do
---                      o@(Output y _) <- f x
---                      y `seq` return o
 {-# INLINE stepAuto #-}
 
--- | 'stepAuto', but for an 'Auto'' --- the underlying 'Monad' is
--- 'Identity'.  Returns the output stripped of 'Identity'.
+-- | "Runs" an 'Auto'' through one step.
 --
--- If you think of an @'Auto'' a b@ as a "stateful function" of type
--- @a -> b@, then 'stepAuto'' lets you "run" it.
+-- That is, given an @'Auto'' a b@, returns a function that takes an @a@
+-- and returns a @b@ and an "updated"/"next" 'Auto''; an @a -> (b, 'Auto''
+-- a b)@.
+--
+-- See 'stepAuto' documentation for motivations, use cases, and more
+-- details.  You can use this instead of 'stepAuto' when your underyling
+-- monad is 'Identity', and your 'Auto' doesn't produce any effects.
+--
+-- Here is an example with @'sumFrom' 0@, the 'Auto'' whose output is the
+-- cumulative sum of the inputs
+--
+-- @
+-- stepAuto' :: Auto' Int Int
+--           -> (Int -> (Int, Auto' Int Int))
+-- @
+--
+-- Every time you "step", you give it an 'Int' and get a resulting 'Int'
+-- (the cumulative sum) and the "updated 'Auto''", with the updated
+-- accumulator.
+--
+-- >>> let a0 :: Auto' Int Int
+--         a0 = sumFrom 0
+-- >>> let (res1, a1) = stepAuto' a0 4          -- run with 4
+-- >>> res1
+-- 4                -- the cumulative sum, 4
+-- >>> let (res2, a2) = stepAuto' a1 5          -- run with 5
+-- >>> res2
+-- 9                -- the cumulative sum, 4 + 5
+-- >>> let (res3, _ ) = stepAuto' a2 3          -- run with 3
+-- >>> res3
+-- 12               -- the cumulative sum, 4 + 5 + 3
+--
+-- If you think of an @'Auto'' a b@ as a "stateful function" @a -> b@,
+-- then 'stepAuto'' lets you "run" it.
+--
+-- In order to directly run an 'Auto'' on a stream, an @[a]@, use
+-- 'streamAuto''.  That gives you an @[a] -> [b]@.
+--
 stepAuto' :: Auto' a b        -- ^ the 'Auto'' to step
           -> a                -- ^ the input
-          -> Output' a b      -- ^ the output, and the updated 'Auto''
--- stepAuto' a = runIdentity . stepAuto a
+          -> (b, Auto' a b)   -- ^ the output, and the updated 'Auto''
 stepAuto' a x = case a of
-                  AutoFunc f        -> Output (f x) a
-                  AutoFuncM f       -> Output (runIdentity (f x)) a
+                  AutoFunc f        -> (f x, a)
+                  AutoFuncM f       -> (runIdentity (f x), a)
                   AutoState gp f s  -> let (y, s') = f x s
                                            a'      = AutoState gp f s'
-                                       in  Output y a'
+                                       in  (y, a')
                   AutoStateM gp f s -> let (y, s') = runIdentity (f x s)
                                            a'      = AutoStateM gp f s'
-                                       in  Output y a'
+                                       in  (y, a')
                   AutoArb _ _ f     -> f x
                   AutoArbM _ _ f    -> runIdentity (f x)
 {-# INLINE stepAuto' #-}
 
--- | Playing around with an optimization hack.  If you have an 'Auto'', run
--- 'purifyAuto' on it before you "step" or "stream" it...you might get
--- performance benefits.  Benchmarks to be written!
+-- | In theory, "purifying" an 'Auto''" should prep it for faster
+-- evaluation when used with 'stepAuto'' or 'streamAuto''.  But the
+-- benchmarks have not been run yet, so stay tuned!
+--
+-- TODO: Benchmark
 purifyAuto :: Auto' a b -> Auto' a b
 purifyAuto a@(AutoFunc {})     = a
 purifyAuto (AutoFuncM f)       = AutoFunc (runIdentity . f)
@@ -497,56 +590,90 @@ purifyAuto a@(AutoState {})    = a
 purifyAuto (AutoStateM gp f s) = AutoState gp (\x s' -> runIdentity (f x s')) s
 purifyAuto (AutoArb g p f)     = AutoArb (purifyAuto <$> g)
                                          p
-                                       $ \x -> let Output y a' = f x
-                                               in  Output y (purifyAuto a')
+                                       $ \x -> let (y, a') = f x
+                                               in  (y, purifyAuto a')
 purifyAuto (AutoArbM g p f)    = AutoArb (purifyAuto <$> g)
                                          p
-                                       $ \x -> let Output y a' = runIdentity (f x)
-                                               in  Output y (purifyAuto a')
+                                       $ \x -> let (y, a') = runIdentity (f x)
+                                               in  (y, purifyAuto a')
 
 -- | Like 'stepAuto', but drops the "next 'Auto'" and just gives the
 -- result.
 evalAuto :: Monad m
-         => Auto m a b
-         -> a
-         -> m b
-evalAuto a = liftM outRes . stepAuto a
+         => Auto m a b      -- ^ 'Auto' to run
+         -> a               -- ^ input
+         -> m b             -- ^ output
+evalAuto a = liftM fst . stepAuto a
 
 -- | Like 'stepAuto'', but drops the "next 'Auto''" and just gives the
 -- result.  'evalAuto' for 'Auto''.
-evalAuto' :: Auto' a b
-          -> a
-          -> b
-evalAuto' a = outRes . stepAuto' a
+evalAuto' :: Auto' a b      -- ^ 'Auto' to run
+          -> a              -- ^ input
+          -> b              -- ^ output
+evalAuto' a = fst . stepAuto' a
 
--- | Like 'stepAuto', but drops the result and just gives the "next
+-- | Like 'stepAuto', but drops the result and just gives the "updated
 -- 'Auto'".
 execAuto :: Monad m
-         => Auto m a b
-         -> a
-         -> m (Auto m a b)
-execAuto a = liftM outAuto . stepAuto a
+         => Auto m a b      -- ^ 'Auto' to run
+         -> a               -- ^ input
+         -> m (Auto m a b)  -- ^ updated 'Auto'
+execAuto a = liftM snd . stepAuto a
 
--- | Like 'stepAuto'', but drops the result and just gives the "next
+-- | Like 'stepAuto'', but drops the result and just gives the "updated
 -- 'Auto''".  'execAuto' for 'Auto''.
-execAuto' :: Auto' a b
-          -> a
-          -> Auto' a b
-execAuto' a = outAuto . stepAuto' a
+execAuto' :: Auto' a b      -- ^ 'Auto'' to run
+          -> a              -- ^ input
+          -> Auto' a b      -- ^ updated 'Auto''
+execAuto' a = snd . stepAuto' a
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be fully evaluated, when composed with other
 -- 'Auto's.
+--
+-- TODO: Test if this really works
 forcer :: NFData a => Auto m a a
-forcer = mkAuto_ $ \x -> x `deepseq` Output x forcer
+forcer = mkAuto_ $ \x -> x `deepseq` (x, forcer)
 {-# INLINE forcer #-}
 
 -- | A special 'Auto' that acts like the 'id' 'Auto', but forces results as
 -- they come through to be evaluated to Weak Head Normal Form, with 'seq',
 -- when composed with other 'Auto's.
+--
+-- TODO: Test if this really works
 seqer :: Auto m a a
-seqer = mkAuto_ $ \x -> x `seq` Output x seqer
+seqer = mkAuto_ $ \x -> x `seq` (x, seqer)
 {-# INLINE seqer #-}
+
+-- | Abstraction over lower-level funging with serialization; lets you
+-- modify the result of an 'Auto' by being able to intercept the @(b,
+-- 'Auto' m a b)@ output and return a new output value @m c@.
+--
+-- Note that this is a lot like 'fmap':
+--
+-- @
+-- fmap :: (b -> c) -> Auto m a b -> Auto m a c
+-- @
+--
+-- Except gives you access to both the @b@ and the "updated 'Auto'";
+-- instead of an @b -> c@, you get to pass a @(b, 'Auto' m a b) -> m c@.
+--
+-- Basically experimenting with a bunch of abstractions over different
+-- lower-level modification of 'Auto's, because making sure the
+-- serialization works as planned can be a bit difficult.
+--
+interceptO :: Monad m
+           => ((b, Auto m a b) -> m c)      -- ^ intercepting function
+           -> Auto m a b
+           -> Auto m a c
+interceptO f = go
+  where
+    go a0 = mkAutoM (go <$> resumeAuto a0)
+                    (saveAuto a0)
+                  $ \x -> do
+                        o@(_, a1) <- stepAuto a0 x
+                        y <- f o
+                        return (y, go a1)
 
 -- compMAuto :: (Monad m, Monad m') => Auto m b (m' c) -> Auto m a (m' b) -> Auto m a (m' c)
 -- compMAuto g f = AutoArbM undefined
@@ -564,29 +691,31 @@ seqer = mkAuto_ $ \x -> x `seq` Output x seqer
 --                         in  forceSerial a `seq` outp
 
 -- | Construct an 'Auto' by explicity giving its serialization,
--- deserialization, and the (pure) function from @a@ to @b@ and the "next
+-- deserialization, and the function from @a@ to a @b@ and "updated
 -- 'Auto'".
 --
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
--- primtives together.
-mkAuto :: Get (Auto m a b)      -- ^ resuming/loading 'Get'
-       -> Put                   -- ^ saving 'Put'
-       -> (a -> Output m a b)   -- ^ step function
+-- primtives together.  Working with serilization directly is hard.
+mkAuto :: Get (Auto m a b)          -- ^ resuming/loading 'Get'
+       -> Put                       -- ^ saving 'Put'
+       -> (a -> (b, Auto m a b))    -- ^ step function
        -> Auto m a b
 mkAuto = AutoArb
 {-# INLINE mkAuto #-}
 
 -- | Construct an 'Auto' by explicitly giving its serializiation,
--- deserialization, and the (monadic) function from @a@ to @b@ and the
--- "next 'Auto'".
+-- deserialization, and the (monadic) function from @a@ to a @b@ and the
+-- "updated 'Auto'".
 --
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
-mkAutoM :: Get (Auto m a b)         -- ^ resuming/loading 'Get'
-        -> Put                      -- ^ saving 'Put'
-        -> (a -> m (Output m a b))  -- ^ (monadic) step function
+--
+-- TODO: Tutorial!!!!
+mkAutoM :: Get (Auto m a b)             -- ^ resuming/loading 'Get'
+        -> Put                          -- ^ saving 'Put'
+        -> (a -> m (b, Auto m a b))     -- ^ (monadic) step function
         -> Auto m a b
 mkAutoM = AutoArbM
 {-# INLINE mkAutoM #-}
@@ -597,10 +726,10 @@ mkAutoM = AutoArbM
 -- Be careful!  This 'Auto' can still carry arbitrary internal state, but
 -- it cannot be meaningfully serialized or re-loaded/resumed.  You can
 -- still pretend to do so using
--- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
+-- 'resumeAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be lost.
-mkAuto_ :: (a -> Output m a b)      -- ^ step function
+mkAuto_ :: (a -> (b, Auto m a b))       -- ^ step function
         -> Auto m a b
 mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
 {-# INLINE mkAuto_ #-}
@@ -611,16 +740,16 @@ mkAuto_ f = mkAuto (pure (mkAuto_ f)) (return ()) f
 -- Be careful!  This 'Auto' can still carry arbitrary internal state, but
 -- it cannot be meaningfully serialized or re-loaded/resumed.  You can
 -- still pretend to do so using
--- 'loadAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
+-- 'resumeAuto'/'saveAuto'/'encodeAuto'/'decodeAuto' (and the type system
 -- won't stop you), but when you try to "resume"/decode it, its state will
 -- be reset.
-mkAutoM_ :: (a -> m (Output m a b))   -- ^ (monadic) step function
+mkAutoM_ :: (a -> m (b, Auto m a b))    -- ^ (monadic) step function
          -> Auto m a b
 mkAutoM_ f = mkAutoM (pure (mkAutoM_ f)) (return ()) f
 {-# INLINE mkAutoM_ #-}
 
--- | Construct the 'Auto' that always yields the given value, ignoring its
--- input.
+-- | Construct the 'Auto' whose output is always the given value, ignoring
+-- its input.
 --
 -- Provided for API constency, but you should really be using 'pure' from
 -- the 'Applicative' instance, from "Control.Applicative", which does the
@@ -631,7 +760,7 @@ mkConst = AutoFunc . const
 {-# INLINE mkConst #-}
 
 -- | Construct the 'Auto' that always "executes" the given monadic value at
--- every step, yielding the result and ignoring its input.
+-- every step, yielding the result as its output and ignoring its input.
 --
 -- Provided for API consistency, but you shold really be using 'effect'
 -- from "Control.Auto.Effects", which does the same thing.
@@ -641,7 +770,10 @@ mkConstM = AutoFuncM . const
 {-# INLINE mkConstM #-}
 
 -- | Construct a stateless 'Auto' that simply applies the given (pure)
--- function to every input, yielding the output.
+-- function to every input, yielding the output.  The output stream is just
+-- the result of applying the function to every input.
+--
+-- prop> streamAuto' (mkFunc f) = map f
 --
 -- This is rarely needed; you should be using 'arr' from the 'Arrow'
 -- instance, from "Control.Arrow".
@@ -650,8 +782,12 @@ mkFunc :: (a -> b)        -- ^ pure function
 mkFunc = AutoFunc
 {-# INLINE mkFunc #-}
 
--- | Construct a statelss 'Auto' that simply applies and executes the givne
--- (monadic) function to every input, yielding the output.
+-- | Construct a stateless 'Auto' that simply applies and executes the givne
+-- (monadic) function to every input, yielding the output.  The output
+-- stream is the result of applying the function to every input,
+-- executing/sequencing the action, and returning the returned value.
+--
+-- prop> streamAuto (mkFuncM f) = mapM f
 --
 -- It's recommended that you use 'arrM' from "Control.Auto.Effects".  This
 -- is only really provided for consistency.
@@ -666,13 +802,15 @@ mkFuncM = AutoFuncM
 -- state, returns the @b@ result, and now contains the new resulting state.
 -- You have to intialize it with an initial state, of course.
 --
+-- From the "stream transformer" point of view, this is rougly equivalent
+-- to 'mapAccumL' from "Data.List", with the function's arguments and
+-- results in the backwards order.
+--
+-- prop> streamAuto' (mkState f s0) = snd . mapAccumL (\s x -> swap (f x s))
+--
 -- Try not to use this if it's ever avoidable, unless you're a framework
 -- developer or something.  Try make something by combining/composing the
 -- various 'Auto' combinators.
---
--- This version is a wrapper around 'mkAuto', that keeps track of the
--- serialization and re-loading of the internal state for you, so you don't
--- have to deal with it explicitly.
 --
 -- If your state @s@ does not have a 'Serialize' instance, then you should
 -- either write a meaningful one, provide the serialization methods
@@ -713,6 +851,8 @@ mkStateM = AutoStateM (get, put)
 -- | A version of 'mkState', where the internal state doesn't have
 -- a 'Serialize' instance, so you provide your own instructions for getting
 -- and putting the state.
+--
+-- See 'mkState' for more details.
 mkState' :: Get s                     -- ^ 'Get'; strategy for reading and deserializing the state
          -> (s -> Put)                -- ^ 'Put'; strategy for serializing given state
          -> (a -> s -> (b, s))        -- ^ state transformer
@@ -724,6 +864,8 @@ mkState' = curry AutoState
 -- | A version of 'mkStateM', where the internal state doesn't have
 -- a 'Serialize' instance, so you provide your own instructions for getting
 -- and putting the state.
+--
+-- See 'mkStateM' for more details.
 mkStateM' :: Get s                      -- ^ 'Get'; strategy for reading and deserializing the state
           -> (s -> Put)                 -- ^ 'Put'; strategy for serializing given state
           -> (a -> s -> m (b, s))       -- ^ (monadic) state transformer
@@ -735,6 +877,8 @@ mkStateM' = curry AutoStateM
 -- | A version of 'mkState', where the internal state isn't serialized.  It
 -- can be "saved" and "loaded", but the state is lost in the process.
 --
+-- See 'mkState' for more details.
+--
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkState_ :: (a -> s -> (b, s))    -- ^ state transformer
          -> s                     -- ^ initial state
@@ -744,6 +888,8 @@ mkState_ f s0 = AutoState (return s0, \_ -> return ()) f s0
 
 -- | A version of 'mkStateM', where the internal state isn't serialized.
 -- It can be "saved" and "loaded", but the state is lost in the process.
+--
+-- See 'mkStateM' for more details.
 --
 -- Useful if your state @s@ cannot have a meaningful 'Serialize' instance.
 mkStateM_ :: (a -> s -> m (b, s))   -- ^ (monadic) state transformer
@@ -759,23 +905,25 @@ mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 --
 -- Example: an 'Auto' that sums up all of its input.
 --
--- >>> let summer = mkAccum (+) 0
--- >>> let Output sum1 summer' = stepAuto summer 3
+-- >>> let summer = accum (+) 0
+-- >>> let (sum1, summer')  = stepAuto' summer 3
 -- >>> sum1
 -- 3
--- >>> let Output sum2 _       = stepAuto summer'' 10
+-- >>> let (sum2, summer'') = stepAuto' summer' 10
 -- >>> sum2
 -- 13
+-- >>> streamAuto'  summer'' [1..10]
+-- [14,16,19,23,28,34,41,49,58,68]
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'mkAccum_'.
-mkAccum :: Serialize b
-        => (b -> a -> b)      -- ^ accumulating function
-        -> b                  -- ^ initial accumulator
-        -> Auto m a b
-mkAccum f = mkState (\x s -> let y = f s x in (y, y))
-{-# INLINE mkAccum #-}
+-- use 'accum_'.
+accum :: Serialize b
+      => (b -> a -> b)      -- ^ accumulating function
+      -> b                  -- ^ initial accumulator
+      -> Auto m a b
+accum f = mkState (\x s -> let y = f s x in (y, y))
+{-# INLINE accum #-}
 
 -- | Construct an 'Auto' from a "monadic" "folding" function: @b -> a ->
 -- m b@ yields an @'Auto' m a b@.  Basically acts like a 'foldM' or 'scanM'
@@ -783,82 +931,106 @@ mkAccum f = mkState (\x s -> let y = f s x in (y, y))
 -- an input @a@ with the result of the executed @m b@ at every step.  Must
 -- be given an initial accumulator.
 --
+-- See 'accum' for more details.
+--
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'mkAccumM_'.
-mkAccumM :: (Serialize b, Monad m)
-         => (b -> a -> m b)       -- ^ (monadic) accumulating function
-         -> b                     -- ^ initial accumulator
-         -> Auto m a b
-mkAccumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
-{-# INLINE mkAccumM #-}
+-- use 'accumM_'.
+accumM :: (Serialize b, Monad m)
+       => (b -> a -> m b)       -- ^ (monadic) accumulating function
+       -> b                     -- ^ initial accumulator
+       -> Auto m a b
+accumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
+{-# INLINE accumM #-}
 
--- | A version of 'mkAccum_, where the internal accumulator isn't
+-- | A version of 'accum', where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
+-- See 'accum' for more details.
+--
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-mkAccum_ :: (b -> a -> b)   -- ^ accumulating function
+accum_ :: (b -> a -> b)   -- ^ accumulating function
          -> b               -- ^ intial accumulator
          -> Auto m a b
-mkAccum_ f = mkState_ (\x s -> let y = f s x in (y, y))
-{-# INLINE mkAccum_ #-}
+accum_ f = mkState_ (\x s -> let y = f s x in (y, y))
+{-# INLINE accum_ #-}
 
--- | A version of 'mkAccumM_, where the internal accumulator isn't
+-- | A version of 'accumM_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
+-- See 'accumM' for more details.
+--
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-mkAccumM_ :: Monad m
+accumM_ :: Monad m
           => (b -> a -> m b)    -- ^ (monadic) accumulating function
           -> b                  -- ^ initial accumulator
           -> Auto m a b
-mkAccumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
-{-# INLINE mkAccumM_ #-}
+accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
+{-# INLINE accumM_ #-}
 
--- | A "delayed" version of 'mkAccum', where the first output is actually
--- the initial state of the accumulator.  Useful in recursive bindings.
-mkAccumD :: Serialize b
+-- | A "delayed" version of 'accum', where the first output is the initial
+-- state of the accumulator, before applying the folding function. Useful
+-- in recursive bindings.
+--
+-- >>> let summerD = accumD (+) 0
+-- >>> let (sum1, summerD')  = stepAuto' summerD 3
+-- >>> sum1
+-- 0
+-- >>> let (sum2, summerD'') = stepAuto' summerD' 10
+-- >>> sum2
+-- 3
+-- >>> streamAuto'  summerD'' [1..10]
+-- [13,14,16,19,23,28,34,41,49,58]
+--
+-- (Compare with the example in 'accum')
+--
+accumD :: Serialize b
          => (b -> a -> b)      -- ^ accumulating function
          -> b                  -- ^ initial accumulator
          -> Auto m a b
-mkAccumD f = mkState (\x s -> (s, f s x))
-{-# INLINE mkAccumD #-}
+accumD f = mkState (\x s -> (s, f s x))
+{-# INLINE accumD #-}
 
--- | A "delayed" version of 'mkAccumM', where the first output is actually
--- the initial state of the accumulator.  Useful in recursive bindings.
-mkAccumMD :: (Serialize b, Monad m)
+-- | A "delayed" version of 'accumM', where the first output is the initial
+-- state of the accumulator, before applying the folding function. Useful
+-- in recursive bindings.
+accumMD :: (Serialize b, Monad m)
           => (b -> a -> m b)       -- ^ (monadic) accumulating function
           -> b                     -- ^ initial accumulator
           -> Auto m a b
-mkAccumMD f = mkStateM (\x s -> liftM (s,) (f s x))
-{-# INLINE mkAccumMD #-}
+accumMD f = mkStateM (\x s -> liftM (s,) (f s x))
+{-# INLINE accumMD #-}
 
--- | The non-resuming/non-serializing version of 'mkAccumD'.
-mkAccumD_ :: (b -> a -> b)   -- ^ accumulating function
+-- | The non-resuming/non-serializing version of 'accumD'.
+accumD_ :: (b -> a -> b)   -- ^ accumulating function
           -> b               -- ^ intial accumulator
           -> Auto m a b
-mkAccumD_ f = mkState_ (\x s -> (s, f s x))
-{-# INLINE mkAccumD_ #-}
+accumD_ f = mkState_ (\x s -> (s, f s x))
+{-# INLINE accumD_ #-}
 
--- | The non-resuming/non-serializing version of 'mkAccumMD'.
-mkAccumMD_ :: Monad m
+-- | The non-resuming/non-serializing version of 'accumMD'.
+accumMD_ :: Monad m
            => (b -> a -> m b)    -- ^ (monadic) accumulating function
            -> b                  -- ^ initial accumulator
            -> Auto m a b
-mkAccumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
-{-# INLINE mkAccumMD_ #-}
+accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
+{-# INLINE accumMD_ #-}
 
+-- | Maps over the output stream of the 'Auto'.
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
     {-# INLINE fmap #-}
 
+-- | Creates the "constant" 'Auto', and also gives the ability to "fork"
+-- an input stream, run it to two 'Auto's, and "recombine" the two output
+-- streams.
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
-    -- af <*> ax = uncurry ($) <$> (af &&& ax)
     af <*> ax = case (af, ax) of
                   (AutoFunc f, AutoFunc x)  ->
                       AutoFunc (f <*> x)
@@ -869,9 +1041,9 @@ instance Monad m => Applicative (Auto m a) where
                   (AutoFunc f, AutoStateM gp x s) ->
                       AutoStateM gp (\i s' -> liftM (first (f i)) (x i s')) s
                   (AutoFunc f, AutoArb l s x) ->
-                      AutoArb (fmap (af <*>) l) s $ \i -> onOutput (f i) (af <*>) $ x i
+                      AutoArb (fmap (af <*>) l) s $ \i -> (f i *** (af <*>)) $ x i
                   (AutoFunc f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (onOutput (f i) (af <*>)) (x i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (f i *** (af <*>)) (x i)
                   (AutoFuncM f, AutoFunc x) ->
                       AutoFuncM $ \i -> liftM ($ x i) (f i)
                   (AutoFuncM f, AutoFuncM x) ->
@@ -881,9 +1053,9 @@ instance Monad m => Applicative (Auto m a) where
                   (AutoFuncM f, AutoStateM gp x s) ->
                       AutoStateM gp (\i s' -> liftM2 first (f i) (x i s')) s
                   (AutoFuncM f, AutoArb l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . (`onOutput` (af <*>))) (f i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM (($ x i) . (*** (af <*>))) (f i)
                   (AutoFuncM f, AutoArbM l s x) ->
-                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 (\f' -> onOutput f' (af <*>)) (f i) (x i)
+                      AutoArbM (fmap (af <*>) l) s $ \i -> liftM2 (*** (af <*>)) (f i) (x i)
                   (AutoState gp f s, AutoFunc x) ->
                       AutoState gp (\i s' -> first ($ x i) (f i s')) s
                   (AutoState gp f s, AutoFuncM x) ->
@@ -926,13 +1098,15 @@ instance Monad m => Applicative (Auto m a) where
 -- Should this even be here?  It might be kind of dangerous/unexpected.
 instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty     = mkConstM empty
-    a1 <|> a2 = mkAutoM ((<|>) <$> loadAuto a1 <*> loadAuto a2)
+    a1 <|> a2 = mkAutoM ((<|>) <$> resumeAuto a1 <*> resumeAuto a2)
                         (saveAuto a1 *> saveAuto a2)
-                        $ \x -> let res1  = onOutAuto (<|> a2) `liftM` stepAuto a1 x
-                                    res2  = onOutAuto (a1 <|>) `liftM` stepAuto a2 x
+                        $ \x -> let res1  = second (<|> a2) `liftM` stepAuto a1 x
+                                    res2  = second (a1 <|>) `liftM` stepAuto a2 x
                                 in  res1 <|> res2
 
-
+-- | Gives the ability to "compose" two 'Auto's; feeds the input stream
+-- into the first, feeds that output stream into the second, and returns as
+-- a result the output stream of the second.
 instance Monad m => Category (Auto m) where
     id      = mkFunc id
     ag . af = case (ag, af) of
@@ -945,9 +1119,9 @@ instance Monad m => Category (Auto m) where
                 (AutoFunc g, AutoStateM gpf f s)  ->
                     AutoStateM gpf (\x s' -> liftM (first g) (f x s')) s
                 (AutoFunc g, AutoArb l s f)       ->
-                    AutoArb (fmap (ag .) l) s $ \x -> fmap g (f x)
+                    AutoArb (fmap (ag .) l) s $ \x -> (g *** fmap g) (f x)
                 (AutoFunc g, AutoArbM l s f)      ->
-                    AutoArbM (fmap (ag .) l) s $ \x -> liftM (fmap g) (f x)
+                    AutoArbM (fmap (ag .) l) s $ \x -> liftM (g *** fmap g) (f x)
                 (AutoFuncM g, AutoFunc f)         ->
                     AutoFuncM (g <=< return . f)
                 (AutoFuncM g, AutoFuncM f)        ->
@@ -960,16 +1134,16 @@ instance Monad m => Category (Auto m) where
                     AutoArbM (fmap (ag .) l)
                              s
                            $ \x -> do
-                               let Output y af' = f x
+                               let (y, af') = f x
                                y' <- g y
-                               return (Output y' (ag . af'))
+                               return (y', ag . af')
                 (AutoFuncM g, AutoArbM l s f)     ->
                     AutoArbM (fmap (ag .) l)
                              s
                            $ \x -> do
-                               Output y af' <- f x
+                               (y, af') <- f x
                                y' <- g y
-                               return (Output y' (ag . af'))
+                               return (y', ag . af')
                 (AutoState gpg g sg, AutoFunc f)  ->
                     AutoState gpg (g . f) sg
                 (AutoState gpg g sg, AutoFuncM f) ->
@@ -990,18 +1164,18 @@ instance Monad m => Category (Auto m) where
                 (AutoState gpg@(gg,pg) g sg, AutoArb l s f) ->
                     AutoArb (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
                             (pg sg *> s)
-                            $ \x -> let Output y af' = f x
-                                        (z, sg')     = g y sg
-                                        ag'          = AutoState gpg g sg'
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, af') = f x
+                                        (z, sg') = g y sg
+                                        ag'      = AutoState gpg g sg'
+                                    in  (z, ag' . af')
                 (AutoState gpg@(gg,pg) g sg, AutoArbM l s f) ->
                     AutoArbM (liftA2 (\sg' af' -> AutoState gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 Output y af' <- f x
+                                 (y, af') <- f x
                                  let (z, sg') = g y sg
                                      ag'      = AutoState gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoStateM gpg g sg, AutoFunc f)       ->
                     AutoStateM gpg (g <=< return . f) sg
                 (AutoStateM gpg g sg, AutoFuncM f)      ->
@@ -1024,90 +1198,88 @@ instance Monad m => Category (Auto m) where
                     AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 let Output y af' = f x
+                                 let (y, af') = f x
                                  (z, sg') <- g y sg
                                  let ag' = AutoStateM gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoStateM gpg@(gg,pg) g sg, AutoArbM l s f) ->
                     AutoArbM (liftA2 (\sg' af' -> AutoStateM gpg g sg' . af') gg l)
                              (pg sg *> s)
                              $ \x -> do
-                                 Output y af' <- f x
+                                 (y, af') <- f x
                                  (z, sg') <- g y sg
                                  let ag' = AutoStateM gpg g sg'
-                                 return (Output z (ag' . af'))
+                                 return (z, ag' . af')
                 (AutoArb l s g, AutoFunc f)  ->
-                    AutoArb (fmap (. af) l) s (onOutAuto (. af) . g . f)
+                    AutoArb (fmap (. af) l) s (second (. af) . g . f)
                 (AutoArb l s g, AutoFuncM f) ->
-                    AutoArbM (fmap (. af) l) s (return . onOutAuto (. af) . g <=< f)
+                    AutoArbM (fmap (. af) l) s (return . second (. af) . g <=< f)
                 (AutoArb l s g, AutoState gpf@(gf,pf) f sf) ->
                     AutoArb (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
                             (s *> pf sf)
-                            $ \x -> let (y, sf')     = f x sf
-                                        af'          = AutoState gpf f sf'
-                                        Output z ag' = g y
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, sf') = f x sf
+                                        af'      = AutoState gpf f sf'
+                                        (z, ag') = g y
+                                    in  (z, ag' . af')
                 (AutoArb l s g, AutoStateM gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  (y, sf') <- f x sf
-                                 let af'          = AutoStateM gpf f sf'
-                                     Output z ag' = g y
-                                 return (Output z (ag' . af'))
+                                 let af'      = AutoStateM gpf f sf'
+                                     (z, ag') = g y
+                                 return (z, ag' . af')
                 (AutoArb lg sg g, AutoArb lf sf f) ->
                     AutoArb (liftA2 (.) lg lf)
                             (sg *> sf)
-                            $ \x -> let Output y af' = f x
-                                        Output z ag' = g y
-                                    in  Output z (ag' . af')
+                            $ \x -> let (y, af') = f x
+                                        (z, ag') = g y
+                                    in  (z, ag' . af')
                 (AutoArb lg sg g, AutoArbM lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 Output y af' <- f x
-                                 let Output z ag' = g y
-                                 return (Output z (ag' . af'))
+                                 (y, af') <- f x
+                                 let (z, ag') = g y
+                                 return (z, ag' . af')
                 (AutoArbM l s g, AutoFunc f)  ->
                     AutoArbM (fmap (. af) l)
                              s
-                             (liftM (onOutAuto (. af)) . g . f)
+                             (liftM (second (. af)) . g . f)
                 (AutoArbM l s g, AutoFuncM f) ->
                     AutoArbM (fmap (. af) l)
                              s
-                             (liftM (onOutAuto (. af)) . g <=< f)
+                             (liftM (second (. af)) . g <=< f)
                 (AutoArbM l s g, AutoState gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoState gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  let (y, sf') = f x sf
                                      af'      = AutoState gpf f sf'
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM l s g, AutoStateM gpf@(gf,pf) f sf) ->
                     AutoArbM (liftA2 (\ag' sf' -> ag' . AutoStateM gpf f sf') l gf)
                              (s *> pf sf)
                              $ \x -> do
                                  (y, sf') <- f x sf
                                  let af' = AutoStateM gpf f sf'
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM lg sg g, AutoArb lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 let Output y af' = f x
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
+                                 let (y, af') = f x
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
                 (AutoArbM lg sg g, AutoArbM lf sf f) ->
                     AutoArbM (liftA2 (.) lg lf)
                              (sg *> sf)
                              $ \x -> do
-                                 Output y af' <- f x
-                                 Output z ag' <- g y
-                                 return (Output z (ag' . af'))
-      -- where
-      --   mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
+                                 (y, af') <- f x
+                                 (z, ag') <- g y
+                                 return (z, ag' . af')
     {-# INLINE (.) #-}
 
 mergeStSt :: (Get s, s -> Put)
@@ -1115,6 +1287,9 @@ mergeStSt :: (Get s, s -> Put)
           -> (Get (s, s'), (s, s') -> Put)
 mergeStSt (gg, pg) (gf, pf) = (liftA2 (,) gg gf, uncurry (*>) . (pg *** pf))
 
+-- | 'lmap' lets you map over the /input/ stream, and 'rmap' lets you map
+-- over the /output/ stream.  Note that, as with all 'Profunctor's, 'rmap'
+-- is 'fmap'.
 instance Monad m => Profunctor (Auto m) where
     lmap f = a_
       where
@@ -1125,13 +1300,13 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (fa . f) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa (f x)
-                                                      in  Output y (a_ a')
+                                              $ \x -> let (y, a') = fa (f x)
+                                                      in  (y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                               $ \x -> do
-                                                  Output y a' <- fa (f x)
-                                                  return (Output y (a_ a'))
+                                                  (y, a') <- fa (f x)
+                                                  return (y, a_ a')
     {-# INLINE lmap #-}
     rmap g = a_
       where
@@ -1142,13 +1317,13 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (\x -> liftM (first g) . fa x) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa x
-                                                      in  Output (g y) (a_ a')
+                                              $ \x -> let (y, a') = fa x
+                                                      in  (g y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                                $ \x -> do
-                                                   Output y a' <- fa x
-                                                   return (Output (g y) (a_ a'))
+                                                   (y, a') <- fa x
+                                                   return (g y, a_ a')
     {-# INLINE rmap #-}
     dimap f g = a_
       where
@@ -1159,26 +1334,38 @@ instance Monad m => Profunctor (Auto m) where
                  AutoStateM gpg fa s -> AutoStateM gpg (\x -> liftM (first g) . fa (f x)) s
                  AutoArb l s fa      -> AutoArb (a_ <$> l)
                                                 s
-                                              $ \x -> let Output y a' = fa (f x)
-                                                      in  Output (g y) (a_ a')
+                                              $ \x -> let (y, a') = fa (f x)
+                                                      in  (g y, a_ a')
                  AutoArbM l s fa     -> AutoArbM (a_ <$> l)
                                                  s
                                                $ \x -> do
-                                                   Output y a' <- fa (f x)
-                                                   return (Output (g y) (a_ a'))
+                                                   (y, a') <- fa (f x)
+                                                   return (g y, a_ a')
     {-# INLINE dimap #-}
 
+-- | See 'Arrow' instance.
 instance Monad m => Strong (Auto m) where
     first'  = first
     second' = second
 
+-- | See 'ArrowChoice' instance
 instance Monad m => Choice (Auto m) where
     left'  = left
     right' = right
 
+-- | See 'ArrowLoop' instance
 instance MonadFix m => Costrong (Auto m) where
     unfirst = loop
 
+-- | Allows you to have an 'Auto' run on only the "first" or "second" field
+-- in an input stream that is tuples...and also allows 'Auto's to run
+-- side-by-side on an input stream of tuples (run each on either tuple
+-- field).
+--
+-- Most importantly, however, allows for "proc" notation; see the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
+-- for more details.
+--
 instance Monad m => Arrow (Auto m) where
     arr     = mkFunc
     first a = case a of
@@ -1193,15 +1380,39 @@ instance Monad m => Arrow (Auto m) where
                 AutoArb l s f      ->
                     AutoArb (first <$> l)
                             s
-                          $ \(x, z) -> let Output y a' = f x
-                                       in  Output (y, z) (first a')
+                          $ \(x, z) -> let (y, a') = f x
+                                       in  ((y, z), first a')
                 AutoArbM l s f     ->
                     AutoArbM (first <$> l)
                              s
                            $ \(x, z) -> do
-                               Output y a' <- f x
-                               return (Output (y, z) (first a'))
+                               (y, a') <- f x
+                               return ((y, z), first a')
+    second a = case a of
+                 AutoFunc f         ->
+                     AutoFunc (second f)
+                 AutoFuncM f        ->
+                     AutoFuncM (secondM f)
+                 AutoState gp fa s  ->
+                     AutoState gp (\(z, x) -> first (z,) . fa x) s
+                 AutoStateM gp fa s ->
+                     AutoStateM gp (\(z, x) -> liftM (first (z,)) . fa x) s
+                 AutoArb l s f      ->
+                     AutoArb (second <$> l)
+                             s
+                           $ \(z, x) -> let (y, a') = f x
+                                        in  ((z, y), second a')
+                 AutoArbM l s f     ->
+                     AutoArbM (second <$> l)
+                              s
+                            $ \(z, x) -> do
+                                (y, a') <- f x
+                                return ((z, y), second a')
 
+-- | Allows you to have an 'Auto' only act on "some" inputs (only on
+-- 'Left's, for example), and be "paused" otherwise.
+--
+-- Again mostly useful for "proc" notation, with branching.
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
       where
@@ -1226,14 +1437,14 @@ instance Monad m => ArrowChoice (Auto m) where
                   AutoArb (left <$> l)
                           s
                         $ \x -> case x of
-                                  Right y -> Output (Right y) a
-                                  Left y  -> onOutput Left left (f y)
+                                  Right y -> (Right y, a)
+                                  Left y  -> (Left *** left) (f y)
               AutoArbM l s f    ->
                   AutoArbM (left <$> l)
                            s
                          $ \x -> case x of
-                                   Right y -> return (Output (Right y) a)
-                                   Left y  -> liftM (onOutput Left left) (f y)
+                                   Right y -> return (Right y, a)
+                                   Left y  -> liftM (Left *** left) (f y)
     {-# INLINE left #-}
     right a0 = a
       where
@@ -1256,16 +1467,19 @@ instance Monad m => ArrowChoice (Auto m) where
                   AutoArb (right <$> l)
                           s
                         $ \x -> case x of
-                                  Left y  -> Output (Left y) a
-                                  Right y -> onOutput Right right (f y)
+                                  Left y  -> (Left y, a)
+                                  Right y -> (Right *** right) (f y)
               AutoArbM l s f    ->
                   AutoArbM (right <$> l)
                            s
                          $ \x -> case x of
-                                   Left y  -> return (Output (Left y) a)
-                                   Right y -> liftM (onOutput Right right) (f y)
+                                   Left y  -> return (Left y, a)
+                                   Right y -> liftM (Right *** right) (f y)
     {-# INLINE right #-}
 
+-- | Finds the fixed point of self-referential 'Auto's (for example,
+-- feeding the output stream of an 'Auto' to itself).  Mostly used with
+-- proc notation to allow recursive bindings.
 instance MonadFix m => ArrowLoop (Auto m) where
     loop a = case a of
                 AutoFunc f        ->
@@ -1279,26 +1493,32 @@ instance MonadFix m => ArrowLoop (Auto m) where
                 AutoArb l s f     ->
                     AutoArb (loop <$> l)
                             s
-                          $ \x -> onOutput fst loop
+                          $ \x -> (fst *** loop)
                                 . fix
-                                $ \ ~(Output (_, d) _) -> f (x, d)
+                                $ \ ~((_, d), _) -> f (x, d)
                 AutoArbM l s f    ->
                     AutoArbM (loop <$> l)
                              s
-                           $ \x -> liftM (onOutput fst loop)
+                           $ \x -> liftM (fst *** loop)
                                  . mfix
-                                 $ \ ~(Output (_, d) _) -> f (x, d)
+                                 $ \ ~((_, d), _) -> f (x, d)
     {-# INLINE loop #-}
 
 -- Utility instances
 
+-- | Fork the input stream and '<>' the outputs.
 instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
     (<>) = liftA2 (<>)
 
+-- | Fork the input stream and mappend the outputs.  'mempty' is a constant
+-- stream of 'mempty's, ignoring its input.
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
 
+-- | Fork the input stream and add, multiply, etc. the outputs.  'negate'
+-- will negate the ouptput stream, 'fromInteger' will be a constant stream
+-- of that 'Integer'.
 instance (Monad m, Num b) => Num (Auto m a b) where
     (+)         = liftA2 (+)
     (*)         = liftA2 (*)
@@ -1308,11 +1528,16 @@ instance (Monad m, Num b) => Num (Auto m a b) where
     signum      = fmap signum
     fromInteger = pure . fromInteger
 
+-- | Fork the input stream and divide the outputs.  'recip' maps 'recip' to
+-- the output stream; 'fromRational' will be a constant stream of that
+-- 'Rational'.
 instance (Monad m, Fractional b) => Fractional (Auto m a b) where
     (/)          = liftA2 (/)
     recip        = fmap recip
     fromRational = pure . fromRational
 
+-- | A bunch of constant producers, mappers-of-output-streams, and
+-- forks-and-recombiners.
 instance (Monad m, Floating b) => Floating (Auto m a b) where
     pi      = pure pi
     exp     = fmap exp
@@ -1333,51 +1558,13 @@ instance (Monad m, Floating b) => Floating (Auto m a b) where
     atanh   = fmap atanh
     acosh   = fmap acosh
 
--- Semigroup, Monoid, Num, Fractional, and Floating instances for Output
--- because why not.
 
-instance (Monad m, Semigroup b) => Semigroup (Output m a b) where
-    (<>) = liftA2 (<>)
+-- Utility functions
 
-instance (Monad m, Monoid b) => Monoid (Output m a b) where
-    mempty  = pure mempty
-    mappend = liftA2 mappend
-
-instance (Monad m, Num b) => Num (Output m a b) where
-    (+)         = liftA2 (+)
-    (*)         = liftA2 (*)
-    (-)         = liftA2 (-)
-    negate      = fmap negate
-    abs         = fmap abs
-    signum      = fmap signum
-    fromInteger = pure . fromInteger
-
-instance (Monad m, Fractional b) => Fractional (Output m a b) where
-    (/)          = liftA2 (/)
-    recip        = fmap recip
-    fromRational = pure . fromRational
-
-instance (Monad m, Floating b) => Floating (Output m a b) where
-    pi      = pure pi
-    exp     = fmap exp
-    sqrt    = fmap sqrt
-    log     = fmap log
-    (**)    = liftA2 (**)
-    logBase = liftA2 logBase
-    sin     = fmap sin
-    tan     = fmap tan
-    cos     = fmap cos
-    asin    = fmap asin
-    atan    = fmap atan
-    acos    = fmap acos
-    sinh    = fmap sinh
-    tanh    = fmap tanh
-    cosh    = fmap cosh
-    asinh   = fmap asinh
-    atanh   = fmap atanh
-    acosh   = fmap acosh
-
--- Utility function
 firstM :: Monad m => (a -> m b) -> (a, c) -> m (b, c)
-firstM f (x, y) = liftM (, y) (f x)
+firstM f ~(x, y) = liftM (, y) (f x)
 {-# INLINE firstM #-}
+
+secondM :: Monad m => (a -> m b) -> (c, a) -> m (c, b)
+secondM f ~(x, y) = liftM (x,) (f y)
+{-# INLINE secondM #-}

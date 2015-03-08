@@ -5,7 +5,7 @@
 -- Module      : Control.Auto.Run
 -- Description : Various utilities for running and unrolling 'Auto's, both
 --               interactively and non-interactively.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -42,61 +42,83 @@ module Control.Auto.Run (
   -- * Generalized "self-runners"
   , run
   , runM
-  -- * Unrolling monadic 'Auto's
-  , runStateA
-  , runReaderA
-  , runTraversableA
   ) where
 
 import Control.Applicative
-import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Interval
-import Control.Monad hiding       (mapM, mapM_)
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.State
-import Data.Foldable hiding       (concatMap)
+import Control.Monad hiding  (mapM, mapM_)
 import Data.Functor.Identity
 import Data.Maybe
-import Data.Traversable
-import Prelude hiding             (interact, mapM, mapM_)
+import Data.Profunctor
+import Prelude hiding        (interact, mapM, mapM_)
 import Text.Read
 
--- | Steps the 'Auto' through every element of the given list as input.
+-- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
+-- -> m [b]@ inside.  Streaming is done in the context of the underlying
+-- monad; when done consuming the list, the result is the list of outputs
+-- updated/next 'Auto' in the context of the underlying monad.
 --
--- >>> let a          = mkAccum (+) 0
--- >>> let (ys, a')   = runIdentity (overList a [4,8,-3,5])
+-- Basically just steps the 'Auto' by feeding in every item in the list and
+-- pops out the list of results and the updated/next 'Auto', monadically
+-- chaining the steppings.
+--
+-- See 'overList'' for a simpler example; the following example uses
+-- effects from 'IO' to demonstrate the monadic features of 'overList'.
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> (ys, a') <- overList a [1..5]
+-- 1    -- IO effects
+-- 2
+-- 3
+-- 4
+-- 5
 -- >>> ys
--- [4, 12, 9, 14]
--- >>> let Output y _ = runIdentity (stepAuto a 7)
--- >>> y
--- 21
+-- [1,3,6,10,15]
+-- >>> (ys', _) <- overList a' [11..15]
+-- 11   -- IO effects
+-- 12
+-- 13
+-- 14
+-- 15
+-- >>> ys'
+-- [26,38,51,65,80]
+--
+-- @a@ is like @'sumFrom' 0@, except at every step, prints the input item
+-- to stdout as a side-effect.  Note that in executing we get the updated
+-- @a'@, which ends up with an accumulator of 15.  Now, when we stream
+-- @a'@, we pick up were we left off (from 15) on the results.
+--
 overList :: Monad m
          => Auto m a b            -- ^ the 'Auto' to run
          -> [a]                   -- ^ list of inputs to step the 'Auto' with
          -> m ([b], Auto m a b)   -- ^ list of outputs and the updated 'Auto'
 overList a []     = return ([], a)
 overList a (x:xs) = do
-    Output y a' <- stepAuto a  x
-    (ys, a'')   <- overList a' xs
+    (y, a')   <- stepAuto a  x
+    (ys, a'') <- overList a' xs
     return (y:ys, a'')
 
--- | Like 'overList', but with an 'Auto'' (the underlying 'Monad' is
--- 'Identity')
+-- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]
+-- -> [b]@ inside.  When done comsuming the list, returns the outputs and
+-- the updated/next 'Auto''.
 --
--- >>> let a          = mkAccum (+) 0
--- >>> let (ys, a')   = overList' a [4,8,-3,5]
+-- >>> let (ys, updatedSummer) = overList' (sumFrom 0) [1..5]
 -- >>> ys
--- [4, 12, 9, 14]
--- >>> let Output y _ = stepAuto' a 7
--- >>> y
--- 21
+-- [1, 3, 6, 10, 15]
+-- >>> let (ys', _) = streamAuto' updatedSummer [1..5]
+-- >>> ys'
+-- [16, 18, 21, 25, 30]
+--
+-- If you wanted to stream over an infinite list then you don't care about
+-- the 'Auto'' at the end, and probably want 'streamAuto''.
+--
 overList' :: Auto' a b          -- ^ the 'Auto'' to run
           -> [a]                -- ^ list of inputs to step the 'Auto'' with
           -> ([b], Auto' a b)   -- ^ list of outputs and the updated 'Auto''
 overList' a []     = ([], a)
-overList' a (x:xs) = let Output y a' = stepAuto' a x
-                         (ys, a'')   = overList' a' xs
+overList' a (x:xs) = let (y, a')   = stepAuto' a x
+                         (ys, a'') = overList' a' xs
                      in  (y:ys, a'')
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
@@ -105,14 +127,31 @@ overList' a (x:xs) = let Output y a' = stepAuto' a x
 --
 -- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
 -- m [b]@.
+--
+-- See 'streamAuto'' for a simpler example; here is one taking advantage of
+-- monadic effects:
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> ys <- streamAuto a [1..5]
+-- 1                -- IO effects
+-- 2
+-- 3
+-- 4
+-- 5
+-- >>> ys
+-- [1,3,6,10,15]    -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
+--
 streamAuto :: Monad m
            => Auto m a b        -- ^ 'Auto' to stream
            -> [a]               -- ^ input stream
            -> m [b]             -- ^ output stream
 streamAuto _ []     = return []
 streamAuto a (x:xs) = do
-    Output y a' <- stepAuto a x
-    ys <- streamAuto a' xs
+    (y, a') <- stepAuto a x
+    ys      <- streamAuto a' xs
     return (y:ys)
 
 -- | Stream an 'Auto'' over a list, returning the list of results.  Does
@@ -120,26 +159,57 @@ streamAuto a (x:xs) = do
 -- designed for) infinite lists.
 --
 -- Note that conceptually this turns an @'Auto'' a b@ into an @[a] -> [b]@
+--
+-- >>> streamAuto' (arr (+3)) [1..10]
+-- [4,5,6,7,8,9,10,11,12,13]
+-- >>> streamAuto' (sumFrom 0) [1..5]
+-- [1,3,6,10,15]
+-- >>> streamAuto' (productFrom 1) . streamAuto' (sumFrom 0) $ [1..5]
+-- [1,3,18,180,2700]
+-- >>> streamAuto' (productFrom 1 . sumFrom 0) $ [1..5]
+-- [1,3,18,180,2700]
+-- >>> streamAuto' id [1..5]
+-- [1,2,3,4,5]
+--
 streamAuto' :: Auto' a b        -- ^ 'Auto'' to stream
             -> [a]              -- ^ input stream
             -> [b]              -- ^ output stream
 streamAuto' _ []     = []
-streamAuto' a (x:xs) = let Output y a' = stepAuto' a x
-                           ys          = streamAuto' a' xs
+streamAuto' a (x:xs) = let (y, a') = stepAuto' a x
+                           ys      = streamAuto' a' xs
                        in  y:ys
 
--- | Repeatedly steps an 'Auto' with the same input a given number of
--- times.
+-- | Streams (in the context of the underlying monad) the given 'Auto' with
+-- a stream of constant values as input, a given number of times.  After
+-- the given number of inputs, returns the list of results and the
+-- next/updated 'Auto', in the context of the underlying monad.
 --
 -- prop> stepAutoN n a0 x = overList a0 (replicate n x)
 --
--- >>> let a          = iterator (*2) 1
--- >>> let (ys, a')   = runIdentity (stepAutoN 8 a ())
+-- See 'stepAutoN'' for a simpler example; here is one taking advantage of
+-- monadic effects:
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> (ys, a') <- stepAutoN 5 a 3
+-- 3                -- IO effects
+-- 3
+-- 3
+-- 3
+-- 3
 -- >>> ys
--- [1, 2, 4, 8, 16, 32, 64, 128]
--- >>> let Output y _ = runIdentity (stepAuto a ())
--- >>> y
--- 256
+-- [3,6,9,12,15]    -- the result
+-- >>> (ys'', _) <- stepAutoN 5 a' 5
+-- 5                -- IO effects
+-- 5
+-- 5
+-- 5
+-- 5
+-- >>> ys''
+-- [20,25,30,35,50] -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
+--
 stepAutoN :: Monad m
           => Int                  -- ^ number of times to step the 'Auto'
           -> Auto m a b           -- ^ the 'Auto' to run
@@ -149,28 +219,49 @@ stepAutoN n a0 x = go (max n 0) a0
   where
     go 0 a = return ([], a)
     go i a = do
-      Output y a' <- stepAuto a x
-      (ys, a'')   <- go (i - 1)  a'
+      (y , a')  <- stepAuto a x
+      (ys, a'') <- go (i - 1)  a'
       return (y:ys, a'')
 
--- | Like 'stepAutoN', but with an 'Auto'' (the underlying 'Monad' is
--- 'Identity')
+-- | Streams the given 'Auto'' with a stream of constant values as input,
+-- a given number of times.  After the given number of inputs, returns the
+-- list of results and the next/updated 'Auto'.
 --
--- >>> let a          = iterator (*2) 1
--- >>> let (ys, a')   = stepAutoN 8 a ()
+-- prop> stepAutoN' n a0 x = overList' a0 (replicate n x)
+--
+-- >>> let (ys, a') = stepAutoN' 5 (sumFrom 0) 3
 -- >>> ys
--- [1, 2, 4, 8, 16, 32, 64, 128]
--- >>> let Output y _ = stepAuto a ()
--- >>> y
--- 256
+-- [3,6,9,12,15]
+-- >>> let (ys', _) = stepAutoN' 5 a' 5
+-- >>> ys'
+-- [20,25,30,35,40]
+--
 stepAutoN' :: Int                 -- ^ number of times to step the 'Auto''
            -> Auto' a b           -- ^ the 'Auto'' to run
            -> a                   -- ^ the repeated input
            -> ([b], Auto' a b)    -- ^ list of outputs and the updated 'Auto''
 stepAutoN' n a0 x = runIdentity (stepAutoN n a0 x)
 
--- | Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
+-- | Streams (in the context of the underlying monad) the given 'Auto' with
+-- a stream of constant values as input, a given number of times.  After
+-- the given number of inputs, returns the list of results in the context
+-- of the underlying monad.
+--
+-- Like 'stepAutoN', but drops the "next 'Auto'".  Only returns the list
 -- of results.
+--
+-- >>> let a = arrM print *> sumFrom 0 :: Auto IO Int Int
+-- >>> ys <- evalAutoN 5 a 3
+-- 3                -- IO effects
+-- 3
+-- 3
+-- 3
+-- 3
+-- >>> ys
+-- [3,6,9,12,15]    -- the result
+--
+-- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
+-- item to stdout as a side-effect.
 evalAutoN :: Monad m
           => Int                  -- ^ number of times to step the 'Auto'
           -> Auto m a b           -- ^ the 'Auto' to run
@@ -178,10 +269,16 @@ evalAutoN :: Monad m
           -> m [b]                -- ^ list of outputs
 evalAutoN n a0 = liftM fst . stepAutoN n a0
 
--- | Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the
--- list of results.
+-- | Streams the given 'Auto'' with a stream of constant values as input,
+-- a given number of times.  After the given number of inputs, returns the
+-- list of results and the next/updated 'Auto'.
 --
--- 'evalAutoN' for 'Auto''.
+-- Like 'stepAutoN'', but drops the "next 'Auto''".  Only returns the list
+-- of results.
+--
+-- >>> evalAutoN' 5 (sumFrom 0) 3
+-- [3,6,9,12,15]
+--
 evalAutoN' :: Int                 -- ^ number of times to step the 'Auto''
            -> Auto' a b           -- ^ the 'Auto'' to run
            -> a                   -- ^ the repeated input
@@ -202,47 +299,45 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 -- execAutoN' n a0 = snd . stepAutoN' n a0
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
--- input and a function from an output to the next input to feed in, and
--- the 'Auto', and you get a feedback loop that constantly feeds back in
--- the result of the function applied to the previous output.  "Stops" when
--- said function returns 'Nothing'.
+-- input action, a (possibly side-effecting) function from an output to
+-- the next input to feed in, and the 'Auto', and you get a feedback
+-- loop that constantly feeds back in the result of the function applied to
+-- the previous output. "Stops" when the "next input" function returns
+-- 'Nothing'.
 --
--- Note that the none of the results are returned from the loop.  Instead,
--- if you want to process the results, they must be utilized in the
--- "side-effects' of the "next input" function.  (ie, a write to a file, or
--- an accumulation to a state).
+-- Note that the none of the results are actually returned from the loop.
+-- Instead, if you want to process the results, they must be utilized in
+-- the "side-effects' of the "next input" function.  (ie, a write to
+-- a file, or an accumulation to a state).
 --
 run :: Monad m
-    => a
-    -> (b -> m (Maybe a))
-    -> Interval m a b
-    -> m (Interval m a b)
+    => m a                -- ^ action to retrieve starting input
+    -> (b -> m (Maybe a)) -- ^ handling output and next input in @m@
+    -> Auto m a b         -- ^ 'Auto'
+    -> m (Auto m a b)     -- ^ return the ran/updated 'Auto' in @m@
 run x0 f = runM x0 f id
 
 -- | A generalized version of 'run' where the 'Monad' you are "running" the
 -- 'Auto' in is different than the 'Monad' underneath the 'Auto'.  You just
 -- need to provide the natural transformation.
 runM :: (Monad m, Monad m')
-     => a                         -- ^ Starting input
-     -> (b -> m (Maybe a))        -- ^ Handling output and next input in @m@
-     -> (forall c. m' c -> m c)   -- ^ Natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
-     -> Interval m' a b           -- ^ Auto in monad @m'@
-     -> m (Interval m' a b)       -- ^ Return the resulting/run Auto in @m@
+     => m a                       -- ^ action to retrieve starting input
+     -> (b -> m (Maybe a))        -- ^ handling output and next input in @m@
+     -> (forall c. m' c -> m c)   -- ^ natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
+     -> Auto m' a b               -- ^ 'Auto' in monad @m'@
+     -> m (Auto m' a b)           -- ^ return the resulting/run Auto in @m@
 runM x0 f nt a = do
-    Output my a' <- nt $ stepAuto a x0
-    case my of
-      Just y  -> do
-        x1 <- f y
-        case x1 of
-          Just x  -> runM x f nt a'
-          Nothing -> return a'
-      Nothing ->
-        return a'
+    (y, a') <- nt . stepAuto a =<< x0
+    x1 <- f y
+    case x1 of
+      -- TODO: optimize for no return x
+      Just x  -> runM (return x) f nt a'
+      Nothing -> return a'
 
 -- | Run an 'Auto'' "interactively".  Every step grab a string from stdin,
--- and feed it to the 'Auto'.  If the 'Auto' pops out 'Nothing', end the
--- session; if it outputs a 'Just', print it out to stdout and repeat all
--- over again.
+-- and feed it to the 'Interval''.  If the 'Interval'' is "off", ends the
+-- session; if it is "on", then prints the output value to stdout and
+-- repeat all over again.
 --
 -- If your 'Auto' outputs something other than a 'String', you can use
 -- 'fmap' to transform the output into a 'String' en-route (like @'fmap'
@@ -254,12 +349,16 @@ runM x0 f nt a = do
 --
 -- You can use 'duringRead' or 'bindRead' if you have an 'Auto'' or
 -- 'Interval'' that takes something 'read'able, to chug along until you
--- find something non-readable.
+-- find something non-readable; there's also 'interactRS' which handles
+-- most of that for you.
 --
--- Outputs the final 'Auto'' when the interaction terminates.
+-- Outputs the final 'Interval'' when the interaction terminates.
 interactAuto :: Interval' String String         -- ^ 'Interval'' to run interactively
              -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
-interactAuto = interactM putStrLn (return . runIdentity)
+interactAuto = interactM f (return . runIdentity)
+  where
+    f (Just str) = True <$ putStrLn str
+    f Nothing    = return False
 
 -- | Like 'interact', but instead of taking @'Interval'' 'String'
 -- 'String'@, takes any @'Interval'' a b@ as long as @a@ is 'Read' and @b@
@@ -279,21 +378,24 @@ interactRS = interactAuto . bindRead . fmap (fmap show)
 -- of any underlying 'Monad', as long as you provide the natural
 -- transformation from that 'Monad' to 'IO'.
 --
--- The 'Auto' can also output any @'Maybe' b@; you have to provide
--- a function to "handle" it yourself; a @b -> 'IO' '()'@ (if you don't
--- want to print it and you wanted to, say, write it to a file.)
+-- The 'Auto' can any @'Maybe' b@; you have to provide
+-- a function to "handle" it yourself; a @b -> 'IO' 'Bool'@.  You can print
+-- the result, or write the result to a file, etc.; the 'Bool' parameter
+-- determines whether or not to "continue running", or to stop and return
+-- the final updated 'Auto'.
 interactM :: Monad m
-          => (b -> IO ())             -- ^ function to "handle" each succesful 'Auto' output
-          -> (forall c. m c -> IO c)  -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
-          -> Interval m String b      -- ^ 'Auto' to run "interactively"
-          -> IO (Interval m String b) -- ^ final 'Auto' after it all
-interactM f nt a = do
-    x <- getLine
-    runM x f' nt a
+          => (b -> IO Bool)          -- ^ function to "handle" each succesful 'Auto' output
+          -> (forall c. m c -> IO c) -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
+          -> Auto m String b         -- ^ 'Auto' to run "interactively"
+          -> IO (Auto m String b)    -- ^ final 'Auto' after it all
+interactM f = runM getLine f'
   where
     f' y = do
-      f y
-      Just <$> getLine
+      cont <- f y
+      if cont
+        then Just <$> getLine
+        else return Nothing
+
 
 -- | Turn an 'Auto' that takes a "readable" @a@ and outputs a @b@ into an
 -- 'Auto' that takes a 'String' and outputs a @'Maybe' b@.  When the
@@ -301,14 +403,14 @@ interactM f nt a = do
 -- outputs a succesful 'Just' result; when it isn't, it outputs a 'Nothing'
 -- on that step.
 --
--- >>> let a0 = duringRead (mkAccum (+) (0 :: Int))
--- >>> let Output y1 a1 = stepAuto' a0 "12"
+-- >>> let a0 = duringRead (accum (+) (0 :: Int))
+-- >>> let (y1, a1) = stepAuto' a0 "12"
 -- >>> y1
 -- Just 12
--- >>> let Output y2 a2 = stepAuto' a1 "orange"
+-- >>> let (y2, a2) = stepAuto' a1 "orange"
 -- >>> y2
 -- Nothing
--- >>> let Output y3 _  = stepAuto' a2 "4"
+-- >>> let (y3, _ ) = stepAuto' a2 "4"
 -- >>> y3
 -- Just 16
 --
@@ -316,7 +418,7 @@ interactM f nt a = do
 duringRead :: (Monad m, Read a)
            => Auto m a b                -- ^ 'Auto' taking in a readable @a@, outputting @b@
            -> Interval m String b       -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
-duringRead a = during a <<^ readMaybe
+duringRead = lmap readMaybe . during
 
 -- | Like 'duringRead', but the original 'Auto' would output a @'Maybe' b@
 -- instead of a @b@.  Returns 'Nothing' if either the 'String' fails to
@@ -327,69 +429,4 @@ duringRead a = during a <<^ readMaybe
 bindRead :: (Monad m, Read a)
          => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
-bindRead a = bindI a <<^ readMaybe
-
--- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
--- takes in an input state every turn (in addition to the normal input) and
--- outputs, along with the original result, the modified state.
---
--- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
--- you want to compose and create some isolated 'Auto's with access to an
--- underlying state, but not your entire program.
---
--- Also just simply useful as a convenient way to use an 'Auto' over
--- 'State' with 'stepAuto' and friends.
---
--- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
--- @'Auto'' (a, s) (b, s)@.
-runStateA :: Monad m
-          => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
-          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
-runStateA a = mkAutoM (runStateA <$> loadAuto a)
-                      (saveAuto a)
-                      $ \(x, s) -> do
-                          (Output y a', s') <- runStateT (stepAuto a x) s
-                          return (Output (y, s') (runStateA a'))
-
--- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
--- takes in the input "environment" every turn in addition to the normal
--- input.
---
--- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
--- want to compose and create some isolated 'Auto's with access to an
--- underlying environment, but not your entire program.
---
--- Also just simply useful as a convenient way to use an 'Auto' over
--- 'Reader' with 'stepAuto' and friends.
---
--- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
--- an @'Auto'' (a, r) b@.
-runReaderA :: Monad m
-           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
-           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
-runReaderA a = mkAutoM (runReaderA <$> loadAuto a)
-                       (saveAuto a)
-                       $ \(x, r) -> do
-                           Output y a' <- runReaderT (stepAuto a x) r
-                           return (Output y (runReaderA a'))
-
--- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
--- 'Traversable' ('[]', 'Maybe', etc.).
---
--- It can turn, for example, an @'Auto' [] a b@ into an @'Auto'' a [b]@; it
--- collects all of the results together.  Or an @'Auto' 'Maybe' a b@ into
--- an @'Auto'' a ('Maybe' b)@.
---
--- If you find a good use for this, let me know :)
-runTraversableA :: (Monad f, Traversable f)
-                => Auto f a b           -- ^ 'Auto' run over traversable structure
-                -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
-runTraversableA = go . return
-  where
-    go a = mkAuto (go <$> mapM loadAuto a)
-                  (mapM_ saveAuto a)
-                  $ \x -> let o  = a >>= (`stepAuto` x)
-                              y  = liftM outRes o
-                              a' = liftM outAuto o
-                          in  Output y (go a')
-
+bindRead = lmap readMaybe . bindI

@@ -73,11 +73,11 @@ Operationally, an `Auto` does this by acting as a "stateful function" that we
 can "run" with `stepAuto`.  A function with "internal state".
 
 ~~~haskell
--- stepAuto' :: Auto' a b -> a -> Output' a b
-ghci> let Output x nextAuto  = stepAuto' (sumFrom 0) 5
+-- stepAuto' :: Auto' a b -> a -> (b, Auto' a b)
+ghci> let (x, nextAuto ) = stepAuto' (sumFrom 0) 5
 ghci> x
 5
-ghci> let Output y nextAuto2 = stepAuto' nextAuto 3
+ghci> let (y, nextAuto2) = stepAuto' nextAuto 3
 ghci> y
 8
 ghci> evalAuto' nextAuto2 4
@@ -90,15 +90,6 @@ returns an `b` as the output, and a "next/updated `Auto'`", which is the
 continue along with the new updated state.  (`evalAuto'` is like `stepAuto'`
 but throws away the "next `Auto`")   In this case, the "internal state" is an
 accumulator, the sum of all received elements so far.
-
-It returns the output and the next `Auto` in an `Output'` data type, which is
-just a glorified tuple for convenience:
-
-~~~haskell
-data Output' a b = Output' { outRes  :: b
-                           , outAuto :: Auto' a b
-                           }
-~~~
 
 In practice, this is usually going to be your "main loop", or "game loop":
 
@@ -162,11 +153,6 @@ Working with `Monad m => Auto m a b` is practically identical to working with
 `Auto'`.  However, specializing to `Auto'` lets us use simple "running"
 functions like `streamAuto'` and `stepAuto'`.
 
-You probably also already know about `Output m a b`, which is a glorified `(b,
-Auto m a b)` tuple, and `Output' a b`, which is a glorified `(b, Auto' a b)`
-tuple.  You can pattern match on it using the `Output` constructor, or just
-access them using `outRes` and `outAuto`.
-
 While we're on the subject, there is another type alias for `Auto`s: an
 `Interval m a b` is an `Auto m a (Maybe b)` (they're just type aliases).
 Semantically, it represents an `Auto` that is "on" or "off" for durations of
@@ -229,6 +215,18 @@ ghci> streamAuto' (productFrom 1) [1..5]
 [ 1, 2,  6, 24, 120]
 ghci> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
 [ 2, 5, 12, 34, 135]
+~~~
+
+You can also "fork" an input stream to two `Auto`s, and then throw away the
+output stream of one: (very useful for `Auto`s like `effect`, which we will
+see later, where we only care about the monadic effects and not about the
+actual output stream)
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0 *> productFrom 1) [1..5]
+[ 1, 2,  6, 24, 120]
+ghci> streamAuto' (sumFrom 0 <* productFrom 1) [1..5]
+[ 1, 3,  6, 10,  15]
 ~~~
 
 Heck, you can even `sequenceA` several!
@@ -457,31 +455,31 @@ internally stateful `Auto`s from scratch:
 ~~~haskell
 iterator  :: (b -> b)             -> b -> Auto m a b
 iteratorM :: (b -> m b)           -> b -> Auto m a b
-mkAccum   :: (b -> a -> b)        -> b -> Auto m a b
-mkAccumM  :: (b -> a -> m b)      -> b -> Auto m a b
+accum     :: (b -> a -> b)        -> b -> Auto m a b
+accumM    :: (b -> a -> m b)      -> b -> Auto m a b
 mkState   :: (a -> s -> (b, s))   -> s -> Auto m a b
 mkStateM  :: (a -> s -> m (b, s)) -> s -> Auto m a b
-mkAuto_   :: (a -> Output m a b)       -> Auto m a b
-mkAutoM_  :: (a -> m (Output m a b))   -> Auto m a b
+mkAuto_   :: (a -> (b, Auto m a b))    -> Auto m a b
+mkAutoM_  :: (a -> m (b, Auto m a b))  -> Auto m a b
 ~~~
 
 You can look at the documentation for all of these, but these all basically
 work with "internal state" --- `iterator` ignores its input and repeatedly
-applies a function to a value and pops it out at every step.  `mkAccum`
+applies a function to a value and pops it out at every step.  `accum`
 maintains that the *output* is always the result of "folding together" (a la
 `foldl`) all of the inputs so far, with a starting value.  `mkState` is
-like a more powerful `mkAccum`, which keeps an internal state that is updated
+like a more powerful `accum`, which keeps an internal state that is updated
 at every step.  `mkAuto_` lets you describe an `Auto` by its behavior under
 `stepAuto'`.
 
 ~~~haskell
 ghci> take 10 $ streamAuto' (iterator (+1) 0) (repeat ())
 [0,1,2,3,4,5,6,7,8,9]
-ghci> take 10 $ streamAuto' (mkAccum (+) 0)   [1..]
+ghci> take 10 $ streamAuto' (accum (+) 0)   [1..]
 [1,3,6,10,15,21,28,36,45,55]
 ~~~
 
-It is recommended to only use `mkAccum`, `mkState`, `mkAuto` only when
+It is recommended to only use `accum`, `mkState`, `mkAuto` only when
 absolutely necessary; usually you can make what you want from combining
 smaller, simple, pre-made `Auto`s.  But sometimes the case does arrive.
 
@@ -722,7 +720,7 @@ Like with blip streams, intervals are used to great effect with switches, like
 the useful `(-->)` combinator:
 
 ~~~haskell
-ghci> let a1 = whileI (< 4) --> pure 0
+ghci> let a1 = whileI (<= 4) --> pure 0
 ghci> streamAuto' a1 [1..10]
 [1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
                -- look, recursion!
@@ -802,9 +800,9 @@ internal accumulator as 13, keeping track of all the numbers it has seen so
 far.
 
 ~~~haskell
-ghci> let a             = sumFrom 0
-ghci> let Output _ a'   = stepAuto' a  3
-ghci> let Output _ a''  = stepAuto' a' 10
+ghci> let a         = sumFrom 0
+ghci> let (_, a')   = stepAuto' a  3
+ghci> let (_, a'')  = stepAuto' a' 10
 ~~~
 
 `encodeAuto` can be used to "freeze"/"save" the `Auto` into the `ByteString`
@@ -821,7 +819,7 @@ accumulator at 13.
 
 ~~~haskell
 ghci> let Right resumed = decodeAuto a bs
-ghci> let Output y _    = stepAuto' resumed 0
+ghci> let (y, _)        = stepAuto' resumed 0
 13
 ~~~
 
@@ -855,21 +853,38 @@ ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last
 Final partings
 --------------
 
-I recommend just looking over the combinators available to you in the various
-modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*, and
-*[Control.Auto.Switch][]*.  We didn't go over anything close to all of them in
-this tutorial, so it's nice for getting a good overview.  The most up-to-date
-documentation at this point in time is on [the github pages][docs]
+One last note before finishing up...if you ever want to implement a low-level
+library, or implement a "backend", defining your own `Auto`s and working with
+them has its own rules.  You're a bit "on your own", in this sense; the
+optimization game might take you to places that really get rid of the nice
+semantic denotative ideals of this library. I plan on writing a
+framework/low-level guide soon (for writing, say, a GUI framework, or hooking
+on GUI).
+
+However, one good principle is just to *separate* your "two hats" as much as
+possible.  There's the hat you wear when you are thinking about your program
+logic, dealing with compositions of ideas ... and there's the hat you wear
+when you are at the nitty-gritty interface between your system and the real
+world. One goal in Haskell is always to be able to create as clear a divide as
+possible...so you can really enjoy the best of both worlds.  So just make sure
+that the `Auto`s and API that you export behave in meaningful ways that you
+can reason about...just what we expect from using `Auto` :)
+
+Anyways, I recommend just looking over the combinators available to you in the
+various modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*,
+and *[Control.Auto.Switch][]*.  We didn't go over anything close to all of
+them in this tutorial, so it's nice for getting a good overview.  The most
+up-to-date documentation at this point in time is on [the github pages][docs]
 
 A good next step too wouild be also just looking at the [auto-examples][]
 directory and peruse over the examples, which each highlight a different
 aspect of the library, so you can see how all of these ideas work together.
 There will also be writeups on [my blog][blog] coming up too!
 
-Help is always available on the *#auto* channel on freenode IRC; you can also
-email me at <justin@jle.im>, or find me on twitter as [mstk][twitter].  There
-is no mailing list or message board yet, but for now, feel free to abuse the
-[github issue tracker][issues].
+Help is always available on the *#haskell-auto* channel on freenode IRC; you
+can also email me at <justin@jle.im>, or find me on twitter as
+[mstk][twitter].  There is no mailing list or message board yet, but for now,
+feel free to abuse the [github issue tracker][issues].
 
 [twitter]: https://twitter.com/mstk
 [issues]: https://github.com/mstksg/auto/issues

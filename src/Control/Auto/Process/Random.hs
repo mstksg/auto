@@ -1,9 +1,7 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 -- |
 -- Module      : Control.Auto.Process.Random
 -- Description : Entropy generationg 'Auto's.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -41,11 +39,33 @@
 -- -> (b, g)@, as well:
 --
 -- @
---     'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
+-- 'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
 -- @
 --
 -- These are useful for generating noise...a new random value at every
 -- stoep.  They are entropy sources.
+--
+-- Alternatively, if you want to give up parallelizability and determinism
+-- and have your entire 'Auto' be sequential, you can make your entire
+-- 'Auto' run under 'Rand' or 'RandT' as its internal monad, from
+-- <http://hackage.haskell.org/package/MonadRandom MonadRandom>.
+--
+-- @
+-- 'Auto' ('Rand' g) a b
+-- @
+--
+-- In this case, if you wanted to pull a random number, you could do:
+--
+-- @
+-- 'effect' 'random' :: ('Random' r, 'RandomGen' g) => 'Auto' ('Rand' g) a r
+-- @
+--
+-- Which pulls a random @r@ from "thin air" (from the internal 'Rand'
+-- monad)...however, you lose a great deal of determinism from this, as
+-- your 'Auto's are no longer deterministic with a given seed...and
+-- resumability becomes dependent on starting everything with the same seed
+-- every time you re-load your 'Auto'.  Also, 'Auto''s are parallelizable,
+-- while @'Auto' ('Rand' g)@s are not.
 --
 -- The other two generators given are for useful random processes you might
 -- run into.  The first is a 'Blip' stream that emits at random times with
@@ -53,6 +73,7 @@
 -- from "Control.Auto.Interval", and is a stream that is "on" or "off",
 -- chunks at a time, for random lengths.  The average length of each on or
 -- off period is controlled by the parameter you pass in.
+--
 
 module Control.Auto.Process.Random (
   -- * Streams of random values from random generators
@@ -94,8 +115,8 @@ import System.Random
 -- this form:
 --
 -- @
---     'random'  :: 'RandomGen' g =>            g -> (b, g)
---     'randomR' :: 'RandomGen' g => (b, b) -> (g -> (b, g))
+-- 'random'  :: 'RandomGen' g =>            g -> (b, g)
+-- 'randomR' :: 'RandomGen' g => (b, b) -> (g -> (b, g))
 -- @
 --
 -- If you are using something from <http://hackage.haskell.org/package/MonadRandom MonadRandom>,
@@ -103,7 +124,7 @@ import System.Random
 -- -> (b, g)@:
 --
 -- @
---     'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
+-- 'runRand' :: 'RandomGen' g => 'Rand' g b -> (g -> (b, g))
 -- @
 --
 --
@@ -123,7 +144,8 @@ import System.Random
 -- serialization/resumability).
 --
 -- In the context of these generators, resumability basically means
--- deterministic behavior over re-loads.
+-- deterministic behavior over re-loads...if "reloading", it'll ignore the
+-- seed you pass in, and use the original seed given when originally saved.
 --
 rands :: (Serialize g, RandomGen g)
       => (g -> (b, g)) -- ^ random generating function
@@ -157,13 +179,14 @@ rands_ r = mkState_ (\_ g -> r g)
 -- m (b, g)@, instead of @g -> (b, g)@.  Your random generating function
 -- has access to the underlying monad.
 --
--- If you are using something from <http://hackage.haskell.org/package/MonadRandom MonadRandom>,
--- then you can use the 'runRandT' function to turn a @'RandT' g m b@ into a @g
--- -> m (b, g)@:
+-- If you are using something from
+-- <http://hackage.haskell.org/package/MonadRandom MonadRandom>, then you
+-- can use the 'runRandT' function to turn a @'RandT' g m b@ into a @g ->
+-- m (b, g)@:
 --
 -- @
---     'runRandT' :: ('Monad' m, 'RandomGen' g)
---                => 'RandT' g m b -> m (g -> (b, g))
+-- 'runRandT' :: ('Monad' m, 'RandomGen' g)
+--            => 'RandT' g m b -> (g -> m (b, g))
 -- @
 --
 randsM :: (Serialize g, RandomGen g, Monad m)
@@ -195,21 +218,19 @@ randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
 
 -- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
--- a process where, at every trial, the result is "on" with the given
--- probability @p@, and "off" otherwise.  Every step is independent from
--- the last.
+-- a process of sequential independent trials each with a success of
+-- probability @p@.
 --
--- Basically, the result of every trial is an independent weighted coin
--- flip.
---
--- It is implemented here as a 'Blip' stream that emits whenever the
--- Bernoulli trial succeeds and does not emit otherwise.
+-- Implemented here is an 'Auto' producing a blip stream that emits
+-- whenever the bernoulli process succeeds with the value of the received
+-- input of the 'Auto', with its probability of succuss per each trial as
+-- the 'Double' parameter.
 --
 -- It is expected that, for probability @p@, the stream will emit a value
 -- on average once every @1/p@ ticks.
 --
 bernoulli :: (Serialize g, RandomGen g)
-          => Double       -- ^ probability of any step emitting
+          => Double       -- ^ probability of success per step
           -> g            -- ^ initial seed
           -> Auto m a (Blip a)
 bernoulli p = mkState (_bernoulliF p)
@@ -232,24 +253,23 @@ bernoulli_ :: RandomGen g
            -> Auto m a (Blip a)
 bernoulli_ p = mkState_ (_bernoulliF p)
 
-_bernoulliF :: forall a g. RandomGen g
+_bernoulliF :: RandomGen g
             => Double
             -> a
             -> g
             -> (Blip a, g)
 _bernoulliF p x g = (outp, g')
   where
-    (roll, g') = randomR (0, 1) g :: (Double, g)
+    (roll, g') = randomR (0, 1 :: Double) g
     outp | roll <= p = Blip x
          | otherwise = NoBlip
 
--- | An 'Auto' that outputs intervals that are "on" and "off" for
--- contiguous but random lengths of time --- when "on", it allows values to
--- pass (in a 'Just'); when "off", it prevents values from passing (as
--- 'Nothing').
+-- | An 'Interval' that is "on" and "off" for contiguous but random
+-- intervals of time...when "on", allows values to pass as "on" ('Just'),
+-- but when "off", suppresses all incoming values (outputing 'Nothing').
 --
 -- You provide a 'Double', an @l@ parameter, representing the
--- average/expected length of each interval.
+-- average/expected length of each on/off interval.
 --
 -- The distribution of interval lengths follows
 -- a <http://en.wikipedia.org/wiki/Geometric_distribution Geometric Distribution>.
@@ -287,15 +307,16 @@ randIntervals_ :: RandomGen g
                -> Interval m a a
 randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
-_randIntervalsF :: forall a g. RandomGen g
+_randIntervalsF :: RandomGen g
                 => Double
                 -> a
                 -> (g, Bool)
                 -> (Maybe a, (g, Bool))
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    (roll, g') = randomR (0, 1) g :: (Double, g)
+    (roll, g') = randomR (0, 1 :: Double) g
     onoff' = onoff `xor` (roll <= thresh)
     outp | onoff     = Just x
          | otherwise = Nothing
+    -- should this be onoff' ?
 

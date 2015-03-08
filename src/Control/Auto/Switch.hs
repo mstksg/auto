@@ -2,7 +2,7 @@
 -- Module      : Control.Auto.Switch
 -- Description : Combinators for dynamically switching between and
 --               sequencing 'Auto's.
--- Copyright   : (c) Justin Le 2014
+-- Copyright   : (c) Justin Le 2015
 -- License     : MIT
 -- Maintainer  : justin@jle.im
 -- Stability   : unstable
@@ -15,18 +15,18 @@
 -- room to room, menu to menu...switching between 'Auto's is a core part
 -- about how many programs are built.
 --
--- All of the switches here take advantage of either 'Blip' semantics (from
+-- All of the switches here take advantage of either blip semantics (from
 -- "Control.Auto.Blip") or /Interval/ semantics (from
 -- "Control.Auto.Interval")...so this is where maintaining semantically
--- meaningful 'Blip' streams and intervals pays off!
+-- meaningful blip streams and intervals pays off!
 --
 -- Each switch here has various examples, and you'll find many of these in
 -- use in the <https://github.com/mstksg/auto-examples example projects>.
 --
 -- Note the naming convention going on here (also used in
--- "Control.Auto.Serialize"):  A switch "from" a 'Blip' stream is triggered
--- "internally" by the 'Auto' being switched itself; a switch "on" a 'Blip' stream is
--- triggered "externally" by an 'Auto' that is /not/ swiched.
+-- "Control.Auto.Serialize"):  A switch "from" a blip stream is triggered
+-- "internally" by the 'Auto' being switched itself; a switch "on" a blip
+-- stream is triggered "externally" by an 'Auto' that is /not/ swiched.
 --
 
 module Control.Auto.Switch (
@@ -60,30 +60,29 @@ import Prelude hiding             ((.), id)
 infixr 1 -->
 infixr 1 -?>
 
--- | "One after the other".  Behave like the first 'Auto' (and run only its
--- effects) as long as it is "on" ('Just').  As soon as it is 'Nothing',
--- begin behaving like the second 'Auto' forevermore, and running the
--- second 'Auto''s effects, if any.  Works well if the 'Auto's follow
--- interval semantics from "Control.Auto.Interval".
+-- | "This, then that".  Behave like the first 'Interval' (and run its
+-- effects) as long as it is "on" (outputting 'Just').  As soon as it turns
+-- off (is 'Nothing), it'll "switch over" and begin behaving like the
+-- second 'Auto' forever, running the effects of the second 'Auto', too.
+-- Works well if the 'Auto's follow interval semantics from
+-- "Control.Auto.Interval".
 --
--- >>> let a1 = (onFor 2 . pure "hello") --> pure "world"
--- >>> let Output res1 _ = stepAutoN' 5 a1 ()
--- >>> res1
--- ["hello", "hello", "world", "world", "world"]
+-- >>> let a1 = whileI (<= 4) --> pure 0
+-- >>> streamAuto' a1 [1..10]
+-- [1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
 --
--- (Recall that @'pure' "hello"@ is the 'Auto' that ignores its input and
--- constantly outputs "hello", and @'onFor' 2@ lets its input pass "on"
--- ('Just') for two steps, then is "off" ('Nothing') ever after.)
+-- ('whileI' only lets items satisfying the predicate pass through as "on",
+-- and is "off" otherwise; 'pure' is the 'Auto' that always produces the
+-- same output)
 --
 -- Association works in a way that you can "chain" '-->'s, as long as you
--- have a non-'Maybe' / non-"Interval" 'Auto' at the end.
+-- have an appropriate 'Auto' (and not 'Interval') at the end:
 --
--- >>> let a2 = onFor 2 . pure "hello"
---          --> onFor 2 . pure "world"
---          --> pure "goodbye!"
--- >>> let Output res2 _ = stepAutoN' 6 a2 ()
--- >>> res2
--- ["hello", "hello", "world", "world", "goodbye!", "goodbye!"]
+-- >>> let a2 = onFor 3 . sumFrom 0
+--          --> onFor 3 . sumFrom 100
+--          --> pure 0
+-- >>> streamAuto' a2 [1..10]
+-- [1,3,6,104,109,115,0,0,0,0]
 --
 -- @a --> b --> c@ associates as @a --> (b --> c)@
 --
@@ -95,7 +94,7 @@ infixr 1 -?>
 -- Note that recursive bindings work just fine, so:
 --
 -- >>> let a3 = onFor 2 . pure "hello"
---          --> onFor 2 . pure "world"
+--          --> onFor 2 . pure "goodbye"
 --          --> a3
 -- >>> let (res3, _) = stepAutoN' 8 a3 ()
 -- >>> res3
@@ -134,69 +133,82 @@ a1 -?> a2 = mkAutoM l s t
     l = do
       flag <- get
       if flag
-        then loadAuto (switched a2)
-        else liftA2 (-?>) (loadAuto a1) (loadAuto a2)
+        then resumeAuto (switched a2)
+        else liftA2 (-?>) (resumeAuto a1) (resumeAuto a2)
     s = put False *> saveAuto a1 *> saveAuto a2
     t x = do
-      Output y1 a1' <- stepAuto a1 x
+      (y1, a1') <- stepAuto a1 x
       case y1 of
         Just _  ->
-          return (Output y1 (a1' -?> a2))
+          return (y1, a1' -?> a2)
         Nothing -> do
-          Output y a2' <- stepAuto a2 x
-          return (Output y (switched a2'))
-    switched a = mkAutoM (switched <$> loadAuto a)
+          (y, a2') <- stepAuto a2 x
+          return (y, switched a2')
+    switched a = mkAutoM (switched <$> resumeAuto a)
                          (put True  *> saveAuto a)
-                         $ \x -> do
-                             Output y a' <- stepAuto a x
-                             return (Output y (switched a'))
+                       $ \x -> do
+                           (y, a') <- stepAuto a x
+                           return (y, switched a')
+-- TODO: Add tests for the serialization here.
 
--- | Takes an 'Auto' that emits an output with a 'Blip' stream emitting
--- 'Auto's.
+-- | Takes an 'Auto' who has both a normal output stream and a blip stream
+-- output stream, where the blip stream emits new 'Auto's.
 --
--- @'switchFrom_' a0@ behaves like @'fst' '<$>' a0@ at first, outputting
--- the first part of the result tuple.  Then, as soon as the 'Blip' stream
--- emits with an 'Auto' @a1@, the whole thing behaves like @a1@ forever.
+-- You can imagine 'switchFrom_' as a box containing a single 'Auto' like
+-- the one just described.  It feeds its input into the contained 'Auto',
+-- and its output stream is the "normal value" output stream of the
+-- contained 'Auto'.
 --
--- In the following example, @a1@ is an 'Auto' that counts upwards forever
--- and also outputs a 'Blip' stream that will emit an 'Auto' containing
--- @'pure' 100@ (the 'Auto' that always emits 100) after three steps.
+-- However, as soon as the blip stream of the contained 'Auto' emits a new
+-- 'Auto'...it immediately /replaces/ the contained 'Auto' with the /new/
+-- one.  And the whole thing starts all over again.
+--
+-- @'switchFrom_' a0@ will "start" with @a0@ already in the box.
+--
+-- This is mostly useful to allow 'Auto's to "replace themselves" or
+-- control their own destiny, or the behavior of their successors.
+--
+-- In the following example, @a1@ is an 'Auto' that behaves like
+-- a cumulative sum but also outputs a blip stream that will emit an 'Auto'
+-- containing @'pure' 100@ (the 'Auto' that always emits 100) after three
+-- steps.
 --
 -- @
---     a1 :: Auto' () (Int, Blip (Auto' () Int))
---     a1 = proc _ -> do
---         c          <- count -< ()
---         switchBlip <- inB 3 -< pure 100
---         id -< (c, switchBlip)
+-- a1 :: Auto' Int (Int, Blip (Auto' Int Int))
+-- a1 = proc x -> do
+--     sums       <- sumFrom 0 -< x
+--     switchBlip <- inB 4     -< pure 100
+--     id -< (sums, switchBlip)
 --
---     -- alternatively
---     a1' = count &&& (tagBlips (pure 100) . inB 3)
+-- -- alternatively
+-- a1' = sumFrom 0 &&& (tagBlips (pure 100) . inB 4)
 -- @
 --
 -- So, @'switchFrom_' a1@ will be the output of 'count' for three steps,
--- and then switch to @'pure' 100@ afterwards (when the 'Blip' stream
+-- and then switch to @'pure' 100@ afterwards (when the blip stream
 -- emits):
 --
--- >>> let (res1, _) = stepAutoN' 6 (switchFrom_ a1) ()
--- >>> res1
--- [0, 1, 2, 100, 100, 100]
+-- >>> streamAuto' (switchFrom_ a1) [1..10]
+-- [1,3,6,10,100,100,100,100,100,100]
 --
 -- This is fun to use with recursion, so you can get looping switches:
 --
 -- @
---     a2 :: Auto' () (Int, Blip (Auto' () Int))
---     a2 = proc _ -> do
---         c <- count -< ()
---         switchBlip <- inB 3 -< switchFrom_ a2
---         id -< (c, switchBlip)
+-- a2 :: Auto' Int (Int, Blip (Auto' Int Int))
+-- a2 = proc x -> do
+--     sums       <- sumFrom 0 -< x
+--     switchBlip <- inB 3     -< switchFrom_ a2
+--     id -< (c, switchBlip)
 --
---    -- alternatively
---    a2' = count &&& (tagBlips (switchFrom_ a2) . inB 3)
+-- -- alternatively
+-- a2' = sumFrom 0 &&& (tagBlips (switchFrom_ a2') . inB 3)
 -- @
 --
--- >>> let (res2, _) = stepAutoN' 10 (switchFrom_ a2) ()
--- >>> res2
--- [0, 1, 2, 0, 1, 2, 0, 1, 2, 0]
+-- >>> streamAuto' (switchFrom_ a2) [101..112]
+-- [ 101, 203, 306  -- first 'sumFrom', on first three items
+-- , 104, 209, 315  -- second 'sumFrom', on second three items
+-- , 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
+-- , 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
 --
 -- Note that this combinator is inherently unserializable, so you are going
 -- to lose all serialization capabilities if you use this.  So sad, I know!
@@ -205,53 +217,55 @@ a1 -?> a2 = mkAutoM l s t
 -- If you want to use switching /and/ have serialization, you can use the
 -- perfectly serialization-safe alternative, 'switchFromF', which slightly
 -- less powerful in ways that are unlikely to be missed in practical usage.
+-- That is, almost all non-contrived real life usages of 'switchFrom_' can
+-- be recovered using 'switchFromF'.
 --
 switchFrom_ :: Monad m
             => Auto m a (b, Blip (Auto m a b))  -- ^ 'Auto' outputting a
                                                 --   normal output (@b@)
-                                                --   and a 'Blip' stream
+                                                --   and a blip stream
                                                 --   containing the 'Auto'
                                                 --   to replace itself
                                                 --   with.
             -> Auto m a b
 switchFrom_ a0 = mkAutoM_ $ \x -> do
-                              Output (y, ea1) a0' <- stepAuto a0 x
+                              ((y, ea1), a0') <- stepAuto a0 x
                               return $ case ea1 of
-                                Blip a1 -> Output y a1
-                                NoBlip  -> Output y (switchFrom_ a0')
+                                Blip a1 -> (y, a1)
+                                NoBlip  -> (y, switchFrom_ a0')
 
--- | Is a little 'Auto' box...whenever the input 'Blip' stream emits an
--- 'Auto', it begins to behave like that emitted 'Auto'.
+-- | You can think of this as a little box containing a single 'Auto'
+-- inside.  Takes two input streams: an input stream of normal values, and
+-- a blip stream containing 'Auto's.  It feeds the input stream into the
+-- contained 'Auto'...but every time the input blip stream emits with a new
+-- 'Auto', /replaces/ the contained 'Auto' with the emitted one.  Then
+-- starts the cycle all over, immediately giving the new 'Auto' the
+-- received input.
 --
--- Input to the contained 'Auto' is fed through the first field of the
--- tuple, and a 'Blip' stream emitting new 'Auto's is fed through the
--- second field.
---
--- When the stream emits, /immediately/ feeds the input to the new 'Auto'.
---
--- Given an initial 'Auto' to behave like.
+-- Useful for being able to externally "swap out" 'Auto's for a given
+-- situation by just emitting a new 'Auto' in the blip stream.
 --
 -- For example, here we push several 'Auto's one after the other into the
--- box: @'pure' 100@, 'count', and @'iterator' (+3) 0@, starting with
--- @'pure' 0@.  @'eachAt_' 3@ emits each 'Auto' in the given list every
--- three steps, starting on the third.
+-- box: @'sumFrom' 0@, @'productFrom' 1@, and 'count'. @'eachAt_' 4@ emits
+-- each 'Auto' in the given list every four steps, starting on the fourth.
 --
 -- @
---     newAutos :: Auto' () (Blip (Auto' () Int))
---     newAutos = eachAt_ 3 [pure 100, count, iterator (+3) 0]
+-- newAutos :: Auto' Int (Blip (Auto' Int Int))
+-- newAutos = eachAt_ 4 [sumFrom 0, productFrom 1, count]
 --
---     a :: Auto' () Int
---     a = proc _ -> do
---         blipAutos <- newAutos -< ()
---         switchOn_ (pure 0)    -< ((), blipAutos)
+-- a :: Auto' Int Int
+-- a = proc i -> do
+--     blipAutos <- newAutos -< ()
+--     switchOn_ (pure 0)    -< (i, blipAutos)
 --
---     -- alternatively
---     a' = switchOn_ (pure 0) . (pure () &&& newAutos)
+-- -- alternatively
+-- a' = switchOn_ (pure 0) . (id &&& newAutos)
 -- @
 --
--- >>> let (res, _) = stepAutoN' 14 a ()
--- >>> res
--- [0, 0, 100, 100, 100, 0, 1, 2, 0, 3, 6, 9, 12, 15]
+-- >>> streamAuto' a [1..12]
+-- [ 1,  3,   6           -- output from sumFrom 0
+-- , 4, 20, 120           -- output from productFrom 1
+-- , 0,  1,   2, 3, 4, 5] -- output from count
 --
 -- Like 'switchFrom_', this combinator is inherently unserializable.  So if
 -- you use it, you give up serialization for your 'Auto's.  This is
@@ -268,65 +282,81 @@ switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
                             let a = case ea1 of
                                       NoBlip  -> a0
                                       Blip a1 -> a1
-                            Output y a' <- stepAuto a x
-                            return (Output y (switchOn_ a'))
+                            (y, a') <- stepAuto a x
+                            return (y, switchOn_ a')
 
--- | Takes a function from a @c@ to a new (next) 'Auto', and an initial
--- 'Auto'.
+-- | Essentially identical to 'switchFrom_', except insead of the 'Auto'
+-- outputting a blip stream of new 'Auto's to replace itself with, it emits
+-- a blip stream of @c@ --- and 'switchFromF' uses the @c@ to create the
+-- new 'Auto'.
 --
--- These 'Auto's all taken in @a@ and output @b@, along with a 'Blip'
--- stream of @c@s.
---
--- @'switchFromF' f a0@ behaves like the current 'Auto' (beginning with
--- @a0@), taking in the @a@ and popping out the @b@.  However, as soon as
--- the 'Blip' stream emits a @c@, it replaces internal 'Auto' with a new
--- one, determined by the function.
---
--- Here is an example where the "next 'Auto'" function is @nextAuto@:
+-- Here is the equivalent of the two examples from 'switchFrom_',
+-- implemented with 'switchFromF'; see the documentatino for 'switchFrom_'
+-- for a description of what they are to do.
 --
 -- @
---     nextAuto :: Int -> Auto' () (String, Blip Int)
---     nextAuto i0 = proc _ -> do
---         c     <- sumFromD i0 -< 1
---         nextB <- inB 3       -< c
---         id    -< (show c, (+10) <$> nextB)
+-- a1 :: Auto' Int (Int, Blip Int)
+-- a1 = proc x -> do
+--     sums       <- sumFrom 0 -< x
+--     switchBlip <- inB 4     -< 100
+--     id -< (sums, switchBlip)
+--
+-- -- alternatively
+-- a1' = sumFrom 0 &&& (tagBlips 100 . inB 4)
 -- @
 --
--- @nextAuto@ continually counts upwards from the given initial value @i0@.
--- Then, on the third step, the 'Blip' stream emits with the value of the
--- counter plus ten.
---
--- >>> let (res0, _) = stepAutoN' 5 (nextAuto 0) ()
--- >>> res0
--- [("0", NoBlip), ("1", NoBlip), ("2", Blip 13), ("3", NoBlip), ("4", NoBlip)]
---
--- Let's see what happens when we wrap it with 'switchFromF' and an initial
--- 'Auto' of @'nextAuto' 0@:
+-- >>> streamAuto' (switchFrom_ pure a1) [1..10]
+-- [1,3,6,10,100,100,100,100,100,100]
 --
 -- @
---     a :: Auto' () String
---     a = switchFromF nextAuto (nextAuto 0)
+-- a2 :: Auto' Int (Int, Blip ())
+-- a2 = proc x -> do
+--     sums       <- sumFrom 0 -< x
+--     switchBlip <- inB 3     -< ()
+--     id -< (c, switchBlip)
+--
+-- -- alternatively
+-- a2' = sumFrom 0 &&& (tagBlips () . inB 3)
 -- @
 --
--- >>> let (res, _) = stepAutoN' 10 a ()
--- >>> res
--- [ "0", "1", "2", "12", "13", "14", "24", "25", "26", "36", "37"]
+-- >>> streamAuto' (switchFromF (const a2) a2) [101..112]
+-- [ 101, 203, 306  -- first 'sumFrom', on first three items
+-- , 104, 209, 315  -- second 'sumFrom', on second three items
+-- , 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
+-- , 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
 --
--- Every three steps, the the 'Auto' is replaced by a new one, skipping
--- ten steps ahead.  First it behaves like the first field of the output of
--- @nextAuto 0@, then like @nextAuto 12@, then like @nextAuto 24@, etc.
+-- Or, if you're only ever going to use @a2@ in switching form:
 --
--- This is a more limited (but serializable) version of 'switchFrom_',
--- where you know the form of all the 'Auto's you might be switching to in
--- the future, and can generate them with a function conceived ahead of
--- time.
+-- @
+-- a2s :: Auto' Int Int
+-- a2s = switchFromF (const a2s) $ proc x -> do
+--           sums       <- sumFrom 0 -< x
+--           switchBlip <- inB 3     -< ()
+--           id -< (c, swichBlip)
+--
+-- -- or
+-- a2s' = switchFromF (const a2s')
+--      $ sumFrom 0 &&& (tagBlips () . inB 3)
+-- @
+--
+-- >>> streamAuto' a2s [101..112]
+-- [101, 203, 306, 104, 209, 315, 107, 215, 324, 110, 221, 333]
+--
+-- As you can see, all of the simple examples from 'switchFrom_' can be
+-- implemented in 'switchFromF'...and so can most real-life examples.  The
+-- advantage is that 'switchFromF' is serializable, and 'switchFrom_' is
+-- not.
+--
+-- Note that for the examples above, instead of using 'const', we could
+-- have actually used the input parameter to create a new 'Auto' based on
+-- what we outputted.
 --
 switchFromF :: (Monad m, Serialize c)
             => (c -> Auto m a (b, Blip c))  -- ^ function to generate the
                                             --   next 'Auto' to behave like
             -> Auto m a (b, Blip c)         -- ^ initial 'Auto'.  the @b@
                                             --   is the output, and the
-                                            --   'Blip' stream triggers new
+                                            --   blip stream triggers new
                                             --   'Auto's to replace this
                                             --   one.
             -> Auto m a b
@@ -337,15 +367,15 @@ switchFromF f = go Nothing
         s   = put mz
            *> saveAuto a
         t x = do
-          Output (y, ez) a' <- stepAuto a x
+          ((y, ez), a') <- stepAuto a x
           return $ case ez of
-            Blip z -> Output y (go (Just z) (f z))
-            NoBlip -> Output y (go mz       a'   )
+            Blip z -> (y, go (Just z) (f z))
+            NoBlip -> (y, go mz       a'   )
     l a = do
       mz <- get
       case mz of
-        Just z  -> go mz <$> loadAuto (f z)
-        Nothing -> go mz <$> loadAuto a
+        Just z  -> go mz <$> resumeAuto (f z)
+        Nothing -> go mz <$> resumeAuto a
 
 -- | The non-serializing/non-resuming version of 'switchFromF'.
 switchFromF_ :: Monad m
@@ -353,44 +383,51 @@ switchFromF_ :: Monad m
                                             --   next 'Auto' to behave like
              -> Auto m a (b, Blip c)        -- ^ initial 'Auto'.  the @b@
                                             --   is the output, and the
-                                            --   'Blip' stream triggers new
+                                            --   blip stream triggers new
                                             --   'Auto's to replace this
                                             --   one.
              -> Auto m a b
 switchFromF_ f a0 = mkAutoM_ $ \x -> do
-                                 Output (y, ez) a0' <- stepAuto a0 x
+                                 ((y, ez), a0') <- stepAuto a0 x
                                  return $ case ez of
-                                   Blip z -> Output y (switchFromF_ f (f z))
-                                   NoBlip -> Output y (switchFromF_ f a0')
+                                   Blip z -> (y, switchFromF_ f (f z))
+                                   NoBlip -> (y, switchFromF_ f a0'  )
 
 -- | Gives an 'Auto' the ability to "reset" itself on command
 --
 -- Basically acts like @'fmap' 'fst'@
 --
 -- @
---     fmap fst :: Monad m => Auto m a (b, Blip c) -> Auto m a b
+-- fmap fst :: Monad m => Auto m a (b, Blip c) -> Auto m a b
 -- @
 --
--- But...whenever the 'Blip' stream emits..."resets" the 'Auto' back to the
+-- But...whenever the blip stream emits..."resets" the 'Auto' back to the
 -- original state, as if nothing ever happened.
 --
--- Here is a counter that attempts to resets itself every three steps:
+-- Note that this resetting happens on the step /after/ the blip stream
+-- emits.
+--
+-- Here is a summer that sends out a signal to reset itself whenever the
+-- cumulative sum reaches 10 or higher:
 --
 -- @
---     resetCounter :: Auto' () (Int, Blip ())
---     resetCounter = count &&& inB 3
+-- limitSummer :: Auto' Int (Int, Blip ())
+-- limitSummer = (id &&& became (>= 10)) . sumFrom 0
 -- @
 --
 -- And now we throw it into 'resetFrom':
 --
 -- @
---     resettingCounter :: Auto' () Int
---     resettingCounter = resetFrom resetCounter
+-- resettingSummer :: Auto' Int Int
+-- resettingSummer = resetFrom limitSummer
 -- @
 --
--- >>> let (res, _) = stepAutoN' 11 resettingCounter ()
--- >>> res
--- [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1]
+-- >>> streamAuto' resettingSummer [1..10]
+-- [ 1, 3, 6, 10    -- and...reset!
+-- , 5, 11          -- and...reset!
+-- , 7, 15          -- and...reset!
+-- , 9, 19 ]
+--
 resetFrom :: Monad m
           => Auto m a (b, Blip c)   -- ^ The self-resetting 'Auto'
           -> Auto m a b
@@ -398,35 +435,40 @@ resetFrom a = switchFromF (const a') a'
   where
     a' = second (tagBlips ()) . a
 
--- | Like 'switchOn_', @'switchOnF' f a0@ is like a little 'Auto' box
--- wrapping and running an 'Auto'.  It takes in both an input and a 'Blip'
--- stream of @c@'s.  It behaves just like the internal @'Auto' m a b@,
--- and initially behaves like @a0@, until the 'Blip' stream emits.
+-- | Essentially identical to 'switchOn_', except instead of taking in
+-- a blip stream of new 'Auto's to put into the box, takes a blip stream
+-- of @c@ --- and 'switchOnF' uses the @c@ to create the new 'Auto' to put
+-- in the box.
 --
--- Then, it swaps the 'Auto' for a /new/ one, given by the function @f@.
--- @f@ is applied to the @c@ that the stream emits, and that new 'Auto' is
--- placed into the box and is immediately run on that same step.
---
--- In the following example we are using just @'iterate' (+1)@ for our
--- "next 'Auto'" function, and triggering it with a 'Blip' stream that
--- counts up from 0.
+-- Here is the equivalent of the two examples from 'switchOn_',
+-- implemented with 'switchOnF'; see the documentatino for 'switchOn_'
+-- for a description of what they are to do.
 --
 -- @
--- nextAuto :: Int -> Auto' () Int
--- nextAuto = iterator (+1)
+-- newAuto :: Int -> Auto' Int Int
+-- newAuto 1 = sumFrom 0
+-- newAuto 2 = productFrom 1
+-- newAuto 3 = count
+-- newAuto _ = error "Do you expect rigorous error handling from a toy example?"
 --
--- triggerer :: Auto' () (Blip Int)
--- triggerer = stretchB 3 (iterator (+10) 0)
---
--- a :: Auto' () Int
--- a = proc _ -> do
---     triggers <- triggerer -< ()
---     switchOnF nextAuto (nextAuto 0) -< ((), triggers)
+-- a :: Auto' Int Int
+-- a = proc i -> do
+--     blipAutos <- eachAt 4 [1,2,3] -< ()
+--     switchOnF_ newAuto (pure 0) -< (i, blipAutos)
 -- @
 --
--- >>> let (res, _) = stepAutoN' 10 a ()
--- >>> res
--- [0,1,2,10,11,12,20,21,22,30,31]
+-- >>> streamAuto' a [1..12]
+-- [ 1,  3,   6           -- output from sumFrom 0
+-- , 4, 20, 120           -- output from productFrom 1
+-- , 0,  1,   2, 3, 4, 5] -- output from count
+--
+-- Instead of sending in the "replacement 'Auto'", sends in a number, which
+-- corresponds to a specific replacement 'Auto'.
+--
+-- As you can see, all of the simple examples from 'switchOn_' can be
+-- implemented in 'switchOnF'...and so can most real-life examples.  The
+-- advantage is that 'switchOnF' is serializable, and 'switchOn_' is
+-- not.
 --
 switchOnF :: (Monad m, Serialize c)
           => (c -> Auto m a b)    -- ^ function to generate the next 'Auto'
@@ -440,18 +482,18 @@ switchOnF f = go Nothing
     l a0 = do
       mz <- get
       case mz of
-        Just z  -> go mz <$> loadAuto (f z)
-        Nothing -> go mz <$> loadAuto a0
+        Just z  -> go mz <$> resumeAuto (f z)
+        Nothing -> go mz <$> resumeAuto a0
     s mz a0 = put mz
            *> saveAuto a0
     t mz a0 (x, ez) =
       case ez of
         NoBlip -> do
-          Output y a0' <- stepAuto a0 x
-          return (Output y (go mz a0'))
+          (y, a0') <- stepAuto a0 x
+          return (y, go mz a0')
         Blip z -> do
-          Output y a1  <- stepAuto (f z) x
-          return (Output y (go (Just z) a1))
+          (y, a1)  <- stepAuto (f z) x
+          return (y, go (Just z) a1)
 
 -- | The non-serializing/non-resuming version of 'switchOnF'.
 switchOnF_ :: Monad m
@@ -463,22 +505,26 @@ switchOnF_ :: Monad m
 switchOnF_ f a0 = mkAutoM_ $ \(x, ez) ->
                               case ez of
                                 NoBlip -> do
-                                  Output y a0' <- stepAuto a0 x
-                                  return (Output y (switchOnF_ f a0'))
+                                  (y, a0') <- stepAuto a0 x
+                                  return (y, switchOnF_ f a0')
                                 Blip z -> do
-                                  Output y a1 <- stepAuto (f z) x
-                                  return (Output y (switchOnF_ f a1))
+                                  (y, a1) <- stepAuto (f z) x
+                                  return (y, switchOnF_ f a1)
 
 -- | Takes an innocent 'Auto' and wraps a "reset button" around it.  It
--- behaves just like the original 'Auto' at first, but when the 'Blip'
+-- behaves just like the original 'Auto' at first, but when the input blip
 -- stream emits, the internal 'Auto' is reset back to the beginning.
 --
--- Here we have 'count', being reset every five steps:
+-- Here we have 'sumFrom' wrapped around a reset button, and we send
+-- in a blip stream that emits every 4 steps; so every 4th step, the whole
+-- summer resets.
 --
--- >>> let a = resetOn count . (pure () &&& every 5)
--- >>> let (res, _) = stepAutoN' 15 a ()
--- >>> res
--- [0,1,2,3,0,1,2,3,4,0,1,2,3,4,0]
+-- >>> let a = resetOn (sumFrom 0) . (id &&& every 4)
+-- >>> streamAuto' a [101..112]
+-- [ 101, 203, 306
+-- , 104, 209, 315  -- resetted!
+-- , 107, 215, 324  -- resetted!
+-- , 110, 221, 333] -- resetted!
 resetOn :: Monad m
         => Auto m a b   -- ^ 'Auto' to repeatedly reset
         -> Auto m (a, Blip c) b

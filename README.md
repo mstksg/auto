@@ -3,6 +3,61 @@ Auto
 
 (Working name)
 
+Check it out!
+-------------
+
+~~~haskell
+-- Let's impliement a PID feedback controller over a black box system.
+
+-- We represent a system as `System`, an `Auto` that takes stream of `Double`s
+-- as input and transforms it into a stream of `Double`s as output.  A
+-- `System IO` might do IO in the process of creating its ouputs, for
+-- instance.
+--
+type System m = Auto m Double Double
+
+-- A PID controller adjusts the input to the black box system until the response
+-- matches the target.  It does this by adjusting the input based on the
+-- current error, the cumulative sum, and the consecutative differences.
+--
+-- See http://en.wikipedia.org/wiki/PID_controller
+--
+-- Here, we just lay out the "concepts"/time-varying values in our system as a
+-- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
+--
+pid :: (Double, Double, Double) -> System m -> System m
+pid (kp, ki, kd) blackbox = proc target -> do
+    rec --  err :: Double
+        --  the difference of the response from the target
+        let err        = target - response
+
+        -- cumulativeSum :: Double
+        -- the cumulative sum of the errs
+        cumulativeSum <- sumFrom 0 -< err
+
+        -- changes :: Maybe Double
+        -- the consecutive differences of the errors, with 'Nothing' at first.
+        changes       <- deltas    -< err
+
+        --  adjustment :: Double
+        --  the adjustment term, from the PID algorithm
+        let adjustment = kp * err
+                       + ki * cumulativeSum
+                       + kd * fromMaybe 0 changes
+
+        -- the control input is the cumulative sum of the adjustments
+        control  <- sumFromD 0 -< adjustment
+
+        -- the response of the system, feeding the control into the blackbox
+        response <- blackbox   -< control
+
+    id -< response
+~~~
+
+
+What is it?
+-----------
+
 **Auto** is a Haskell DSL/library providing declarative, compositional,
 denotative semantics for discrete-step, locally stateful, interactive
 programs, games, and automations, with implicitly derived serialization.
@@ -81,25 +136,27 @@ programs, games, and automations, with implicitly derived serialization.
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
 
-A good place to get started is with [the tutorial][tutorial], which is a part
-of this package directory and also on github at the above link.  The current
-development documentation server is found at <https://mstksg.github.io/auto>.
-You can find examples and demonstrations in the [auto-examples][] repo on
-github; they are constantly being kept up-to-date with the currently super
-unstable API.
+Intrigued?  Excited?  Start at [the tutorial][tutorial]!
+
+[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
+
+It's a part of this package directory and also on github at the above link.
+The current development documentation server is found at
+<https://mstksg.github.io/auto>. You can find examples and demonstrations in
+the [auto-examples][] repo on github; they are constantly being kept
+up-to-date with the currently super unstable API.
 
 [auto-examples]: https://github.com/mstksg/auto-examples
-[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
 
 More examples and further descriptions will appear here as development
 continues.
 
-## Support
+### Support
 
 Though this library is not officially released yet, the official support and
 discussion channel is #haskell-auto on freenode.  You can also usually find me
-as *jle`* on #haskell and #haskell-game.  Also, contributions to documentation
-and tests are welcome! :D
+(the maintainer and developer) as *jle`* on #haskell and #haskell-game.  Also,
+contributions to documentation and tests are welcome! :D
 
 Why Auto?
 ---------
@@ -207,3 +264,119 @@ superior semantics and set of concepts for working in such contexts.
 
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
+
+A chatbot
+---------
+
+~~~haskell
+import qualified Data.Map as M
+import Data.Map (Map)
+
+-- Let's build a big chat bot by combining small chat bots.
+-- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
+-- message, and timestamp at every step; the result is a "blip stream" that
+-- emits with messages whenever it wants to respond.
+
+type Message   = String
+type Nick      = String
+type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
+
+-- Keeps track of last time a nick has spoken, and allows queries
+seenBot :: Monad m => ChatBot m
+seenBot = proc (nick, msg, time) -> do
+    -- seens :: Map Nick UTCTime
+    -- Map containing last time each nick has spoken
+    seens <- accum addToMap M.empty -< (nick, time)
+
+    -- query :: Blip Nick
+    -- blip stream emits whenever someone queries for a last time seen;
+    -- emits with the nick queried for
+    query <- emitJusts getRequest -< words msg
+
+        -- a function to get a response from a nick query
+    let respond :: Nick -> [Message]
+        respond qry = case M.lookup qry seens of
+                        Just t  -> [qry ++ " last seen at " ++ show t ++ "."]
+                        Nothing -> ["No record of " ++ qry ++ "."]
+
+    -- output is, whenever the `query` stream emits, map `respond` to it.
+    id -< respond <$> query
+  where
+    addToMap :: Map Nick UTCTime -> (Nick, UTCTime) -> Map Nick UTCTime
+    addToMap mp (nick, time) = M.insert nick time mp
+    getRequest ("@seen":request:_) = Just request
+    getRequest _                   = Nothing
+
+-- Users can increase and decrease imaginary internet points for other users
+karmaBot :: Monad m => ChatBot m
+karmaBot = proc (_, msg, _) -> do
+    -- karmaBlip :: Blip (Nick, Int)
+    -- blip stream emits when someone modifies karma, with nick and increment
+    karmaBlip <- emitJusts getComm -< msg
+
+    -- karmas :: Map Nick Int
+    -- keeps track of the total karma for each user by updating with karmaBlip
+    karmas    <- scanB updateMap M.empty -< karmaBlip
+
+    -- function to look up a nick, if one is asked for
+    let lookupKarma :: Nick -> [Message]
+        lookupKarma nick = let karm = M.findWithDefault 0 nick karmas
+                           in  [nick ++ " has a karma of " ++ show karm ++ "."]
+
+    -- output is, whenever `karmaBlip` stream emits, look up the result
+    id -< lookupKarma . fst <$> karmaBlip
+  where
+    getComm :: String -> Maybe (Nick, Int)
+    getComm msg = case words msg of
+                    "@addKarma":nick:_ -> Just (nick, 1 )
+                    "@subKarma":nick:_ -> Just (nick, -1)
+                    "@karma":nick:_    -> Just (nick, 0)
+                    _                  -> Nothing
+    updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
+    updateMap mp (nick, change) = M.insertWith (+) nick change mp
+
+-- Echos inputs prefaced with "@echo"...unless flood limit has been reached
+echoBot :: Monad m => ChatBot m
+echoBot = proc (nick, msg, time) -> do
+    -- echoBlip :: Blip [Message]
+    -- blip stream emits when someone wants an echo, with the message
+    echoBlip   <- emitJusts getEcho  -< msg
+
+    -- newDayBlip :: Blip UTCTime
+    -- blip stream emits whenever the day changes
+    newDayBlip <- onChange           -< utctDay time
+
+    -- echoCounts :: Map Nick Int
+    -- `countEchos` counts the number of times each user asks for an echo, and
+    -- `resetOn` makes it "reset" itself whenever `newDayBlip` emits.
+    echoCounts <- resetOn countEchos -< (nick <$ echoBlip, newDayBlip)
+
+        -- has this user flooded today...?
+    let hasFlooded = M.lookup nick echoCounts > Just floodLimit
+        -- output :: Blip [Message]
+        -- blip stream emits whenever someone asks for an echo, limiting flood
+        output | hasFlooded = ["No flooding!"] <$ echoBlip
+               | otherwise  = echoBlip
+
+    -- output is the `output` blip stream
+    id -< output
+  where
+    floodLimit = 5
+    getEcho msg = case words msg of
+                    "@echo":xs -> Just [unwords xs]
+                    _          -> Nothing
+    countEchos :: Auto m Nick (Map Nick Int)
+    countEchos = scanB countingFunction M.empty
+    countingFunction :: Map Nick Int -> Nick -> Map Nick Int
+    countingFunction mp nick = M.insertWith (+) nick 1 mp
+
+-- Our final chat bot is the `mconcat` of all the small ones...it forks the
+-- input between all three, and mconcats the outputs.
+chatBot :: Monad m => ChatBot m
+chatBot = mconcat [seenBot, karmaBot, echoBot]
+
+-- Here, our chatbot will automatically serialize itself to "data.dat"
+-- whenever it is run.
+chatBotSerialized :: ChatBot IO
+chatBotSerialized = serializing' "data.dat" chatBot
+~~~
