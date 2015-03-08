@@ -9,10 +9,11 @@ Check it out!
 ~~~haskell
 -- Let's impliement a PID feedback controller over a black box system.
 
--- We represent a system as an `Auto` that takes stream of `Double`s as input
--- and a stream of `Double`s as output.  A `System IO` might do IO in the
--- process of creating its results.
-
+-- We represent a system as `System`, an `Auto` that takes stream of `Double`s
+-- as input and transforms it into a stream of `Double`s as output.  A
+-- `System IO` might do IO in the process of creating its ouputs, for
+-- instance.
+--
 type System m = Auto m Double Double
 
 -- A PID controller adjusts the input to the black box system until the response
@@ -23,7 +24,7 @@ type System m = Auto m Double Double
 --
 -- Here, we just lay out the "concepts"/time-varying values in our system as a
 -- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
-
+--
 pid :: (Double, Double, Double) -> System m -> System m
 pid (kp, ki, kd) blackbox = proc target -> do
     rec --  error :: Double
@@ -47,7 +48,7 @@ pid (kp, ki, kd) blackbox = proc target -> do
         -- the control input is the cumulative sum of the adjustments
         control  <- sumFromD 0 -< adjustment
 
-        --  the response of the system, feeding the control into the blackbox
+        -- the response of the system, feeding the control into the blackbox
         response <- blackbox   -< control
 
     id -< response
