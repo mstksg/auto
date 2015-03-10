@@ -435,22 +435,42 @@ bindRead :: (Monad m, Read a)
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 bindRead = lmap readMaybe . bindI
 
+-- | A generalized version of 'runOnChan' that can run on any @'Auto' m@;
+-- all that is required is a natural transformation from the underyling
+-- 'Monad' @m@ to 'IO'.
 runOnChanM :: Monad m
-           => (forall c. m c -> IO c)
-           -> (b -> IO Bool)          -- ^ function to "handle" each succesful 'Auto' output
-           -> Chan a
-           -> Auto m a b
-           -> IO ()
+           => (forall c. m c -> IO c) -- ^ natural transformation from the
+                                      --     underling 'Monad' of the
+                                      --     'Auto' to 'IO'
+           -> (b -> IO Bool)          -- ^ function to "handle" each
+                                      --     succesful 'Auto' output;
+                                      --     result is whether or not to
+                                      --     continue.
+           -> Chan a                  -- ^ 'Chan' queue to pull input from.
+           -> Auto m a b              -- ^ 'Auto' to run
+           -> IO (Auto m a b)         -- ^ final 'Auto' after it all, when
+                                      --     the handle resturns 'False'
 runOnChanM nt f chan = go
   where
     go a0 = do
       x       <- readChan chan
       (y, a1) <- nt $ stepAuto a0 x
       cont <- f y
-      when cont $ go a1
+      if cont
+        then go a1
+        else return a1
 
-runOnChan :: (b -> IO Bool)
-          -> Chan a
-          -> Auto' a b
-          -> IO ()
+-- | Runs the 'Auto'' in IO with inputs read from a 'Chan' queue, from
+-- "Control.Concurrency.Chan".  It'll block until the 'Chan' has a new
+-- input, run the 'Auto' with the received input, process the output with
+-- the given handling function, and start over if the handling function
+-- returns 'True'.
+runOnChan :: (b -> IO Bool)           -- ^ function to "handle" each
+                                      --     succesful 'Auto' output;
+                                      --     result is whether or not to
+                                      --     continue.
+           -> Chan a                  -- ^ 'Chan' queue to pull input from.
+           -> Auto' a b               -- ^ 'Auto'' to run
+           -> IO (Auto' a b)          -- ^ final 'Auto' after it all, when
+                                      --     the handle resturns 'False'
 runOnChan = runOnChanM (return . runIdentity)

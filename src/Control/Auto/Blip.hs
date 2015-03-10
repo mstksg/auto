@@ -506,10 +506,19 @@ dropWhileB p = mkState f False
                        | otherwise = (e      , True )
     f _          False             = (NoBlip, False)
 
+-- | Takes in a blip stream and outputs a blip stream where each emission
+-- is delayed/lagged by one step.
+--
+-- >>> streamAuto' (emitOn (\x -> x `mod` 3 == 0)) [1..9]
+-- >>> [NoBlip, NoBlip, Blip 3, NoBlip, NoBlip, Blip 6, NoBlip, NoBlip, Blip 9]
+-- >>> streamAuto' (lagBlips . emitOn (\x -> x `mod` 3 == 0)) [1..9]
+-- >>> [NoBlip, NoBlip, NoBlip, Blip 3, NoBlip, NoBlip, Blip 6, NoBlip, NoBlip]
+--
 lagBlips :: Serialize a => Auto m (Blip a) (Blip a)
 lagBlips = mkState (\x s -> (s, x)) NoBlip
 
-lagBlips_ :: Serialize a => Auto m (Blip a) (Blip a)
+-- | The non-serializing/non-resuming version of 'lagBlips'.
+lagBlips_ :: Auto m (Blip a) (Blip a)
 lagBlips_ = mkState_ (\x s -> (s, x)) NoBlip
 
 -- | Accumulates all emissions in the incoming blip stream with
