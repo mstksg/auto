@@ -297,6 +297,12 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
 -- >>> streamAuto' bar [1..5]
 -- ["hey1", "hey2", "hey3", "hey4", "hey5"]
 --
+-- Note that this version serializes the given @r@ environment, so that
+-- every time the 'Auto' is reloaded/resumed, it resumes with the
+-- originally given @r@ environment, ignoring whatever @r@ is given to it
+-- when trying to resume it.  If this is not the behavior you want, use
+-- 'sealReader_'.
+--
 sealReader :: (Monad m, Serialize r)
            => Auto (ReaderT r m) a b
            -> r
@@ -307,7 +313,10 @@ sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                              (y, a') <- runReaderT (stepAuto a x) r
                              return (y, sealReader a' r)
 
--- | The non-resuming/non-serializing version of 'sealReader'.
+-- | The non-resuming/non-serializing version of 'sealReader'.  Does not
+-- serialize/reload the @r@ environment, so that whenever you "resume" the
+-- 'Auto', it uses the new @r@ given when you are trying to resume, instead
+-- of loading the originally given one.
 sealReader_ :: Monad m
             => Auto (ReaderT r m) a b
             -> r

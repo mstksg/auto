@@ -96,15 +96,16 @@ module Control.Auto (
   -- ** Blips
   , emitJusts
   , emitOn
-  , fromBlipsWith
   , fromBlips
+  , fromBlipsWith
   -- * Running
   , interactAuto
   , interactRS
   -- * Re-exports
-  , module Control.Category
   , module Control.Applicative
   , module Control.Arrow
+  , module Control.Category
+  , module Data.Functor.Identity
   , module Data.Semigroup
   ) where
 
@@ -118,7 +119,8 @@ import Control.Auto.Interval
 import Control.Auto.Process
 import Control.Auto.Run
 import Control.Auto.Serialize
+import Control.Auto.Switch
 import Control.Auto.Time
 import Control.Category
+import Data.Functor.Identity
 import Data.Semigroup
-import Control.Auto.Switch

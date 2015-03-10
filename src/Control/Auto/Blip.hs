@@ -54,6 +54,8 @@ module Control.Auto.Blip (
   , (&>)
   , once
   , notYet
+  , lagBlips
+  , lagBlips_
   , filterB
   , mapMaybeB
   , takeB
@@ -106,7 +108,7 @@ infixl 5 &>
 -- as input and outputs a *blip stream* that occasionally emits with a @b@.
 -- An @'Auto'' ('Blip' a) b@ is an 'Auto'' that takes a *blip stream* that
 -- occasionally emits with a @a@ and outputs a stream of @b@'s.
--- 
+--
 -- If an 'Auto' takes or outputs a "blip stream", it comes with some
 -- "semantic" contracts on to how the stream behaves.  The main contract is
 -- that your blip stream should only output on (meaningfully) "isolated"
@@ -504,6 +506,12 @@ dropWhileB p = mkState f False
                        | otherwise = (e      , True )
     f _          False             = (NoBlip, False)
 
+lagBlips :: Serialize a => Auto m (Blip a) (Blip a)
+lagBlips = mkState (\x s -> (s, x)) NoBlip
+
+lagBlips_ :: Serialize a => Auto m (Blip a) (Blip a)
+lagBlips_ = mkState_ (\x s -> (s, x)) NoBlip
+
 -- | Accumulates all emissions in the incoming blip stream with
 -- a "folding function", with a given starting value.  @b -> a -> b@, with
 -- a starting @b@, gives @'Auto' m ('Blip' a) ('Blip' b)@.
@@ -659,9 +667,9 @@ onChange_ :: Eq a => Auto m a (Blip a)
 onChange_ = mkState_ _onChangeF Nothing
 
 _onChangeF :: Eq a => a -> Maybe a -> (Blip a, Maybe a)
-_onChangeF x Nothing               = (NoBlip , Just x)
-_onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
-                       | otherwise = (Blip x', Just x')
+_onChangeF x Nothing               = (NoBlip, Just x )
+_onChangeF x (Just x') | x == x'   = (NoBlip, Just x')
+                       | otherwise = (Blip x, Just x )
 
 -- | An 'Auto' that emits whenever it receives a 'Just' input, with the
 -- value inside the 'Just'.
@@ -676,23 +684,23 @@ _onChangeF x (Just x') | x == x'   = (NoBlip , Just x')
 onJusts :: Auto m (Maybe a) (Blip a)
 onJusts = mkFunc (maybe NoBlip Blip)
 
--- | @'fromBlipsWith' d@ is an 'Auto' that decomposes the incoming blip
+-- | @'fromBlips' d@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
 -- outputs the emitted value when it does.
-fromBlipsWith :: a  -- ^ the "default value" to output when the input is not
-                    --   emitting.
-              -> Auto m (Blip a) a
-fromBlipsWith d = mkFunc (blip d id)
+fromBlips :: a  -- ^ the "default value" to output when the input is not
+                --   emitting.
+          -> Auto m (Blip a) a
+fromBlips d = mkFunc (blip d id)
 
--- | @'fromBlips' d f@ is an 'Auto' that decomposes the incoming blip
+-- | @'fromBlipsWith' d f@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
 -- outputs the result of applying @f@ to the emitted value when it does.
-fromBlips :: b          -- ^ the 'default value" to output when the input is not
-                        --   emitting.
-          -> (a -> b)   -- ^ the function to apply to the emitted value
-                        --   whenever input is emitting.
-          -> Auto m (Blip a) b
-fromBlips d f = mkFunc (blip d f)
+fromBlipsWith :: b          -- ^ the 'default value" to output when the input is not
+                            --   emitting.
+              -> (a -> b)   -- ^ the function to apply to the emitted value
+                            --   whenever input is emitting.
+              -> Auto m (Blip a) b
+fromBlipsWith d f = mkFunc (blip d f)
 
 
 -- | @'holdWith' y0@ is an 'Auto' whose output is always the /most recently

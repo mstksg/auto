@@ -52,20 +52,43 @@
 --
 -- @
 -- 'Auto' ('Rand' g) a b
+-- 'Auto' ('RandT' g m) a b
 -- @
 --
 -- In this case, if you wanted to pull a random number, you could do:
 --
 -- @
 -- 'effect' 'random' :: ('Random' r, 'RandomGen' g) => 'Auto' ('Rand' g) a r
+-- 'effect' 'random' :: ('Random' r, 'RandomGen' g) => 'Auto' ('RandT' g m) a r
 -- @
 --
 -- Which pulls a random @r@ from "thin air" (from the internal 'Rand'
--- monad)...however, you lose a great deal of determinism from this, as
--- your 'Auto's are no longer deterministic with a given seed...and
--- resumability becomes dependent on starting everything with the same seed
--- every time you re-load your 'Auto'.  Also, 'Auto''s are parallelizable,
--- while @'Auto' ('Rand' g)@s are not.
+-- monad).
+--
+-- However, you lose a great deal of determinism from this method, as your
+-- 'Auto's are no longer deterministic with a given seed...and resumability
+-- becomes dependent on starting everything with the same seed every time
+-- you re-load your 'Auto'.  Also, 'Auto''s are parallelizable, while
+-- @'Auto' ('Rand' g)@s are not.
+--
+-- As a compromise, you can then "seal" away the stateful part with
+-- 'sealState' and 'hoistA':
+--
+-- @
+-- sealRandom :: 'Monad' m => 'Auto' ('RandT' g m) a b -> g -> 'Auto' m a b
+-- sealRandom a0 = 'sealState' . 'hoistA' ('StateT' . 'runRandT')
+--
+-- sealRandom' :: 'Auto' ('Rand' g) a b -> g -> 'Auto'' a b
+-- sealRandom' = sealRandom
+-- @
+--
+-- Where 'hoistA' turns an @'Auto' ('RandT' g m)@ into an @'Auto' m@.
+--
+-- In this way, you can run any 'Auto' under 'Rand' or 'RandT' as if it was
+-- a normal 'Auto' "without" underlying randomness.  (These functions
+-- aren't given here so that this library doesn't incurr a dependency on
+-- /MonadRandom/). This lets you compose your sequential/non-parallel parts
+-- in 'Rand' and use it as a part of an 'Auto''.
 --
 -- The other two generators given are for useful random processes you might
 -- run into.  The first is a 'Blip' stream that emits at random times with
@@ -83,6 +106,13 @@ module Control.Auto.Process.Random (
   , randsM
   , stdRandsM
   , randsM_
+  -- * Lifting/wrapping random functions
+  , arrRand
+  , arrRandM
+  , arrRandStd
+  , arrRandStdM
+  , arrRand_
+  , arrRandM_
   -- * Random processes
   -- ** Bernoulli (on/off) processes
   , bernoulli
@@ -216,6 +246,41 @@ randsM_ :: (RandomGen g, Monad m)
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
+
+arrRand :: (Serialize g, RandomGen g)
+        => (a -> g -> (b, g))
+        -> g
+        -> Auto m a b
+arrRand = mkState
+
+arrRandM :: (Monad m, Serialize g, RandomGen g)
+         => (a -> g -> m (b, g))
+         -> g
+         -> Auto m a b
+arrRandM = mkStateM
+
+arrRandStd :: (a -> StdGen -> (b, StdGen))
+           -> StdGen
+           -> Auto m a b
+arrRandStd = mkState' (read <$> get) (put . show)
+
+arrRandStdM :: (a -> StdGen -> m (b, StdGen))
+            -> StdGen
+            -> Auto m a b
+arrRandStdM = mkStateM' (read <$> get) (put . show)
+
+arrRand_ :: RandomGen g
+         => (a -> g -> (b, g))
+         -> g
+         -> Auto m a b
+arrRand_ = mkState_
+
+arrRandM_ :: RandomGen g
+          => (a -> g -> m (b, g))
+          -> g
+          -> Auto m a b
+arrRandM_ = mkStateM_
+
 
 -- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
 -- a process of sequential independent trials each with a success of
