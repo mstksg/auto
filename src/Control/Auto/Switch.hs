@@ -103,6 +103,15 @@ infixr 1 -?>
 -- the above represents an infinite loop between outputting "hello" and
 -- outputting "world".
 --
+-- For serialization, an extra byte cost is incurred per invocation of
+-- '-->'.  For cyclic switches like @a3@, every time the cycle "completes",
+-- it adds another layer of '-->' byte costs.  For example, initially,
+-- saving @a3@ incurs a cost for the two '-->'s.  After @a3@ loops once,
+-- it incurs a cost for another two '-->'s, so it costs four '-->'s.  After
+-- @a3@ loops another time, it is like a cost of six '-->'s.  So be aware
+-- that for cyclic bindings like @a3@, space for serialization grows at
+-- O(n).
+--
 -- By the way, it might be worth contrasting this with '<|!>' and '<|?>'
 -- from "Control.Auto.Interval", which have the same type signatures.
 -- Those alternative-y operators always /feed the input to both sides/,
@@ -134,8 +143,8 @@ a1 -?> a2 = mkAutoM l s t
       flag <- get
       if flag
         then resumeAuto (switched a2)
-        else liftA2 (-?>) (resumeAuto a1) (resumeAuto a2)
-    s = put False *> saveAuto a1 *> saveAuto a2
+        else (-?> a2) <$> resumeAuto a1
+    s = put False *> saveAuto a1
     t x = do
       (y1, a1') <- stepAuto a1 x
       case y1 of

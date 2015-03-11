@@ -9,6 +9,9 @@ Check it out!
 ~~~haskell
 -- Let's impliement a PID feedback controller over a black box system.
 
+import Control.Auto
+import Prelude hiding ((.), id)
+
 -- We represent a system as `System`, an `Auto` that takes stream of `Double`s
 -- as input and transforms it into a stream of `Double`s as output.  A
 -- `System IO` might do IO in the process of creating its ouputs, for
@@ -271,6 +274,8 @@ A chatbot
 ~~~haskell
 import qualified Data.Map as M
 import Data.Map (Map)
+import Control.Auto
+import Prelude hiding ((.), id)
 
 -- Let's build a big chat bot by combining small chat bots.
 -- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,

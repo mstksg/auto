@@ -85,8 +85,13 @@ module Control.Auto (
   -- * Common 'Auto's and combinators
   -- ** Processes
   , sumFrom
+  , sumFrom_
+  , sumFromD
+  , sumFromD_
   , productFrom
+  , productFrom_
   , mappender
+  , mappender_
   , mappendFrom
   , lastVal
   , lastVal_

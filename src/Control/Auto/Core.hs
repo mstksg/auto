@@ -177,7 +177,9 @@ import Prelude hiding         ((.), id, sequence)
 -- information on this.
 --
 -- This type also contains information on its own serialization, so you can
--- serialize and re-load the internal state to binary or disk.
+-- serialize and re-load the internal state to binary or disk.  See the
+-- "serialization" section in the documentation for "Control.Auto.Core", or
+-- the documentation for 'mkAutoM' for more details.
 --
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
@@ -349,6 +351,17 @@ forceSerial a = case a of
 -- and @'sumFrom' 0@ all have the same "blueprint" --- their internal
 -- states are of the same structure.
 --
+-- Now, the /magic/ of this all is that combining and transforming 'Auto's
+-- with the combinators in this library will also /compose serialization
+-- strategies/ .... complex 'Auto's and combinations/chains of 'Auto's
+-- create serialization strategies "for free".  The
+-- <https://github.com/mstksg/auto-examples auto-examples> repo has a lot
+-- of examples that use this  to great effect, serializing entire
+-- applications and entire chat bots without writing any serialization
+-- code; it all does it "by itself".  Be sure to read about the caveats in
+-- the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>.
+--
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
 -- have internal state, yet ignore it when saving/loading.  So, saving it
 -- actaully saves no state, and "resuming" it really doesn't do anything.
@@ -364,6 +377,15 @@ forceSerial a = case a of
 -- have to worry about this!  You shouldn't really ever be "surprised",
 -- because you'll always explicitly chose the resuming version for 'Auto's
 -- you want to resume, and the non-resuming version for those you don't.
+--
+-- Now, /making/ or /writing/ your own generic 'Auto' combinators and
+-- transformers that take advantage of serialization is a bit of
+-- a headache.  When you can, you might be able to make combinators out of
+-- the existing functions in this library.  Sometimes, however, it's
+-- unavoidable.  If you are making your own 'Auto' combinators, making sure
+-- serialization works as expected is tough; check out the documentation
+-- for 'mkAutoM' for more details.
+--
 
 -- | Encode an 'Auto' and its internal state into a 'ByteString'.
 encodeAuto :: Auto m a b -> ByteString
@@ -697,6 +719,8 @@ interceptO f = go
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.  Working with serilization directly is hard.
+--
+-- See 'mkAutoM' for more detailed instructions on doing this right.
 mkAuto :: Get (Auto m a b)          -- ^ resuming/loading 'Get'
        -> Put                       -- ^ saving 'Put'
        -> (a -> (b, Auto m a b))    -- ^ step function
@@ -708,11 +732,129 @@ mkAuto = AutoArb
 -- deserialization, and the (monadic) function from @a@ to a @b@ and the
 -- "updated 'Auto'".
 --
+-- See the "serialization" section in the "Control.Auto.Core" module for
+-- more information.
+--
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
 --
--- TODO: Tutorial!!!!
+-- But sometimes you have to write your own combinators, and you're going
+-- to have to use 'mkAutoM' to make it work.
+--
+-- Sometimes, it's simple:
+--
+-- @
+-- fmap :: (a -> b) -> Auto r a -> Auto r b
+-- fmap f a0 = mkAutoM (do aResumed <- resumeAuto a0
+--                         return (fmap f aResumd) )
+--                     (saveAuto a0)
+--                     $ \x -> do
+--                         (y, a1) <- stepAuto a0 x
+--                         return (f y, fmap f a1)
+-- @
+--
+-- Serializing @'fmap' f a0@ is just the same as serializing @a0@.  And to
+-- resume it, we resume @a0@ to get a resumed version of @a0@, and then we
+-- apply @'fmap' f@ to the 'Auto' that we resumed.
+--
+-- When you have "switching" --- things that behave like different 'Auto's
+-- at different points in time --- then things get a little complicated,
+-- because you have to figure out which 'Auto' to resume.
+--
+-- For example, let's look at the source of '-?>':
+--
+-- @
+-- (-?>) :: Monad m
+--       => Interval m a b   -- ^ initial behavior
+--       -> Interval m a b   -- ^ final behavior, when the initial
+--                           --   behavior turns off.
+--       -> Interval m a b
+-- a1 -?> a2 = mkAutoM l s t
+--   where
+--     l = do
+--       flag <- get
+--       if flag
+--         then resumeAuto (switched a2)
+--         else (-?> a2) <$> resumeAuto a1
+--     s = put False *> saveAuto a1
+--     t x = do
+--       (y1, a1') <- stepAuto a1 x
+--       case y1 of
+--         Just _  ->
+--           return (y1, a1' -?> a2)
+--         Nothing -> do
+--           (y, a2') <- stepAuto a2 x
+--           return (y, switched a2')
+--     switched a = mkAutoM (switched <$> resumeAuto a)
+--                          (put True  *> saveAuto a)
+--                        $ \x -> do
+--                            (y, a') <- stepAuto a x
+--                            return (y, switched a')
+-- @
+--
+-- We have to invent a serialization and reloading scheme, taking into
+-- account the two states that the resulting 'Auto' can be in:
+--
+-- 1.   Initially, it is behaving like @a1@.  So, to save it, we put
+--      a flag saying that we are still in stage 1 ('False'), and then
+--      put @a1@'s current serialization data.
+-- 2.   After the switch, it is behaving like @a2@.  So, to save it, we put
+--      a flag saying that we are now in stage 2 ('True'), and then put
+--      @a2@'s current.
+--
+-- Now, when we /resume/ @a1 '-?>' a2@, /resumeAuto/ on @a1 '-?>' a2@ will
+-- give us @l@.  So the 'Get' we use --- the process we use to resume the
+-- entire @a1 '-?>' a2@, will /start/ at the initial 'Get'/loading
+-- function, @l@ here.  We have to encode our branching and
+-- resuming/serialization scheme into the initial, front-facing @l@.  So
+-- @l@ has to check for the flag, and if the flag is true, load in the data
+-- for the switched state; otherwise, load in the data for the pre-switched
+-- state.
+--
+-- Not all of them are this tricky.  Mostly "switching" combinators will be
+-- tricky, because switching means changing what you are serializing.
+--
+-- This one might be considerably easier, because of 'mapM':
+--
+-- @
+-- zipAuto :: Monad m
+--         => a                -- ^ default input value
+--         -> [Auto m a b]     -- ^ 'Auto's to zip up
+--         -> Auto m [a] [b]
+-- zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM resumeAuto as)
+--                         (mapM_ saveAuto as)
+--                         $ \xs -> do
+--                             res <- zipWithM stepAuto as (xs ++ repeat x0)
+--                             let (ys, as') = unzip res
+--                             return (ys, zipAuto x0 as')
+-- @
+--
+-- To serialize, we basically sequence 'saveAuto' over all of the internal
+-- 'Auto's --- serialize each of their serialization data one-by-one one
+-- after the other in our binary.
+--
+-- To load, we do the same thing; we go over every 'Auto' in @as@ and
+-- 'resumeAuto' it, and then collect the results in a list --- a list of
+-- resumed 'Auto's.  And then we apply @'zipAuto' x0@ to that list of
+-- 'Auto's, to get our resumed @'zipAuto' x0 as@.
+--
+-- So, it might be complicated.  In the end, it might be all worth it, too,
+-- to have implicit serialization compose like this.  Step back and think
+-- about what you need to serialize at every step, and remember that it's
+-- _the initial_ "resuming" function that has to "resume everything"...it's
+-- not the resuming function that exists when you finally save your
+-- 'Auto', it's the resuming 'Get' that was there /at the beginning/.  For
+-- '-?>', the intial @l@ had to know how to "skip ahead".
+--
+-- And of course as always, test.
+--
+-- If you need to make your own combinator or transformer but are having
+-- trouble with the serializtion, feel free to contact me at
+-- <justin@jle.im>, on freenode at /#haskell/ or /#haskell-auto/, open
+-- a <https://github.com/mstksg/auto/issues github issue>, etc.  Just
+-- contact me somehow, I'll be happy to help!
+--
 mkAutoM :: Get (Auto m a b)             -- ^ resuming/loading 'Get'
         -> Put                          -- ^ saving 'Put'
         -> (a -> m (b, Auto m a b))     -- ^ (monadic) step function

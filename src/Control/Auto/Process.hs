@@ -10,6 +10,9 @@
 -- Various 'Auto's describing relationships following common processes,
 -- like 'sumFrom', whose output is the cumulative sum of the input.
 --
+-- Also has some 'Auto' constructors inspired from digital signal
+-- processing signal transformation systems and statistical models.
+--
 -- Note that all of these can be turned into an equivalent version acting
 -- on blip streams, with 'perBlip':
 --
@@ -28,7 +31,7 @@ module Control.Auto.Process (
   , productFrom_
   , deltas
   , deltas_
-  -- ** Numerical signal transformations
+  -- ** Numerical signal transformations/systems
   , movingAverage
   , movingAverage_
   , impulseResponse
@@ -366,20 +369,20 @@ _autoRegressionF weights hist = (result, hist')
 -- weight is @wm_0@, and @wa_n@s are all of the "autoregression" weights,
 -- where the first weight is @wa_1@.
 arma :: (Num a, Serialize a)
-     => [a]
-     -> [a]
-     -> [a]
-     -> [a]
+     => [a]   -- ^ weights for the "auto-regression" components
+     -> [a]   -- ^ weights for the "moving average" components
+     -> [a]   -- ^ an "initial history" of outputs, recents first
+     -> [a]   -- ^ an "initial history" of inputs, recents first
      -> Auto m a a
 arma arWeights maWeights arHist maHist =
         mkState (_armaF arWeights maWeights) (arHist, maHist)
 
 -- | The non-serializing/non-resuming version of 'arma'.
 arma_ :: Num a
-      => [a]
-      -> [a]
-      -> [a]
-      -> [a]
+      => [a]  -- ^ weights for the "auto-regression" components
+      -> [a]  -- ^ weights for the "moving average" components
+      -> [a]  -- ^ an "initial history" of outputs, recents first
+      -> [a]  -- ^ an "initial history" of inputs, recents first
       -> Auto m a a
 arma_ arWeights maWeights arHist maHist =
         mkState_ (_armaF arWeights maWeights) (arHist, maHist)
