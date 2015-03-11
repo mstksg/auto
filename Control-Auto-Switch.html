@@ -39,7 +39,14 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Switch.ht
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>res3
 </code></strong>[&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;]
 </pre><p>the above represents an infinite loop between outputting &quot;hello&quot; and
- outputting &quot;world&quot;.</p><p>By the way, it might be worth contrasting this with <code><a href="Control-Auto-Interval.html#v:-60--124--33--62-">&lt;|!&gt;</a></code> and <code><a href="Control-Auto-Interval.html#v:-60--124--63--62-">&lt;|?&gt;</a></code>
+ outputting &quot;world&quot;.</p><p>For serialization, an extra byte cost is incurred per invocation of
+ <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>.  For cyclic switches like <code>a3</code>, every time the cycle &quot;completes&quot;,
+ it adds another layer of <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code> byte costs.  For example, initially,
+ saving <code>a3</code> incurs a cost for the two <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s.  After <code>a3</code> loops once,
+ it incurs a cost for another two <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s, so it costs four <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s.  After
+ <code>a3</code> loops another time, it is like a cost of six <code><a href="Control-Auto-Switch.html#v:-45--45--62-">--&gt;</a></code>s.  So be aware
+ that for cyclic bindings like <code>a3</code>, space for serialization grows at
+ O(n).</p><p>By the way, it might be worth contrasting this with <code><a href="Control-Auto-Interval.html#v:-60--124--33--62-">&lt;|!&gt;</a></code> and <code><a href="Control-Auto-Interval.html#v:-60--124--63--62-">&lt;|?&gt;</a></code>
  from <a href="Control-Auto-Interval.html">Control.Auto.Interval</a>, which have the same type signatures.
  Those alternative-y operators always <em>feed the input to both sides</em>,
  <em>run both sides</em>, and output the first <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Maybe.html#v:Just">Just</a></code>.  With <code><a href="Control-Auto-Interval.html#v:-60--124--33--62-">&lt;|!&gt;</a></code>, you can

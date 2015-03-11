@@ -42,7 +42,9 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Core.html
  in this library.  You can build complex programs as a complex <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> by
  building up smaller and smaller components.  See the tutorial for more
  information on this.</p><p>This type also contains information on its own serialization, so you can
- serialize and re-load the internal state to binary or disk.</p></div><div class="subs instances"><p id="control.i:Auto" class="caption collapser" onclick="toggleSection('i:Auto')">Instances</p><div id="section.i:Auto" class="show"><table><tr><td class="src"><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Category.html#t:Category">Category</a> * (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m)</td><td class="doc"><p>Gives the ability to &quot;compose&quot; two <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s; feeds the input stream
+ serialize and re-load the internal state to binary or disk.  See the
+ &quot;serialization&quot; section in the documentation for <a href="Control-Auto-Core.html">Control.Auto.Core</a>, or
+ the documentation for <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code> for more details.</p></div><div class="subs instances"><p id="control.i:Auto" class="caption collapser" onclick="toggleSection('i:Auto')">Instances</p><div id="section.i:Auto" class="show"><table><tr><td class="src"><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Category.html#t:Category">Category</a> * (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m)</td><td class="doc"><p>Gives the ability to &quot;compose&quot; two <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s; feeds the input stream
  into the first, feeds that output stream into the second, and returns as
  a result the output stream of the second.</p></td></tr><tr><td class="src"><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m =&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Arrow.html#t:Arrow">Arrow</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m)</td><td class="doc"><p>Allows you to have an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> run on only the &quot;first&quot; or &quot;second&quot; field
  in an input stream that is tuples...and also allows <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to run
@@ -188,7 +190,16 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Core.html
  it&quot;; the blueprint contains what the form of the internal state is, and
  their offets in the <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></code>.  So in the above, <code>a</code>, <code>a'</code>, <code>a''</code>,
  and <code><code>sumFrom</code> 0</code> all have the same &quot;blueprint&quot; --- their internal
- states are of the same structure.</p><p>Some specific <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s (indicated by a naming convention) might choose to
+ states are of the same structure.</p><p>Now, the <em>magic</em> of this all is that combining and transforming <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s
+ with the combinators in this library will also /compose serialization
+ strategies<em> .... complex <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s and combinations</em>chains of <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s
+ create serialization strategies &quot;for free&quot;.  The
+ <a href="https://github.com/mstksg/auto-examples">auto-examples</a> repo has a lot
+ of examples that use this  to great effect, serializing entire
+ applications and entire chat bots without writing any serialization
+ code; it all does it &quot;by itself&quot;.  Be sure to read about the caveats in
+ the
+ <a href="https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md">tutorial</a>.</p><p>Some specific <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s (indicated by a naming convention) might choose to
  have internal state, yet ignore it when saving/loading.  So, saving it
  actaully saves no state, and &quot;resuming&quot; it really doesn't do anything.
  That is, <code><code><a href="Control-Auto-Core.html#v:decodeAuto">decodeAuto</a></code> a_ bs = Right a_</code>.  There isn't a real way to
@@ -200,7 +211,13 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Core.html
  <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s, your composition will also be properly resuming...so you don't
  have to worry about this!  You shouldn't really ever be &quot;surprised&quot;,
  because you'll always explicitly chose the resuming version for <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s
- you want to resume, and the non-resuming version for those you don't.</p></div><div class="top"><p class="src"><a name="v:encodeAuto" class="def">encodeAuto</a> ::  <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></p><div class="doc"><p>Encode an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> and its internal state into a <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></code>.</p></div></div><div class="top"><p class="src"><a name="v:decodeAuto" class="def">decodeAuto</a> ::  <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a> -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Either.html#t:Either">Either</a> <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-String.html#t:String">String</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</p><div class="doc"><p><a href="Resume.html">Resume</a> an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> from its <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></code> serialization, giving
+ you want to resume, and the non-resuming version for those you don't.</p><p>Now, <em>making</em> or <em>writing</em> your own generic <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> combinators and
+ transformers that take advantage of serialization is a bit of
+ a headache.  When you can, you might be able to make combinators out of
+ the existing functions in this library.  Sometimes, however, it's
+ unavoidable.  If you are making your own <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> combinators, making sure
+ serialization works as expected is tough; check out the documentation
+ for <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code> for more details.</p></div><div class="top"><p class="src"><a name="v:encodeAuto" class="def">encodeAuto</a> ::  <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></p><div class="doc"><p>Encode an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> and its internal state into a <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></code>.</p></div></div><div class="top"><p class="src"><a name="v:decodeAuto" class="def">decodeAuto</a> ::  <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a> -&gt; <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Either.html#t:Either">Either</a> <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-String.html#t:String">String</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</p><div class="doc"><p><a href="Resume.html">Resume</a> an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> from its <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/bytestring-0.10.4.0/Data-ByteString.html#t:ByteString">ByteString</a></code> serialization, giving
  a <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Either.html#v:Left">Left</a></code> if the deserialization is not possible.</p></div></div><div class="top"><p class="src"><a name="v:saveAuto" class="def">saveAuto</a> ::  <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b -&gt; <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Put.html#t:Put">Put</a></p><div class="doc"><p>Returns a <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Put.html#t:Put">Put</a></code> --- instructions (from <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize.html">Data.Serialize</a>) on how to
  &quot;freeze&quot; the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, with its internal state, and save it to a binary
  encoding.  It can later be reloaded and &quot;resumed&quot; by
@@ -305,7 +322,7 @@ hoistA f a1 . hoistA f a2 == hoistA f (a1 . a2)
  deserialization, and the function from <code>a</code> to a <code>b</code> and &quot;updated
  <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot;.</p><p>Ideally, you wouldn't have to use this unless you are making your own
  framework.  Try your best to make what you want by assembling
- primtives together.  Working with serilization directly is hard.</p></div></div><div class="top"><p class="src"><a name="v:mkAuto_" class="def">mkAuto_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (a -&gt; (b, <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p>step function</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Like <code><a href="Control-Auto-Core.html#v:mkAuto">mkAuto</a></code>, but without any way of meaningful serializing or
+ primtives together.  Working with serilization directly is hard.</p><p>See <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code> for more detailed instructions on doing this right.</p></div></div><div class="top"><p class="src"><a name="v:mkAuto_" class="def">mkAuto_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (a -&gt; (b, <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p>step function</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Like <code><a href="Control-Auto-Core.html#v:mkAuto">mkAuto</a></code>, but without any way of meaningful serializing or
  deserializing.</p><p>Be careful!  This <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> can still carry arbitrary internal state, but
  it cannot be meaningfully serialized or re-loaded/resumed.  You can
  still pretend to do so using
@@ -313,9 +330,86 @@ hoistA f a1 . hoistA f a2 == hoistA f (a1 . a2)
  won't stop you), but when you try to &quot;resume&quot;/decode it, its state will
  be lost.</p></div></div><div class="top"><p class="src"><a name="v:mkAutoM" class="def">mkAutoM</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Get.html#t:Get">Get</a> (<a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b)</td><td class="doc"><p>resuming/loading <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Get.html#t:Get">Get</a></code></p></td></tr><tr><td class="src">-&gt; <a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Put.html#t:Put">Put</a></td><td class="doc"><p>saving <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Put.html#t:Put">Put</a></code></p></td></tr><tr><td class="src">-&gt; (a -&gt; m (b, <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p>(monadic) step function</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Construct an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> by explicitly giving its serializiation,
  deserialization, and the (monadic) function from <code>a</code> to a <code>b</code> and the
- &quot;updated <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot;.</p><p>Ideally, you wouldn't have to use this unless you are making your own
+ &quot;updated <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>&quot;.</p><p>See the &quot;serialization&quot; section in the <a href="Control-Auto-Core.html">Control.Auto.Core</a> module for
+ more information.</p><p>Ideally, you wouldn't have to use this unless you are making your own
  framework.  Try your best to make what you want by assembling
- primtives together.</p><p>TODO: Tutorial!!!!</p></div></div><div class="top"><p class="src"><a name="v:mkAutoM_" class="def">mkAutoM_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (a -&gt; m (b, <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p>(monadic) step function</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Like <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code>, but without any way of meaningful serializing or
+ primtives together.</p><p>But sometimes you have to write your own combinators, and you're going
+ to have to use <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code> to make it work.</p><p>Sometimes, it's simple:</p><pre>fmap :: (a -&gt; b) -&gt; Auto r a -&gt; Auto r b
+fmap f a0 = mkAutoM (do aResumed &lt;- resumeAuto a0
+                        return (fmap f aResumd) )
+                    (saveAuto a0)
+                    $ x -&gt; do
+                        (y, a1) &lt;- stepAuto a0 x
+                        return (f y, fmap f a1)
+</pre><p>Serializing <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#v:fmap">fmap</a></code> f a0</code> is just the same as serializing <code>a0</code>.  And to
+ resume it, we resume <code>a0</code> to get a resumed version of <code>a0</code>, and then we
+ apply <code><code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#v:fmap">fmap</a></code> f</code> to the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> that we resumed.</p><p>When you have &quot;switching&quot; --- things that behave like different <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s
+ at different points in time --- then things get a little complicated,
+ because you have to figure out which <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> to resume.</p><p>For example, let's look at the source of <code>-?&gt;</code>:</p><pre>(-?&gt;) :: Monad m
+      =&gt; Interval m a b   -- ^ initial behavior
+      -&gt; Interval m a b   -- ^ final behavior, when the initial
+                          --   behavior turns off.
+      -&gt; Interval m a b
+a1 -?&gt; a2 = mkAutoM l s t
+  where
+    l = do
+      flag &lt;- get
+      if flag
+        then resumeAuto (switched a2)
+        else (-?&gt; a2) <a href="$">$</a> resumeAuto a1
+    s = put False *&gt; saveAuto a1
+    t x = do
+      (y1, a1') &lt;- stepAuto a1 x
+      case y1 of
+        Just _  -&gt;
+          return (y1, a1' -?&gt; a2)
+        Nothing -&gt; do
+          (y, a2') &lt;- stepAuto a2 x
+          return (y, switched a2')
+    switched a = mkAutoM (switched <a href="$">$</a> resumeAuto a)
+                         (put True  *&gt; saveAuto a)
+                       $ x -&gt; do
+                           (y, a') &lt;- stepAuto a x
+                           return (y, switched a')
+</pre><p>We have to invent a serialization and reloading scheme, taking into
+ account the two states that the resulting <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> can be in:</p><ol><li>Initially, it is behaving like <code>a1</code>.  So, to save it, we put
+      a flag saying that we are still in stage 1 (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Bool.html#v:False">False</a></code>), and then
+      put <code>a1</code>'s current serialization data.</li><li>After the switch, it is behaving like <code>a2</code>.  So, to save it, we put
+      a flag saying that we are now in stage 2 (<code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Bool.html#v:True">True</a></code>), and then put
+      <code>a2</code>'s current.</li></ol><p>Now, when we <em>resume</em> <code>a1 <code>-?&gt;</code> a2</code>, <em>resumeAuto</em> on <code>a1 <code>-?&gt;</code> a2</code> will
+ give us <code>l</code>.  So the <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Get.html#t:Get">Get</a></code> we use --- the process we use to resume the
+ entire <code>a1 <code>-?&gt;</code> a2</code>, will <em>start</em> at the initial <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Get.html#t:Get">Get</a></code>/loading
+ function, <code>l</code> here.  We have to encode our branching and
+ resuming/serialization scheme into the initial, front-facing <code>l</code>.  So
+ <code>l</code> has to check for the flag, and if the flag is true, load in the data
+ for the switched state; otherwise, load in the data for the pre-switched
+ state.</p><p>Not all of them are this tricky.  Mostly &quot;switching&quot; combinators will be
+ tricky, because switching means changing what you are serializing.</p><p>This one might be considerably easier, because of <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Traversable.html#v:mapM">mapM</a></code>:</p><pre>zipAuto :: Monad m
+        =&gt; a                -- ^ default input value
+        -&gt; [Auto m a b]     -- ^ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s to zip up
+        -&gt; Auto m [a] [b]
+zipAuto x0 as = mkAutoM (zipAuto x0 <a href="$">$</a> mapM resumeAuto as)
+                        (mapM_ saveAuto as)
+                        $ xs -&gt; do
+                            res &lt;- zipWithM stepAuto as (xs ++ repeat x0)
+                            let (ys, as') = unzip res
+                            return (ys, zipAuto x0 as')
+</pre><p>To serialize, we basically sequence <code><a href="Control-Auto-Core.html#v:saveAuto">saveAuto</a></code> over all of the internal
+ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s --- serialize each of their serialization data one-by-one one
+ after the other in our binary.</p><p>To load, we do the same thing; we go over every <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> in <code>as</code> and
+ <code><a href="Control-Auto-Core.html#v:resumeAuto">resumeAuto</a></code> it, and then collect the results in a list --- a list of
+ resumed <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s.  And then we apply <code><code>zipAuto</code> x0</code> to that list of
+ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s, to get our resumed <code><code>zipAuto</code> x0 as</code>.</p><p>So, it might be complicated.  In the end, it might be all worth it, too,
+ to have implicit serialization compose like this.  Step back and think
+ about what you need to serialize at every step, and remember that it's
+ _the initial_ &quot;resuming&quot; function that has to &quot;resume everything&quot;...it's
+ not the resuming function that exists when you finally save your
+ <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>, it's the resuming <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/cereal-0.4.1.1/html/Data-Serialize-Get.html#t:Get">Get</a></code> that was there <em>at the beginning</em>.  For
+ <code>-?&gt;</code>, the intial <code>l</code> had to know how to &quot;skip ahead&quot;.</p><p>And of course as always, test.</p><p>If you need to make your own combinator or transformer but are having
+ trouble with the serializtion, feel free to contact me at
+ <a href="justin@jle.im">justin@jle.im</a>, on freenode at <em>#haskell</em> or <em>#haskell-auto</em>, open
+ a <a href="https://github.com/mstksg/auto/issues">github issue</a>, etc.  Just
+ contact me somehow, I'll be happy to help!</p></div></div><div class="top"><p class="src"><a name="v:mkAutoM_" class="def">mkAutoM_</a></p><div class="subs arguments"><p class="caption">Arguments</p><table><tr><td class="src">:: (a -&gt; m (b, <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b))</td><td class="doc"><p>(monadic) step function</p></td></tr><tr><td class="src">-&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a b</td><td class="doc empty">&nbsp;</td></tr></table></div><div class="doc"><p>Like <code><a href="Control-Auto-Core.html#v:mkAutoM">mkAutoM</a></code>, but without any way of meaningful serializing or
  deserializing.</p><p>Be careful!  This <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> can still carry arbitrary internal state, but
  it cannot be meaningfully serialized or re-loaded/resumed.  You can
  still pretend to do so using
