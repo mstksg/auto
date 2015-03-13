@@ -756,7 +756,7 @@ mkAuto = AutoArb
 -- @
 -- fmap :: (a -> b) -> Auto r a -> Auto r b
 -- fmap f a0 = mkAutoM (do aResumed <- resumeAuto a0
---                         return (fmap f aResumdd)  )
+--                         return (fmap f aResumed)  )
 --                     (saveAuto a0)
 --                     $ \x -> do
 --                         (y, a1) <- stepAuto a0 x

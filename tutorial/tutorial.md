@@ -21,10 +21,10 @@ Auto
 Before we start, let's remember our imports!
 
 ~~~haskell
-import Control.Auto     -- the main entry point
+import Control.Auto                 -- the main entry point
 import Prelude hiding ((.), id)     -- we use generalized versions from
                                     -- Control.Category, so we have to hide
-                                    -  these.
+                                    -- these.
 ~~~
 
 ### Semantic Picture
