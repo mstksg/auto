@@ -286,6 +286,7 @@ type Message   = String
 type Nick      = String
 type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
 
+
 -- Keeps track of last time a nick has spoken, and allows queries
 seenBot :: Monad m => ChatBot m
 seenBot = proc (nick, msg, time) -> do
@@ -311,6 +312,7 @@ seenBot = proc (nick, msg, time) -> do
     addToMap mp (nick, time) = M.insert nick time mp
     getRequest ("@seen":request:_) = Just request
     getRequest _                   = Nothing
+
 
 -- Users can increase and decrease imaginary internet points for other users
 karmaBot :: Monad m => ChatBot m
@@ -339,6 +341,7 @@ karmaBot = proc (_, msg, _) -> do
                     _                  -> Nothing
     updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
     updateMap mp (nick, change) = M.insertWith (+) nick change mp
+
 
 -- Echos inputs prefaced with "@echo"...unless flood limit has been reached
 echoBot :: Monad m => ChatBot m

@@ -102,6 +102,7 @@ import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
+import Data.String
 import Data.Traversable
 import Data.Typeable
 import Prelude hiding         ((.), id, sequence)
@@ -213,19 +214,27 @@ toArb a = a_
                                    (return ())
                                  $ \x -> liftM (, a_) (f x)
            AutoState gp@(g,p) f s  ->
-                          let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
-                                               (p s')
-                                             $ \x -> let (y, s'') = f x s'
-                                                     in  (y, a__ s'')
-                          in  a__ s
+               let a' s' = AutoArb (toArb . AutoState gp f <$> g)
+                                   (p s')
+                                 $ \x -> let (y, s'') = f x s'
+                                         in  (y, a' s'')
+               in  a' s
            AutoStateM gp@(g,p) f s ->
-                          let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
-                                                (p s)
-                                              $ \x -> do
-                                                  (y, s'') <- f x s'
-                                                  return (y, a__ s'')
-                          in  a__ s
-           _                       -> a
+               let a' s' = AutoArbM (toArb . AutoStateM gp f <$> g)
+                                    (p s)
+                                  $ \x -> do
+                                      (y, s'') <- f x s'
+                                      return (y, a' s'')
+               in  a' s
+           AutoArb l s f -> AutoArb (toArb <$> l)
+                                    s
+                                  $ \x -> let (y, a') = f x
+                                          in  (y, toArb a')
+           AutoArbM l s f -> AutoArbM (toArb <$> l)
+                                      s
+                                    $ \x -> do
+                                        (y, a') <- f x
+                                        return (y, toArb a')
 
 
 -- | Returns a string representation of the internal constructor of the
@@ -747,7 +756,7 @@ mkAuto = AutoArb
 -- @
 -- fmap :: (a -> b) -> Auto r a -> Auto r b
 -- fmap f a0 = mkAutoM (do aResumed <- resumeAuto a0
---                         return (fmap f aResumd) )
+--                         return (fmap f aResumdd)  )
 --                     (saveAuto a0)
 --                     $ \x -> do
 --                         (y, a1) <- stepAuto a0 x
@@ -803,7 +812,7 @@ mkAuto = AutoArb
 --      a flag saying that we are now in stage 2 ('True'), and then put
 --      @a2@'s current.
 --
--- Now, when we /resume/ @a1 '-?>' a2@, /resumeAuto/ on @a1 '-?>' a2@ will
+-- Now, when we /resume/ @a1 '-?>' a2@, 'resumeAuto' on @a1 '-?>' a2@ will
 -- give us @l@.  So the 'Get' we use --- the process we use to resume the
 -- entire @a1 '-?>' a2@, will /start/ at the initial 'Get'/loading
 -- function, @l@ here.  We have to encode our branching and
@@ -1163,13 +1172,40 @@ accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
 {-# INLINE accumMD_ #-}
 
 -- | Maps over the output stream of the 'Auto'.
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> streamAuto' (show <$> sumFrom 0) [1..10]
+-- ["1","3","6","10","15","21","28","36","45","55"]
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
     {-# INLINE fmap #-}
 
--- | Creates the "constant" 'Auto', and also gives the ability to "fork"
--- an input stream, run it to two 'Auto's, and "recombine" the two output
--- streams.
+-- | 'pure' creates the "constant" 'Auto':
+--
+-- >>> streamAuto' (pure "foo") [1..5]
+-- ["foo","foo","foo","foo","foo"]
+--
+-- '<*>' and 'liftA2' etc. give you the ability to fork the input stream
+-- over many 'Auto's, and recombine the results:
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [ 1, 3,  6, 10,  15]
+-- >>> streamAuto' (productFrom 1) [1..10]
+-- [ 1, 2,  6, 24, 120]
+-- >>> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
+-- [ 2, 5, 12, 34, 135]
+--
+-- For effectful 'Auto', you can imagine '*>' as "forking" the input stream
+-- through both, and only keeping the result of the second:
+--
+-- @
+-- 'effect' 'print' *> 'sumFrom' 0
+-- @
+--
+-- would, for example, behave just like @'sumFrom' 0@, except printing the
+-- input to 'IO' at every step.
+--
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
@@ -1237,7 +1273,18 @@ instance Monad m => Applicative (Auto m a) where
                   _ -> uncurry ($) <$> (af &&& ax)
     {-# INLINE (<*>) #-}
 
--- Should this even be here?  It might be kind of dangerous/unexpected.
+-- | When the underlying 'Monad'/'Applicative' @m@ is an 'Alternative',
+-- fork the input through each one and "squish" their results together
+-- inside the 'Alternative' context.  Somewhat rarely used, because who
+-- uses an 'Alternative' @m@?
+--
+-- >>> streamAuto (arrM (mfilter even . Just)) [1..10]
+-- Nothing
+-- >>> streamAuto (arrM (Just . negate)) [1..10]
+-- Just [-1,-2,-3,-4,-5,-6,-7,-8,-9,-10]
+-- >>> streamAuto (arrM (mfilter even . Just)) <|> arrM (Just . negate)) [1..10]
+-- Just [-1,2,-3,4,-5,6,-7,8,-9,10]
+--
 instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty     = mkConstM empty
     a1 <|> a2 = mkAutoM ((<|>) <$> resumeAuto a1 <*> resumeAuto a2)
@@ -1499,10 +1546,26 @@ instance Monad m => Choice (Auto m) where
 instance MonadFix m => Costrong (Auto m) where
     unfirst = loop
 
--- | Allows you to have an 'Auto' run on only the "first" or "second" field
--- in an input stream that is tuples...and also allows 'Auto's to run
+-- | Gives us 'arr', which is a "stateless" 'Auto' that behaves just like
+-- a function; its outputs are the function applied the corresponding
+-- inputs.
+--
+-- >>> streamAuto' (arr negate) [1..10]
+-- [-1,-2,-3,-4,-5,-6,-7,-8,-9,-10]
+--
+-- Also allows you to have an 'Auto' run on only the "first" or "second"
+-- field in an input stream that is tuples...and also allows 'Auto's to run
 -- side-by-side on an input stream of tuples (run each on either tuple
 -- field).
+--
+-- >>> streamAuto' (sumFrom 0) [4,6,8,7]
+-- [4,10,18,25]
+-- >>> streamAuto' (first (sumFrom 0)) [(4,True),(6,False),(8,False),(7,True)]
+-- [(4,True),(10,False),(18,False),(25,True)]
+-- >>> streamAuto' (productFrom 1) [1,3,5,2]
+-- [1,3,15,30]
+-- >>> streamAuto' (sumFrom 0 *** productFrom 1) [(4,1),(6,3),(8,5),(7,2)]
+-- [(4,1),(10,3),(18,15),(25,30)]
 --
 -- Most importantly, however, allows for "proc" notation; see the
 -- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
@@ -1554,7 +1617,13 @@ instance Monad m => Arrow (Auto m) where
 -- | Allows you to have an 'Auto' only act on "some" inputs (only on
 -- 'Left's, for example), and be "paused" otherwise.
 --
+-- >>> streamAuto' (sumFrom 0) [1,4,2,5]
+-- [1,5,7,12]
+-- >>> streamAuto' (left (sumFrom 0)) [Left 1, Right 'a', Left 4, Left 2, Right 'b', Left 5]
+-- [Left 1, Right 'a', Left 5, Left 6, Right 'b', Left 12]
+--
 -- Again mostly useful for "proc" notation, with branching.
+--
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
       where
@@ -1648,19 +1717,38 @@ instance MonadFix m => ArrowLoop (Auto m) where
 
 -- Utility instances
 
--- | Fork the input stream and '<>' the outputs.
+-- | Fork the input stream and '<>' the outputs.  See the 'Monoid'
+-- instance.
 instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
     (<>) = liftA2 (<>)
 
 -- | Fork the input stream and mappend the outputs.  'mempty' is a constant
 -- stream of 'mempty's, ignoring its input.
+--
+-- >>> streamAuto' (mconcat [arr (take 3), accum (++) ""]) ["hello","world","good","bye"]
+-- ["helhello","worhelloworld","goohelloworldgood","byehelloworldgoodbye"]
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
 
+-- | String literals in code will be 'Auto's that constanty produce that
+-- string.
+--
+-- >>> take 6 . streamAuto' (onFor 2 . "hello" --> "world") $ repeat ()
+-- ["hello","hello","world","world","world","world"]
+instance (Monad m, IsString b) => IsString (Auto m a b) where
+    fromString = pure . fromString
+
 -- | Fork the input stream and add, multiply, etc. the outputs.  'negate'
--- will negate the ouptput stream, 'fromInteger' will be a constant stream
--- of that 'Integer'.
+-- will negate the ouptput stream.  'fromInteger' will be a constant stream
+-- of that 'Integer', so you can write 'Auto's using numerical literals in
+-- code:
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> streamAuto' (4 + sumFrom 0) [1..10]
+-- [5,7,10,14,19,25,32,40,49,59]
+--
 instance (Monad m, Num b) => Num (Auto m a b) where
     (+)         = liftA2 (+)
     (*)         = liftA2 (*)
@@ -1672,7 +1760,8 @@ instance (Monad m, Num b) => Num (Auto m a b) where
 
 -- | Fork the input stream and divide the outputs.  'recip' maps 'recip' to
 -- the output stream; 'fromRational' will be a constant stream of that
--- 'Rational'.
+-- 'Rational', so you can write 'Auto's using numerical literals in code;
+-- see 'Num' instance.
 instance (Monad m, Fractional b) => Fractional (Auto m a b) where
     (/)          = liftA2 (/)
     recip        = fmap recip
