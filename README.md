@@ -61,9 +61,10 @@ pid (kp, ki, kd) blackbox = proc target -> do
 What is it?
 -----------
 
-**Auto** is a Haskell DSL/library providing declarative, compositional,
-denotative semantics for discrete-step, locally stateful, interactive
-programs, games, and automations, with implicitly derived serialization.
+**Auto** is a Haskell DSL and platform providing an API with declarative,
+compositional, denotative semantics for discrete-step, locally stateful,
+interactive programs, games, and automations, with implicitly derived
+serialization.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -78,6 +79,10 @@ programs, games, and automations, with implicitly derived serialization.
     honesty, it cuts the headache of large projects down --- and what you need
     to keep in your head as you develop and maintain --- by at least 90%.
 
+*   **Platform**: Not only gives the minimal tools for creating your programs,
+    but also provides a platform to run and develop and integrate them, as
+    well as many library/API functions for common processes.
+
 *   **Declarative**: It's not imperative.  That is, unlike in other
     languages, you don't program your program by saying "this happens, then
     this happens...and then in case A, this happens; in case B, something else
@@ -91,7 +96,7 @@ programs, games, and automations, with implicitly derived serialization.
     things and execute things sequentially, your entire program is composed of
     meaningful semantic building blocks that "denote" constant relationships
     and concepts.  The composition of such building blocks also denote new
-    concepts.
+    concepts.  Your building blocks are well-defined *ideas*.
 
 *   **Compositional**: You build your eventually complex program/game out of
     small, simple components.  These simple components compose with eachother;

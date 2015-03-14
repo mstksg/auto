@@ -1,10 +1,11 @@
 name:                auto
 version:             0.2.0.0
-synopsis:            Locally stateful programming with denotational semantics.
-description:         /auto/ is a Haskell DSL/library providing declarative,
-                     compositional, denotative semantics for discrete-step,
-                     locally stateful, interactive programs, games, and
-                     automations, with implicitly derived serialization.
+synopsis:            Denotative, locally stateful programming DSL & platform
+description:         /auto/ is a Haskell DSL and platform providing
+                     declarative, compositional, denotative semantics for
+                     discrete-step, locally stateful, interactive programs,
+                     games, and automations, with implicitly derived
+                     serialization.
                      .
                      /auto/ works by providing a type that encapsulates
                      "stream transformers", or locally stateful functions; by
@@ -38,6 +39,8 @@ author:              Justin Le
 maintainer:          justin@jle.im
 copyright:           (c) Justin Le 2015
 category:            Control
+homepage:            https://github.com/mstksg/auto
+bug-reports:         https://github.com/mstksg/issues
 build-type:          Simple
 extra-source-files:  tutorial/tutorial.md
 cabal-version:       >=1.10
