@@ -42,11 +42,15 @@ module Control.Auto.Run (
   -- * Generalized "self-runners"
   , run
   , runM
+  -- * Running on concurrent channels
+  , runOnChan
+  , runOnChanM
   ) where
 
 import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Interval
+import Control.Concurrent
 import Control.Monad hiding  (mapM, mapM_)
 import Data.Functor.Identity
 import Data.Maybe
@@ -315,23 +319,23 @@ run :: Monad m
     -> (b -> m (Maybe a)) -- ^ handling output and next input in @m@
     -> Auto m a b         -- ^ 'Auto'
     -> m (Auto m a b)     -- ^ return the ran/updated 'Auto' in @m@
-run x0 f = runM x0 f id
+run = runM id
 
 -- | A generalized version of 'run' where the 'Monad' you are "running" the
 -- 'Auto' in is different than the 'Monad' underneath the 'Auto'.  You just
 -- need to provide the natural transformation.
 runM :: (Monad m, Monad m')
-     => m a                       -- ^ action to retrieve starting input
+     => (forall c. m' c -> m c)   -- ^ natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
+     -> m a                       -- ^ action to retrieve starting input
      -> (b -> m (Maybe a))        -- ^ handling output and next input in @m@
-     -> (forall c. m' c -> m c)   -- ^ natural transformation from @m'@ (the Auto monad) to @m@ (the running monad)
      -> Auto m' a b               -- ^ 'Auto' in monad @m'@
      -> m (Auto m' a b)           -- ^ return the resulting/run Auto in @m@
-runM x0 f nt a = do
+runM nt x0 f a = do
     (y, a') <- nt . stepAuto a =<< x0
     x1 <- f y
     case x1 of
       -- TODO: optimize for no return x
-      Just x  -> runM (return x) f nt a'
+      Just x  -> runM nt (return x) f a'
       Nothing -> return a'
 
 -- | Run an 'Auto'' "interactively".  Every step grab a string from stdin,
@@ -355,7 +359,7 @@ runM x0 f nt a = do
 -- Outputs the final 'Interval'' when the interaction terminates.
 interactAuto :: Interval' String String         -- ^ 'Interval'' to run interactively
              -> IO (Interval' String String)    -- ^ final 'Interval'' after it all
-interactAuto = interactM f (return . runIdentity)
+interactAuto = interactM (return . runIdentity) f
   where
     f (Just str) = True <$ putStrLn str
     f Nothing    = return False
@@ -384,11 +388,11 @@ interactRS = interactAuto . bindRead . fmap (fmap show)
 -- determines whether or not to "continue running", or to stop and return
 -- the final updated 'Auto'.
 interactM :: Monad m
-          => (b -> IO Bool)          -- ^ function to "handle" each succesful 'Auto' output
-          -> (forall c. m c -> IO c) -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
+          => (forall c. m c -> IO c) -- ^ natural transformation from the underlying 'Monad' of the 'Auto' to 'IO'
+          -> (b -> IO Bool)          -- ^ function to "handle" each succesful 'Auto' output
           -> Auto m String b         -- ^ 'Auto' to run "interactively"
           -> IO (Auto m String b)    -- ^ final 'Auto' after it all
-interactM f = runM getLine f'
+interactM nt f = runM nt getLine f'
   where
     f' y = do
       cont <- f y
@@ -430,3 +434,43 @@ bindRead :: (Monad m, Read a)
          => Interval m a b        -- ^ 'Auto' taking in a readable @a@, outputting @'Maybe' b@
          -> Interval m String b   -- ^ 'Auto' taking in 'String', outputting @'Maybe' b@
 bindRead = lmap readMaybe . bindI
+
+-- | A generalized version of 'runOnChan' that can run on any @'Auto' m@;
+-- all that is required is a natural transformation from the underyling
+-- 'Monad' @m@ to 'IO'.
+runOnChanM :: Monad m
+           => (forall c. m c -> IO c) -- ^ natural transformation from the
+                                      --     underling 'Monad' of the
+                                      --     'Auto' to 'IO'
+           -> (b -> IO Bool)          -- ^ function to "handle" each
+                                      --     succesful 'Auto' output;
+                                      --     result is whether or not to
+                                      --     continue.
+           -> Chan a                  -- ^ 'Chan' queue to pull input from.
+           -> Auto m a b              -- ^ 'Auto' to run
+           -> IO (Auto m a b)         -- ^ final 'Auto' after it all, when
+                                      --     the handle resturns 'False'
+runOnChanM nt f chan = go
+  where
+    go a0 = do
+      x       <- readChan chan
+      (y, a1) <- nt $ stepAuto a0 x
+      cont <- f y
+      if cont
+        then go a1
+        else return a1
+
+-- | Runs the 'Auto'' in IO with inputs read from a 'Chan' queue, from
+-- "Control.Concurrency.Chan".  It'll block until the 'Chan' has a new
+-- input, run the 'Auto' with the received input, process the output with
+-- the given handling function, and start over if the handling function
+-- returns 'True'.
+runOnChan :: (b -> IO Bool)           -- ^ function to "handle" each
+                                      --     succesful 'Auto' output;
+                                      --     result is whether or not to
+                                      --     continue.
+           -> Chan a                  -- ^ 'Chan' queue to pull input from.
+           -> Auto' a b               -- ^ 'Auto'' to run
+           -> IO (Auto' a b)          -- ^ final 'Auto' after it all, when
+                                      --     the handle resturns 'False'
+runOnChan = runOnChanM (return . runIdentity)

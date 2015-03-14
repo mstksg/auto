@@ -9,6 +9,9 @@ Check it out!
 ~~~haskell
 -- Let's impliement a PID feedback controller over a black box system.
 
+import Control.Auto
+import Prelude hiding ((.), id)
+
 -- We represent a system as `System`, an `Auto` that takes stream of `Double`s
 -- as input and transforms it into a stream of `Double`s as output.  A
 -- `System IO` might do IO in the process of creating its ouputs, for
@@ -271,6 +274,8 @@ A chatbot
 ~~~haskell
 import qualified Data.Map as M
 import Data.Map (Map)
+import Control.Auto
+import Prelude hiding ((.), id)
 
 -- Let's build a big chat bot by combining small chat bots.
 -- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
@@ -280,6 +285,7 @@ import Data.Map (Map)
 type Message   = String
 type Nick      = String
 type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
+
 
 -- Keeps track of last time a nick has spoken, and allows queries
 seenBot :: Monad m => ChatBot m
@@ -306,6 +312,7 @@ seenBot = proc (nick, msg, time) -> do
     addToMap mp (nick, time) = M.insert nick time mp
     getRequest ("@seen":request:_) = Just request
     getRequest _                   = Nothing
+
 
 -- Users can increase and decrease imaginary internet points for other users
 karmaBot :: Monad m => ChatBot m
@@ -334,6 +341,7 @@ karmaBot = proc (_, msg, _) -> do
                     _                  -> Nothing
     updateMap :: Map Nick Int -> (Nick, Int) -> Map Nick Int
     updateMap mp (nick, change) = M.insertWith (+) nick change mp
+
 
 -- Echos inputs prefaced with "@echo"...unless flood limit has been reached
 echoBot :: Monad m => ChatBot m

@@ -18,6 +18,15 @@ github][docs]...and the latest version of this tutorial itself can be found on
 Auto
 ----
 
+Before we start, let's remember our imports!
+
+~~~haskell
+import Control.Auto                 -- the main entry point
+import Prelude hiding ((.), id)     -- we use generalized versions from
+                                    -- Control.Category, so we have to hide
+                                    -- these.
+~~~
+
 ### Semantic Picture
 
 Semantically, a `Auto` describes *a relationship* between an input and an
@@ -419,8 +428,45 @@ if/then's and case statements, and also recursive bindings (so you can even
 declare recursive graphs of concepts, and the library will figure out how to
 solve it for you).
 
-Those are the primary typeclass based interfaces; explore the library for
-more!
+By the way, there are some "scoping" issues to be aware of.  Remember that
+proc more or less builds a graph of relationships between values using `Auto`s
+at compile-time; the whole graph and chaining-together-of-`Auto`s is done at
+compile time.  So, the `Auto`s themselves have to be known at compile time.
+We can't do someothing like this:
+
+~~~haskell
+foo :: Auto' Int Int
+foo = proc x -> do
+    y <- productFrom 1 -< x
+    z <- sumFrom y     -< x
+    id -< y + z
+~~~
+
+We can't do `sumFrom y`, because `y` is not an actual value that we have at
+"compile"/"building" time.  `y` is what we're calling the result of
+`productFrom 1`, at every step, so its value changes at every step, and every
+`Auto` has to be a **fixed `Auto`**.  Remember, `Auto` relationships are
+"forever" and fixed, declaritive style.  So the `Auto` where `sumFrom` is,
+there, has to be a fixed thing that doesn't change at every step...but `y` is
+a value that will very as the stream marches on.
+
+You can however do something like:
+
+~~~haskell
+bar :: Int -> Auto' Int Int
+bar x0 = proc x -> do
+    y <- productFrom 1 -< x
+    z <- sumFrom x0    -< x
+    id -< y + z
+~~~
+
+Because when we are "building" `bar x0`, we *have* `x0`!  It'll be `sumFrom
+x0`, forever!
+
+### Anyways!
+
+Anyways!  Those are the primary typeclass based interfaces; explore the
+library for more!
 
 ### From scratch
 
@@ -850,6 +896,47 @@ ghci> streamAuto a2 [1..10]         -- a2 is resumed to where a1 was last
 [56,58,61,65,70,76,83,91,100,110]
 ~~~
 
+If you want to make your own `Auto` combinators and transformers that work
+with serialization, see the mini-tutorial at the documentation for
+[mkAutoM][] in the [Control.Auto.Core][] module
+
+### Serialization composes
+
+The magic of implicit serialization is that the serliazation of complex
+`Auto`s is preserved under combination and manipulation with the various
+instances and combinators in this library.  For example, serializing the
+complex `blippy` example above, or a huge complex application, is all done
+automatically!  The overall serialization structure is implicitly built and
+inferred.  Think of it like the library analyzing what needs to be serialized
+in your program, and coming up with a serialization and reloading strategy.
+
+This is used to great effect in [auto-examples][], where entire applications and
+chat bots are serialized..."for free".  Build complex chat bots, and the
+serialization is handled implicitly.
+
+### Safecopy problem
+
+There is one slightly drawback however...the "safecopy" problem.  If you
+alter the structure of your `Auto` by adding another aspect that needs to be
+serialized...your `Auto` can no longer "read"/resume from the binary
+serialization of its older version, because it'll expect the previous
+serialization strategy, and be unable to read it.  This means that, if you
+publish programs, save files might become unloadable by new versions of your
+`Auto`.
+
+One solution is to *serialize individual portions* only of your program ---
+portions that you know will stay fixed.  You can do this by techniques in
+[chatbot][], where each individual module of the chatbot is serialized to its
+own place on disk using `serializing`, a variation of `saving` from above.
+That way, if you add more modules to the chat bot, it can still individually
+resume its smaller modules without caring about the rest.
+
+[chatbot]: https://github.com/mstksg/auto-examples#chatbot
+
+(I'll admit that this is not a perfect solution; more research and experiments
+are continually being done.  Feel free to talk to me if you have any ideas or
+leads!)
+
 Final partings
 --------------
 
@@ -897,3 +984,5 @@ Now go forth and make locally stateful, denotative, declarative programs!
 [Control.Auto.Run]: http://mstksg.github.io/auto/Control-Auto-Run.html
 [Control.Auto.Serialize]: http://mstksg.github.io/auto/Control-Auto-Serialize.html
 [Control.Auto.Switch]: http://mstksg.github.io/auto/Control-Auto-Switch.html
+[Control.Auto.Core]: http://mstksg.github.io/auto/Control-Auto-Core.html
+[mkAutoM]: http://mstksg.github.io/auto/Control-Auto-Core.html#v:mkAutoM

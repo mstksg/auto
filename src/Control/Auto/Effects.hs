@@ -37,9 +37,13 @@ module Control.Auto.Effects (
   , sealState_
   , sealReader
   , sealReader_
+  -- ** Constructing monadic 'Auto's from other monads
+  , fromState
+  , fromState_
   -- ** "Unrolling"/"reifying" monadic 'Auto's
   , runStateA
   , runReaderA
+  , runWriterA
   , runTraversableA
   -- ** Hoists
   , hoistA
@@ -49,10 +53,12 @@ module Control.Auto.Effects (
 import Control.Applicative
 import Control.Auto.Blip
 import Control.Auto.Core
+import Control.Monad.Trans.Writer (WriterT, runWriterT)
 import Control.Auto.Generate
 import Control.Category
 import Control.Monad hiding       (mapM, mapM_)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Data.Monoid
 import Control.Monad.Trans.State  (StateT, runStateT)
 import Data.Foldable
 import Data.Serialize
@@ -275,6 +281,70 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
+-- | Turns an @a -> 'StateT' s m b@ arrow into an @'Auto' m a b@, when
+-- given an initial state.  Will continually "run the function", using the
+-- state returned from the last run.
+fromState :: (Serialize s, Monad m)
+          => (a -> StateT s m b)
+          -> s
+          -> Auto m a b
+fromState st = mkStateM (runStateT . st)
+
+-- | Non-seralizing/non-resuming version of 'fromState'.  The state isn't
+-- serialized/resumed, so every time the 'Auto' is resumed, it starts over
+-- with the given initial state.
+fromState_ :: Monad m
+           => (a -> StateT s m b)
+           -> s
+           -> Auto m a b
+fromState_ st = mkStateM_ (runStateT . st)
+
+-- | "Unrolls" the underlying @'WriterT' w m@ 'Monad', so that an 'Auto'
+-- that takes in a stream of @a@ and outputs a stream of @b@ will now
+-- output a stream @(b, w)@, where @w@ is the accumulated log of the
+-- underlying 'Writer' at every step.
+--
+-- @
+-- foo :: Auto (Writer (Sum Int)) Int Int
+-- foo = effect (tell 1) *> effect (tell 1) *> sumFrom 0
+-- @
+--
+-- >>> let fooWriter = streamAuto foo
+-- >>> runWriter $ fooWriter [1..10]
+-- ([1,3,6,10,15,21,28,36,45,55], Sum 20)
+--
+-- @foo@ increments an underlying counter twice every time it is stepped;
+-- its "result" is just the cumulative sum of the inputs.
+--
+-- When we "stream" it, we get a @[Int] -> 'Writer' (Sum Int)
+-- [Int]@...which we can give an input list and 'runWriter' it, getting
+-- a list of outputs and a "final accumulator state" of 10, for stepping it
+-- ten times.
+--
+-- We can write and compose own 'Auto's under 'Writer', using the
+-- convenience of a shared accumulator, and then "use them" with other
+-- 'Auto's:
+--
+-- @
+-- bar :: Auto' Int Int
+-- bar = proc x -> do
+--   (y, w) <- runWriterA foo -< x
+--   blah <- blah -< w
+-- @
+--
+-- And now you have access to the underlying accumulator of @foo@ to
+-- access.  There, @w@ represents the continually updating accumulator
+-- under @foo@, and will be different/growing at every "step".
+--
+runWriterA :: (Monad m, Monoid w)
+           => Auto (WriterT w m) a b
+           -> Auto m a (b, w)
+runWriterA a = mkAutoM (runWriterA <$> resumeAuto a)
+                       (saveAuto a)
+                     $ \x -> do
+                         ((y, a'), w) <- runWriterT (stepAuto a x)
+                         return ((y, w), runWriterA a')
+
 -- | Takes an 'Auto' that operates under the context of a read-only
 -- environment, an environment value, and turns it into a normal 'Auto'
 -- that always "sees" that value when it asks for one.
@@ -297,9 +367,15 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
 -- >>> streamAuto' bar [1..5]
 -- ["hey1", "hey2", "hey3", "hey4", "hey5"]
 --
+-- Note that this version serializes the given @r@ environment, so that
+-- every time the 'Auto' is reloaded/resumed, it resumes with the
+-- originally given @r@ environment, ignoring whatever @r@ is given to it
+-- when trying to resume it.  If this is not the behavior you want, use
+-- 'sealReader_'.
+--
 sealReader :: (Monad m, Serialize r)
-           => Auto (ReaderT r m) a b
-           -> r
+           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over 'Reader'
+           -> r                         -- ^ the perpetual environment
            -> Auto m a b
 sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                          (saveAuto a *> put r)
@@ -307,10 +383,13 @@ sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                              (y, a') <- runReaderT (stepAuto a x) r
                              return (y, sealReader a' r)
 
--- | The non-resuming/non-serializing version of 'sealReader'.
+-- | The non-resuming/non-serializing version of 'sealReader'.  Does not
+-- serialize/reload the @r@ environment, so that whenever you "resume" the
+-- 'Auto', it uses the new @r@ given when you are trying to resume, instead
+-- of loading the originally given one.
 sealReader_ :: Monad m
-            => Auto (ReaderT r m) a b
-            -> r
+            => Auto (ReaderT r m) a b   -- ^ 'Auto' run over 'Reader'
+            -> r                        -- ^ the perpetual environment
             -> Auto m a b
 sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
                           (saveAuto a)
@@ -355,7 +434,7 @@ runStateA a = mkAutoM (runStateA <$> resumeAuto a)
 -- an @'Auto'' (a, r) b@.
 runReaderA :: Monad m
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
-           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
+           -> Auto m (a, r) b           -- ^ 'Auto' receiving environments
 runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                        (saveAuto a)
                        $ \(x, r) -> do

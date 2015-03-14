@@ -102,6 +102,7 @@ import Data.Functor.Identity
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
+import Data.String
 import Data.Traversable
 import Data.Typeable
 import Prelude hiding         ((.), id, sequence)
@@ -177,7 +178,9 @@ import Prelude hiding         ((.), id, sequence)
 -- information on this.
 --
 -- This type also contains information on its own serialization, so you can
--- serialize and re-load the internal state to binary or disk.
+-- serialize and re-load the internal state to binary or disk.  See the
+-- "serialization" section in the documentation for "Control.Auto.Core", or
+-- the documentation for 'mkAutoM' for more details.
 --
 data Auto m a b =           AutoFunc    !(a -> b)
                 |           AutoFuncM   !(a -> m b)
@@ -211,19 +214,27 @@ toArb a = a_
                                    (return ())
                                  $ \x -> liftM (, a_) (f x)
            AutoState gp@(g,p) f s  ->
-                          let a__ s' = AutoArb (toArb . AutoState gp f <$> g)
-                                               (p s')
-                                             $ \x -> let (y, s'') = f x s'
-                                                     in  (y, a__ s'')
-                          in  a__ s
+               let a' s' = AutoArb (toArb . AutoState gp f <$> g)
+                                   (p s')
+                                 $ \x -> let (y, s'') = f x s'
+                                         in  (y, a' s'')
+               in  a' s
            AutoStateM gp@(g,p) f s ->
-                          let a__ s' = AutoArbM (toArb . AutoStateM gp f <$> g)
-                                                (p s)
-                                              $ \x -> do
-                                                  (y, s'') <- f x s'
-                                                  return (y, a__ s'')
-                          in  a__ s
-           _                       -> a
+               let a' s' = AutoArbM (toArb . AutoStateM gp f <$> g)
+                                    (p s)
+                                  $ \x -> do
+                                      (y, s'') <- f x s'
+                                      return (y, a' s'')
+               in  a' s
+           AutoArb l s f -> AutoArb (toArb <$> l)
+                                    s
+                                  $ \x -> let (y, a') = f x
+                                          in  (y, toArb a')
+           AutoArbM l s f -> AutoArbM (toArb <$> l)
+                                      s
+                                    $ \x -> do
+                                        (y, a') <- f x
+                                        return (y, toArb a')
 
 
 -- | Returns a string representation of the internal constructor of the
@@ -349,6 +360,17 @@ forceSerial a = case a of
 -- and @'sumFrom' 0@ all have the same "blueprint" --- their internal
 -- states are of the same structure.
 --
+-- Now, the /magic/ of this all is that combining and transforming 'Auto's
+-- with the combinators in this library will also /compose serialization
+-- strategies/ .... complex 'Auto's and combinations/chains of 'Auto's
+-- create serialization strategies "for free".  The
+-- <https://github.com/mstksg/auto-examples auto-examples> repo has a lot
+-- of examples that use this  to great effect, serializing entire
+-- applications and entire chat bots without writing any serialization
+-- code; it all does it "by itself".  Be sure to read about the caveats in
+-- the
+-- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>.
+--
 -- Some specific 'Auto's (indicated by a naming convention) might choose to
 -- have internal state, yet ignore it when saving/loading.  So, saving it
 -- actaully saves no state, and "resuming" it really doesn't do anything.
@@ -364,6 +386,15 @@ forceSerial a = case a of
 -- have to worry about this!  You shouldn't really ever be "surprised",
 -- because you'll always explicitly chose the resuming version for 'Auto's
 -- you want to resume, and the non-resuming version for those you don't.
+--
+-- Now, /making/ or /writing/ your own generic 'Auto' combinators and
+-- transformers that take advantage of serialization is a bit of
+-- a headache.  When you can, you might be able to make combinators out of
+-- the existing functions in this library.  Sometimes, however, it's
+-- unavoidable.  If you are making your own 'Auto' combinators, making sure
+-- serialization works as expected is tough; check out the documentation
+-- for 'mkAutoM' for more details.
+--
 
 -- | Encode an 'Auto' and its internal state into a 'ByteString'.
 encodeAuto :: Auto m a b -> ByteString
@@ -697,6 +728,8 @@ interceptO f = go
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.  Working with serilization directly is hard.
+--
+-- See 'mkAutoM' for more detailed instructions on doing this right.
 mkAuto :: Get (Auto m a b)          -- ^ resuming/loading 'Get'
        -> Put                       -- ^ saving 'Put'
        -> (a -> (b, Auto m a b))    -- ^ step function
@@ -708,11 +741,129 @@ mkAuto = AutoArb
 -- deserialization, and the (monadic) function from @a@ to a @b@ and the
 -- "updated 'Auto'".
 --
+-- See the "serialization" section in the "Control.Auto.Core" module for
+-- more information.
+--
 -- Ideally, you wouldn't have to use this unless you are making your own
 -- framework.  Try your best to make what you want by assembling
 -- primtives together.
 --
--- TODO: Tutorial!!!!
+-- But sometimes you have to write your own combinators, and you're going
+-- to have to use 'mkAutoM' to make it work.
+--
+-- Sometimes, it's simple:
+--
+-- @
+-- fmap :: (a -> b) -> Auto r a -> Auto r b
+-- fmap f a0 = mkAutoM (do aResumed <- resumeAuto a0
+--                         return (fmap f aResumed)  )
+--                     (saveAuto a0)
+--                     $ \x -> do
+--                         (y, a1) <- stepAuto a0 x
+--                         return (f y, fmap f a1)
+-- @
+--
+-- Serializing @'fmap' f a0@ is just the same as serializing @a0@.  And to
+-- resume it, we resume @a0@ to get a resumed version of @a0@, and then we
+-- apply @'fmap' f@ to the 'Auto' that we resumed.
+--
+-- When you have "switching" --- things that behave like different 'Auto's
+-- at different points in time --- then things get a little complicated,
+-- because you have to figure out which 'Auto' to resume.
+--
+-- For example, let's look at the source of '-?>':
+--
+-- @
+-- (-?>) :: Monad m
+--       => Interval m a b   -- ^ initial behavior
+--       -> Interval m a b   -- ^ final behavior, when the initial
+--                           --   behavior turns off.
+--       -> Interval m a b
+-- a1 -?> a2 = mkAutoM l s t
+--   where
+--     l = do
+--       flag <- get
+--       if flag
+--         then resumeAuto (switched a2)
+--         else (-?> a2) <$> resumeAuto a1
+--     s = put False *> saveAuto a1
+--     t x = do
+--       (y1, a1') <- stepAuto a1 x
+--       case y1 of
+--         Just _  ->
+--           return (y1, a1' -?> a2)
+--         Nothing -> do
+--           (y, a2') <- stepAuto a2 x
+--           return (y, switched a2')
+--     switched a = mkAutoM (switched <$> resumeAuto a)
+--                          (put True  *> saveAuto a)
+--                        $ \x -> do
+--                            (y, a') <- stepAuto a x
+--                            return (y, switched a')
+-- @
+--
+-- We have to invent a serialization and reloading scheme, taking into
+-- account the two states that the resulting 'Auto' can be in:
+--
+-- 1.   Initially, it is behaving like @a1@.  So, to save it, we put
+--      a flag saying that we are still in stage 1 ('False'), and then
+--      put @a1@'s current serialization data.
+-- 2.   After the switch, it is behaving like @a2@.  So, to save it, we put
+--      a flag saying that we are now in stage 2 ('True'), and then put
+--      @a2@'s current.
+--
+-- Now, when we /resume/ @a1 '-?>' a2@, 'resumeAuto' on @a1 '-?>' a2@ will
+-- give us @l@.  So the 'Get' we use --- the process we use to resume the
+-- entire @a1 '-?>' a2@, will /start/ at the initial 'Get'/loading
+-- function, @l@ here.  We have to encode our branching and
+-- resuming/serialization scheme into the initial, front-facing @l@.  So
+-- @l@ has to check for the flag, and if the flag is true, load in the data
+-- for the switched state; otherwise, load in the data for the pre-switched
+-- state.
+--
+-- Not all of them are this tricky.  Mostly "switching" combinators will be
+-- tricky, because switching means changing what you are serializing.
+--
+-- This one might be considerably easier, because of 'mapM':
+--
+-- @
+-- zipAuto :: Monad m
+--         => a                -- ^ default input value
+--         -> [Auto m a b]     -- ^ 'Auto's to zip up
+--         -> Auto m [a] [b]
+-- zipAuto x0 as = mkAutoM (zipAuto x0 <$> mapM resumeAuto as)
+--                         (mapM_ saveAuto as)
+--                         $ \xs -> do
+--                             res <- zipWithM stepAuto as (xs ++ repeat x0)
+--                             let (ys, as') = unzip res
+--                             return (ys, zipAuto x0 as')
+-- @
+--
+-- To serialize, we basically sequence 'saveAuto' over all of the internal
+-- 'Auto's --- serialize each of their serialization data one-by-one one
+-- after the other in our binary.
+--
+-- To load, we do the same thing; we go over every 'Auto' in @as@ and
+-- 'resumeAuto' it, and then collect the results in a list --- a list of
+-- resumed 'Auto's.  And then we apply @'zipAuto' x0@ to that list of
+-- 'Auto's, to get our resumed @'zipAuto' x0 as@.
+--
+-- So, it might be complicated.  In the end, it might be all worth it, too,
+-- to have implicit serialization compose like this.  Step back and think
+-- about what you need to serialize at every step, and remember that it's
+-- _the initial_ "resuming" function that has to "resume everything"...it's
+-- not the resuming function that exists when you finally save your
+-- 'Auto', it's the resuming 'Get' that was there /at the beginning/.  For
+-- '-?>', the intial @l@ had to know how to "skip ahead".
+--
+-- And of course as always, test.
+--
+-- If you need to make your own combinator or transformer but are having
+-- trouble with the serializtion, feel free to contact me at
+-- <justin@jle.im>, on freenode at /#haskell/ or /#haskell-auto/, open
+-- a <https://github.com/mstksg/auto/issues github issue>, etc.  Just
+-- contact me somehow, I'll be happy to help!
+--
 mkAutoM :: Get (Auto m a b)             -- ^ resuming/loading 'Get'
         -> Put                          -- ^ saving 'Put'
         -> (a -> m (b, Auto m a b))     -- ^ (monadic) step function
@@ -1021,13 +1172,40 @@ accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
 {-# INLINE accumMD_ #-}
 
 -- | Maps over the output stream of the 'Auto'.
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> streamAuto' (show <$> sumFrom 0) [1..10]
+-- ["1","3","6","10","15","21","28","36","45","55"]
 instance Monad m => Functor (Auto m a) where
     fmap = rmap
     {-# INLINE fmap #-}
 
--- | Creates the "constant" 'Auto', and also gives the ability to "fork"
--- an input stream, run it to two 'Auto's, and "recombine" the two output
--- streams.
+-- | 'pure' creates the "constant" 'Auto':
+--
+-- >>> streamAuto' (pure "foo") [1..5]
+-- ["foo","foo","foo","foo","foo"]
+--
+-- '<*>' and 'liftA2' etc. give you the ability to fork the input stream
+-- over many 'Auto's, and recombine the results:
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [ 1, 3,  6, 10,  15]
+-- >>> streamAuto' (productFrom 1) [1..10]
+-- [ 1, 2,  6, 24, 120]
+-- >>> streamAuto' (liftA2 (+) (sumFrom 0) (productFrom 1)) [1..5]
+-- [ 2, 5, 12, 34, 135]
+--
+-- For effectful 'Auto', you can imagine '*>' as "forking" the input stream
+-- through both, and only keeping the result of the second:
+--
+-- @
+-- 'effect' 'print' *> 'sumFrom' 0
+-- @
+--
+-- would, for example, behave just like @'sumFrom' 0@, except printing the
+-- input to 'IO' at every step.
+--
 instance Monad m => Applicative (Auto m a) where
     pure      = mkConst
     {-# INLINE pure #-}
@@ -1095,7 +1273,18 @@ instance Monad m => Applicative (Auto m a) where
                   _ -> uncurry ($) <$> (af &&& ax)
     {-# INLINE (<*>) #-}
 
--- Should this even be here?  It might be kind of dangerous/unexpected.
+-- | When the underlying 'Monad'/'Applicative' @m@ is an 'Alternative',
+-- fork the input through each one and "squish" their results together
+-- inside the 'Alternative' context.  Somewhat rarely used, because who
+-- uses an 'Alternative' @m@?
+--
+-- >>> streamAuto (arrM (mfilter even . Just)) [1..10]
+-- Nothing
+-- >>> streamAuto (arrM (Just . negate)) [1..10]
+-- Just [-1,-2,-3,-4,-5,-6,-7,-8,-9,-10]
+-- >>> streamAuto (arrM (mfilter even . Just)) <|> arrM (Just . negate)) [1..10]
+-- Just [-1,2,-3,4,-5,6,-7,8,-9,10]
+--
 instance (Monad m, Alternative m) => Alternative (Auto m a) where
     empty     = mkConstM empty
     a1 <|> a2 = mkAutoM ((<|>) <$> resumeAuto a1 <*> resumeAuto a2)
@@ -1357,10 +1546,26 @@ instance Monad m => Choice (Auto m) where
 instance MonadFix m => Costrong (Auto m) where
     unfirst = loop
 
--- | Allows you to have an 'Auto' run on only the "first" or "second" field
--- in an input stream that is tuples...and also allows 'Auto's to run
+-- | Gives us 'arr', which is a "stateless" 'Auto' that behaves just like
+-- a function; its outputs are the function applied the corresponding
+-- inputs.
+--
+-- >>> streamAuto' (arr negate) [1..10]
+-- [-1,-2,-3,-4,-5,-6,-7,-8,-9,-10]
+--
+-- Also allows you to have an 'Auto' run on only the "first" or "second"
+-- field in an input stream that is tuples...and also allows 'Auto's to run
 -- side-by-side on an input stream of tuples (run each on either tuple
 -- field).
+--
+-- >>> streamAuto' (sumFrom 0) [4,6,8,7]
+-- [4,10,18,25]
+-- >>> streamAuto' (first (sumFrom 0)) [(4,True),(6,False),(8,False),(7,True)]
+-- [(4,True),(10,False),(18,False),(25,True)]
+-- >>> streamAuto' (productFrom 1) [1,3,5,2]
+-- [1,3,15,30]
+-- >>> streamAuto' (sumFrom 0 *** productFrom 1) [(4,1),(6,3),(8,5),(7,2)]
+-- [(4,1),(10,3),(18,15),(25,30)]
 --
 -- Most importantly, however, allows for "proc" notation; see the
 -- <https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial>!
@@ -1412,7 +1617,13 @@ instance Monad m => Arrow (Auto m) where
 -- | Allows you to have an 'Auto' only act on "some" inputs (only on
 -- 'Left's, for example), and be "paused" otherwise.
 --
+-- >>> streamAuto' (sumFrom 0) [1,4,2,5]
+-- [1,5,7,12]
+-- >>> streamAuto' (left (sumFrom 0)) [Left 1, Right 'a', Left 4, Left 2, Right 'b', Left 5]
+-- [Left 1, Right 'a', Left 5, Left 6, Right 'b', Left 12]
+--
 -- Again mostly useful for "proc" notation, with branching.
+--
 instance Monad m => ArrowChoice (Auto m) where
     left a0 = a
       where
@@ -1506,19 +1717,38 @@ instance MonadFix m => ArrowLoop (Auto m) where
 
 -- Utility instances
 
--- | Fork the input stream and '<>' the outputs.
+-- | Fork the input stream and '<>' the outputs.  See the 'Monoid'
+-- instance.
 instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
     (<>) = liftA2 (<>)
 
 -- | Fork the input stream and mappend the outputs.  'mempty' is a constant
 -- stream of 'mempty's, ignoring its input.
+--
+-- >>> streamAuto' (mconcat [arr (take 3), accum (++) ""]) ["hello","world","good","bye"]
+-- ["helhello","worhelloworld","goohelloworldgood","byehelloworldgoodbye"]
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
     mappend = liftA2 mappend
 
+-- | String literals in code will be 'Auto's that constanty produce that
+-- string.
+--
+-- >>> take 6 . streamAuto' (onFor 2 . "hello" --> "world") $ repeat ()
+-- ["hello","hello","world","world","world","world"]
+instance (Monad m, IsString b) => IsString (Auto m a b) where
+    fromString = pure . fromString
+
 -- | Fork the input stream and add, multiply, etc. the outputs.  'negate'
--- will negate the ouptput stream, 'fromInteger' will be a constant stream
--- of that 'Integer'.
+-- will negate the ouptput stream.  'fromInteger' will be a constant stream
+-- of that 'Integer', so you can write 'Auto's using numerical literals in
+-- code:
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> streamAuto' (4 + sumFrom 0) [1..10]
+-- [5,7,10,14,19,25,32,40,49,59]
+--
 instance (Monad m, Num b) => Num (Auto m a b) where
     (+)         = liftA2 (+)
     (*)         = liftA2 (*)
@@ -1530,7 +1760,8 @@ instance (Monad m, Num b) => Num (Auto m a b) where
 
 -- | Fork the input stream and divide the outputs.  'recip' maps 'recip' to
 -- the output stream; 'fromRational' will be a constant stream of that
--- 'Rational'.
+-- 'Rational', so you can write 'Auto's using numerical literals in code;
+-- see 'Num' instance.
 instance (Monad m, Fractional b) => Fractional (Auto m a b) where
     (/)          = liftA2 (/)
     recip        = fmap recip

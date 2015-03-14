@@ -14,12 +14,6 @@
 -- is serialized and resumed, it will continue along the deterministic path
 -- dictated by the /original/ seed given.
 --
--- All of the 'Auto's in this module are generators: they ignore their
--- inputs and just provide random outputs.  As such, you are likely to be
--- running them with inputs of type '()', and combining them with your
--- other processes using @proc@ notation or the various 'Arrow'
--- combinators.
---
 -- All of these 'Auto's come in three flavors: one serializing one that
 -- works with any serializable 'RandomGen' instance, one serializing one
 -- that works specifically with 'StdGen' from "System.Random", and one that
@@ -52,27 +46,50 @@
 --
 -- @
 -- 'Auto' ('Rand' g) a b
+-- 'Auto' ('RandT' g m) a b
 -- @
 --
 -- In this case, if you wanted to pull a random number, you could do:
 --
 -- @
 -- 'effect' 'random' :: ('Random' r, 'RandomGen' g) => 'Auto' ('Rand' g) a r
+-- 'effect' 'random' :: ('Random' r, 'RandomGen' g) => 'Auto' ('RandT' g m) a r
 -- @
 --
 -- Which pulls a random @r@ from "thin air" (from the internal 'Rand'
--- monad)...however, you lose a great deal of determinism from this, as
--- your 'Auto's are no longer deterministic with a given seed...and
--- resumability becomes dependent on starting everything with the same seed
--- every time you re-load your 'Auto'.  Also, 'Auto''s are parallelizable,
--- while @'Auto' ('Rand' g)@s are not.
+-- monad).
 --
--- The other two generators given are for useful random processes you might
--- run into.  The first is a 'Blip' stream that emits at random times with
--- the given frequency/probability.  The second works /Interval/ semantics
--- from "Control.Auto.Interval", and is a stream that is "on" or "off",
--- chunks at a time, for random lengths.  The average length of each on or
--- off period is controlled by the parameter you pass in.
+-- However, you lose a great deal of determinism from this method, as your
+-- 'Auto's are no longer deterministic with a given seed...and resumability
+-- becomes dependent on starting everything with the same seed every time
+-- you re-load your 'Auto'.  Also, 'Auto''s are parallelizable, while
+-- @'Auto' ('Rand' g)@s are not.
+--
+-- As a compromise, you can then "seal" away the stateful part with
+-- 'sealState' and 'hoistA':
+--
+-- @
+-- sealRandom :: 'Monad' m => 'Auto' ('RandT' g m) a b -> g -> 'Auto' m a b
+-- sealRandom a0 = 'sealState' . 'hoistA' ('StateT' . 'runRandT')
+--
+-- sealRandom' :: 'Auto' ('Rand' g) a b -> g -> 'Auto'' a b
+-- sealRandom' = sealRandom
+-- @
+--
+-- Where 'hoistA' turns an @'Auto' ('RandT' g m)@ into an @'Auto' m@.
+--
+-- In this way, you can run any 'Auto' under 'Rand' or 'RandT' as if it was
+-- a normal 'Auto' "without" underlying randomness.  (These functions
+-- aren't given here so that this library doesn't incurr a dependency on
+-- /MonadRandom/). This lets you compose your sequential/non-parallel parts
+-- in 'Rand' and use it as a part of an 'Auto''.
+--
+-- The other generators given are for useful random processes you might run
+-- into.  The first is a 'Blip' stream that emits at random times with the
+-- given frequency/probability.  The second works /Interval/ semantics from
+-- "Control.Auto.Interval", and is a stream that is "on" or "off", chunks
+-- at a time, for random lengths.  The average length of each on or off
+-- period is controlled by the parameter you pass in.
 --
 
 module Control.Auto.Process.Random (
@@ -83,6 +100,13 @@ module Control.Auto.Process.Random (
   , randsM
   , stdRandsM
   , randsM_
+  -- * Lifting/wrapping random functions
+  , arrRand
+  , arrRandM
+  , arrRandStd
+  , arrRandStdM
+  , arrRand_
+  , arrRandM_
   -- * Random processes
   -- ** Bernoulli (on/off) processes
   , bernoulli
@@ -216,6 +240,87 @@ randsM_ :: (RandomGen g, Monad m)
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
+
+-- | Takes a "random function", or "random arrow" --- a function taking an
+-- input value and a starting seed/entropy generator and returning a result
+-- and an ending seed/entropy generator --- and turns it into an 'Auto'
+-- that feeds its input into such a function and outputs the result, with
+-- a new seed every time.
+--
+-- >>> let f x = randomR (0 :: Int, x)
+-- >>> streamAuto' (arrRandStd f (mkStdGen 782065)) [1..10]
+-- -- [1,2,3,4,5,6,7,8,9,10] <- upper bounds
+--    [1,2,0,1,5,3,7,6,8,10] -- random number from 0 to upper bound
+--
+-- If you are using something from
+-- <http://hackage.haskell.org/package/MonadRandom MonadRandom>, then you
+-- can use the @('runRand' .)@ function to turn a @a -> 'Rand' g b@ into
+-- a @a -> g -> (b, g)@:
+--
+-- @
+-- ('runRand' .) :: 'RandomGen' g => (a -> 'Rand' g b) -> (a -> g -> (b, g))
+-- @
+--
+-- (This is basically 'mkState', specialized.)
+arrRand :: (Serialize g, RandomGen g)
+        => (a -> g -> (b, g))
+        -> g
+        -> Auto m a b
+arrRand = mkState
+
+-- | Like 'arrRand', except the result is the result of a monadic action.
+-- Your random arrow function has access to the underlying monad.
+--
+-- If you are using something from
+-- <http://hackage.haskell.org/package/MonadRandom MonadRandom>, then you
+-- can use the @('runRandT' .)@ function to turn a @a -> 'RandT' m g b@
+-- into a @a -> g -> m (b, g)@:
+--
+-- @
+-- ('runRandT' .) :: 'RandomGen' g => (a -> 'RandT' g b) -> (a -> g -> m (b, g))
+-- @
+arrRandM :: (Monad m, Serialize g, RandomGen g)
+         => (a -> g -> m (b, g))
+         -> g
+         -> Auto m a b
+arrRandM = mkStateM
+
+-- | Like 'arrRand', but specialized for 'StdGen' from "System.Random", so
+-- that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'arrRand' for more information.
+--
+arrRandStd :: (a -> StdGen -> (b, StdGen))
+           -> StdGen
+           -> Auto m a b
+arrRandStd = mkState' (read <$> get) (put . show)
+
+-- | Like 'arrRandM', but specialized for 'StdGen' from "System.Random", so
+-- that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'arrRandM' for more information.
+--
+arrRandStdM :: (a -> StdGen -> m (b, StdGen))
+            -> StdGen
+            -> Auto m a b
+arrRandStdM = mkStateM' (read <$> get) (put . show)
+
+-- | The non-serializing/non-resuming version of 'arrRand'.
+arrRand_ :: RandomGen g
+         => (a -> g -> (b, g))
+         -> g
+         -> Auto m a b
+arrRand_ = mkState_
+
+-- | The non-serializing/non-resuming version of 'arrRandM'.
+arrRandM_ :: RandomGen g
+          => (a -> g -> m (b, g))
+          -> g
+          -> Auto m a b
+arrRandM_ = mkStateM_
+
 
 -- | Simulates a <http://en.wikipedia.org/wiki/Bernoulli_process Bernoulli Process>:
 -- a process of sequential independent trials each with a success of
