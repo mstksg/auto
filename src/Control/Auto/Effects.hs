@@ -477,11 +477,12 @@ runTraversableA = go . return
 -- Note that you have to explicitly specify the type of the exceptions you
 -- are catching; see "Control.Exception" documentation for more details.
 --
--- TODO: Possibly look into bringing in some more rigorous tools from
+-- TODO: Possibly look into bringing in some more robust tools from
 -- monad-control and other industry established error handling routes?
 -- Also, can we modify an underlying monad with implicit cacting behavior?
 catchA :: Exception e
-       => Auto IO a b
+       => Auto IO a b               -- ^ Auto over IO, expecting an
+                                    --     exception of a secific type.
        -> Auto IO a (Either e b)
 catchA a = a_
   where

@@ -767,6 +767,25 @@ mkAuto = AutoArb
 -- resume it, we resume @a0@ to get a resumed version of @a0@, and then we
 -- apply @'fmap' f@ to the 'Auto' that we resumed.
 --
+-- Also another nice "simple" example is:
+--
+-- @
+-- catchA :: Exception e
+--        => Auto IO a b
+--        -> Auto IO a (Either e b)
+-- catchA a = mkAutoM (do aResumed <- resumeAuto a
+--                        return (catchA aResumed) )
+--                    (saveAuto a)
+--                  $ \x -> do
+--                      eya' <- try $ stepAuto a x
+--                      case eya' of
+--                        Right (y, a') -> return (Right y, catchA a')
+--                        Left e        -> return (Left e , catchA a )
+-- @
+--
+-- Which is basically the same principle, in terms of serializing and
+-- resuming strategies.
+--
 -- When you have "switching" --- things that behave like different 'Auto's
 -- at different points in time --- then things get a little complicated,
 -- because you have to figure out which 'Auto' to resume.

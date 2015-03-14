@@ -273,6 +273,16 @@ superior semantics and set of concepts for working in such contexts.
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
 
+Open questions
+--------------
+
+*   In principle very little of your program should be over `IO` as a
+    monad...but sometimes, it becomes quite convenient for abstraction
+    purposes.  Handling IO errors in a robust way isn't quite my strong point,
+    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
+    applications it might be unavoidable.  Providing industry-grade tools for
+    making `IO` robust would be a good next priority.
+
 A chatbot
 ---------
 
