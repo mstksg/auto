@@ -103,6 +103,9 @@ module Control.Auto (
   , emitOn
   , fromBlips
   , fromBlipsWith
+  , holdWith
+  , holdWith_
+  , perBlip
   -- * Running
   , interactAuto
   , interactRS
