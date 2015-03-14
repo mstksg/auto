@@ -374,8 +374,8 @@ runWriterA a = mkAutoM (runWriterA <$> resumeAuto a)
 -- 'sealReader_'.
 --
 sealReader :: (Monad m, Serialize r)
-           => Auto (ReaderT r m) a b
-           -> r
+           => Auto (ReaderT r m) a b    -- ^ 'Auto' run over 'Reader'
+           -> r                         -- ^ the perpetual environment
            -> Auto m a b
 sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                          (saveAuto a *> put r)
@@ -388,8 +388,8 @@ sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
 -- 'Auto', it uses the new @r@ given when you are trying to resume, instead
 -- of loading the originally given one.
 sealReader_ :: Monad m
-            => Auto (ReaderT r m) a b
-            -> r
+            => Auto (ReaderT r m) a b   -- ^ 'Auto' run over 'Reader'
+            -> r                        -- ^ the perpetual environment
             -> Auto m a b
 sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
                           (saveAuto a)
@@ -434,7 +434,7 @@ runStateA a = mkAutoM (runStateA <$> resumeAuto a)
 -- an @'Auto'' (a, r) b@.
 runReaderA :: Monad m
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
-           -> Auto m (a, r) b           -- ^ 'Auto' receiving global environment
+           -> Auto m (a, r) b           -- ^ 'Auto' receiving environments
 runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                        (saveAuto a)
                        $ \(x, r) -> do
