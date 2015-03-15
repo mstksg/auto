@@ -61,9 +61,10 @@ pid (kp, ki, kd) blackbox = proc target -> do
 What is it?
 -----------
 
-**Auto** is a Haskell DSL/library providing declarative, compositional,
-denotative semantics for discrete-step, locally stateful, interactive
-programs, games, and automations, with implicitly derived serialization.
+**Auto** is a Haskell DSL and platform providing an API with declarative,
+compositional, denotative semantics for discrete-step, locally stateful,
+interactive programs, games, and automations, with implicitly derived
+serialization.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -78,6 +79,10 @@ programs, games, and automations, with implicitly derived serialization.
     honesty, it cuts the headache of large projects down --- and what you need
     to keep in your head as you develop and maintain --- by at least 90%.
 
+*   **Platform**: Not only gives the minimal tools for creating your programs,
+    but also provides a platform to run and develop and integrate them, as
+    well as many library/API functions for common processes.
+
 *   **Declarative**: It's not imperative.  That is, unlike in other
     languages, you don't program your program by saying "this happens, then
     this happens...and then in case A, this happens; in case B, something else
@@ -91,7 +96,7 @@ programs, games, and automations, with implicitly derived serialization.
     things and execute things sequentially, your entire program is composed of
     meaningful semantic building blocks that "denote" constant relationships
     and concepts.  The composition of such building blocks also denote new
-    concepts.
+    concepts.  Your building blocks are well-defined *ideas*.
 
 *   **Compositional**: You build your eventually complex program/game out of
     small, simple components.  These simple components compose with eachother;
@@ -268,6 +273,16 @@ superior semantics and set of concepts for working in such contexts.
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
 
+Open questions
+--------------
+
+*   In principle very little of your program should be over `IO` as a
+    monad...but sometimes, it becomes quite convenient for abstraction
+    purposes.  Handling IO errors in a robust way isn't quite my strong point,
+    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
+    applications it might be unavoidable.  Providing industry-grade tools for
+    making `IO` robust would be a good next priority.
+
 A chatbot
 ---------
 
@@ -373,7 +388,7 @@ echoBot = proc (nick, msg, time) -> do
     getEcho msg = case words msg of
                     "@echo":xs -> Just [unwords xs]
                     _          -> Nothing
-    countEchos :: Auto m Nick (Map Nick Int)
+    countEchos :: Auto m (Blip Nick) (Map Nick Int)
     countEchos = scanB countingFunction M.empty
     countingFunction :: Map Nick Int -> Nick -> Map Nick Int
     countingFunction mp nick = M.insertWith (+) nick 1 mp

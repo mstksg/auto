@@ -37,9 +37,6 @@ module Control.Auto.Effects (
   , sealState_
   , sealReader
   , sealReader_
-  -- ** Constructing monadic 'Auto's from other monads
-  , fromState
-  , fromState_
   -- ** "Unrolling"/"reifying" monadic 'Auto's
   , runStateA
   , runReaderA
@@ -48,10 +45,16 @@ module Control.Auto.Effects (
   -- ** Hoists
   , hoistA
   , generalizeA
+  -- ** Working with IO
+  , catchA
+  -- ** Constructing monadic 'Auto's from other monads
+  , fromState
+  , fromState_
   ) where
 
 import Control.Applicative
 import Control.Auto.Blip
+import Control.Exception
 import Control.Auto.Core
 import Control.Monad.Trans.Writer (WriterT, runWriterT)
 import Control.Auto.Generate
@@ -266,9 +269,9 @@ sealState :: (Monad m, Serialize s)
           -> Auto m a b
 sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
                          (saveAuto a *> put s0)
-                         $ \x -> do
-                             ((y, a'), s1) <- runStateT (stepAuto a x) s0
-                             return (y, sealState a' s1)
+                       $ \x -> do
+                           ((y, a'), s1) <- runStateT (stepAuto a x) s0
+                           return (y, sealState a' s1)
 
 -- | The non-resuming/non-serializing version of 'sealState'.
 sealState_ :: Monad m
@@ -379,9 +382,9 @@ sealReader :: (Monad m, Serialize r)
            -> Auto m a b
 sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
                          (saveAuto a *> put r)
-                         $ \x -> do
-                             (y, a') <- runReaderT (stepAuto a x) r
-                             return (y, sealReader a' r)
+                       $ \x -> do
+                           (y, a') <- runReaderT (stepAuto a x) r
+                           return (y, sealReader a' r)
 
 -- | The non-resuming/non-serializing version of 'sealReader'.  Does not
 -- serialize/reload the @r@ environment, so that whenever you "resume" the
@@ -393,9 +396,9 @@ sealReader_ :: Monad m
             -> Auto m a b
 sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
                           (saveAuto a)
-                          $ \x -> do
-                              (y, a') <- runReaderT (stepAuto a x) r
-                              return (y, sealReader_ a' r)
+                        $ \x -> do
+                            (y, a') <- runReaderT (stepAuto a x) r
+                            return (y, sealReader_ a' r)
 
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
 -- takes in an input state every turn (in addition to the normal input) and
@@ -415,9 +418,9 @@ runStateA :: Monad m
           -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
 runStateA a = mkAutoM (runStateA <$> resumeAuto a)
                       (saveAuto a)
-                      $ \(x, s) -> do
-                          ((y, a'), s') <- runStateT (stepAuto a x) s
-                          return ((y, s'), runStateA a')
+                    $ \(x, s) -> do
+                        ((y, a'), s') <- runStateT (stepAuto a x) s
+                        return ((y, s'), runStateA a')
 
 -- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
 -- takes in the input "environment" every turn in addition to the normal
@@ -437,9 +440,9 @@ runReaderA :: Monad m
            -> Auto m (a, r) b           -- ^ 'Auto' receiving environments
 runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                        (saveAuto a)
-                       $ \(x, r) -> do
-                           (y, a') <- runReaderT (stepAuto a x) r
-                           return (y, runReaderA a')
+                     $ \(x, r) -> do
+                         (y, a') <- runReaderT (stepAuto a x) r
+                         return (y, runReaderA a')
 
 -- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
 -- 'Traversable' ('[]', 'Maybe', etc.).
@@ -448,7 +451,13 @@ runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
 -- collects all of the results together.  Or an @'Auto' 'Maybe' a b@ into
 -- an @'Auto'' a ('Maybe' b)@.
 --
--- If you find a good use for this, let me know :)
+-- This might be useful if you want to make some sort of "underyling
+-- inhibiting" 'Auto' where the entire computation might just end up being
+-- 'Nothing' in the end.  With this, you can turn that
+-- possibly-catastrophically-failing 'Auto' (with an underlying 'Monad' of
+-- 'Maybe') into a normal 'Auto', and use it as a normal 'Auto' in
+-- composition with other 'Auto's...returning 'Just' if your computation
+-- succeeded.
 runTraversableA :: (Monad f, Traversable f)
                 => Auto f a b           -- ^ 'Auto' run over traversable structure
                 -> Auto m a (f b)       -- ^ 'Auto' returning traversable structure
@@ -461,3 +470,26 @@ runTraversableA = go . return
                               a' = liftM snd o
                           in  (y, go a')
 
+-- | Wraps a "try" over an underlying 'IO' monad; if the Auto encounters a
+-- runtime exception while trying to "step" itself, it'll output a 'Left'
+-- with the 'Exception'.  Otherwise, will output 'left'.
+--
+-- Note that you have to explicitly specify the type of the exceptions you
+-- are catching; see "Control.Exception" documentation for more details.
+--
+-- TODO: Possibly look into bringing in some more robust tools from
+-- monad-control and other industry established error handling routes?
+-- Also, can we modify an underlying monad with implicit cacting behavior?
+catchA :: Exception e
+       => Auto IO a b               -- ^ Auto over IO, expecting an
+                                    --     exception of a secific type.
+       -> Auto IO a (Either e b)
+catchA a = a_
+  where
+    a_ = mkAutoM (catchA <$> resumeAuto a)
+                 (saveAuto a)
+               $ \x -> do
+                   eya' <- try $ stepAuto a x
+                   case eya' of
+                     Right (y, a') -> return (Right y, catchA a')
+                     Left e        -> return (Left e , a_)

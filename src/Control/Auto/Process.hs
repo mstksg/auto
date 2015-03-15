@@ -80,11 +80,17 @@ sumFrom_ = accum_ (+)
 -- >>> y2
 -- 10
 --
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1,3,6,10,15,21,28,36,45,55]
+-- >>> streamAuto' (sumFromD 0) [1..10]
+-- [0,1,3,6,10,15,21,28,36,45]
+--
 -- It's 'sumFrom', but "delayed".
 --
 -- Useful for recursive bindings, where you need at least one value to be
 -- able to produce its "first output" without depending on anything else.
 --
+-- prop> sumFromD x0 = sumFrom x0 . delay 0
 -- prop> sumFromD x0 = delay x0 . sumFrom x0
 sumFromD :: (Serialize a, Num a)
          => a             -- ^ initial count

@@ -142,8 +142,8 @@ merge' _ _ _ NoBlip   NoBlip   = NoBlip
 -- Lazy on the second stream if the first stream is emitting.
 --
 -- If we discount laziness, this is @'merge' 'const'@.
-mergeL :: Blip a    -- ^ first stream
-       -> Blip a    -- ^ second stream (higher priority)
+mergeL :: Blip a    -- ^ first stream (higher priority)
+       -> Blip a    -- ^ second stream
        -> Blip a
 mergeL b1@(Blip _) _  = b1
 mergeL _           b2 = b2
@@ -154,10 +154,10 @@ mergeL _           b2 = b2
 --
 -- Lazy on the first stream if the second stream is emitting.
 --
--- If we discout laziness, this is @'merge' ('flip' 'const')@.
+-- If we discount laziness, this is @'merge' ('flip' 'const')@.
 --
-mergeR :: Blip a        -- ^ first stream (higher priority)
-       -> Blip a        -- ^ second stream
+mergeR :: Blip a        -- ^ first stream
+       -> Blip a        -- ^ second stream (higher priority)
        -> Blip a
 mergeR _  b2@(Blip _) = b2
 mergeR b1 _           = b1
