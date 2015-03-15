@@ -388,7 +388,7 @@ echoBot = proc (nick, msg, time) -> do
     getEcho msg = case words msg of
                     "@echo":xs -> Just [unwords xs]
                     _          -> Nothing
-    countEchos :: Auto m Nick (Map Nick Int)
+    countEchos :: Auto m (Blip Nick) (Map Nick Int)
     countEchos = scanB countingFunction M.empty
     countingFunction :: Map Nick Int -> Nick -> Map Nick Int
     countingFunction mp nick = M.insertWith (+) nick 1 mp

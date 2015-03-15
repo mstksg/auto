@@ -380,7 +380,7 @@ Most of what was just done could be written with the `Applicative`
 instance as well...but in this way, the entire thing looks a lot like a
 dependency graph, and it's pretty expressive and powerful.
 
-### Brief Primer on Proc Notation
+#### Brief Primer on Proc Notation
 
 An explanation on the syntax; when you see:
 
@@ -826,6 +826,60 @@ of the internal `Auto`s.
 
 See the documentation at *[Control.Auto.Collection][]* for more!
 
+### Recursive relationships
+
+Not exactly a tool per se, but the *auto* library has the ability to state and
+"solve" for recursive relationships.
+
+We can define an `Auto` that "chases" its input:
+
+~~~haskell
+chaseFrom :: Num a => a -> Auto' a a
+chaseFrom x0 = proc target -> do
+    rec let step = signum (target - x)  -- 1 if target is bigger
+                                        -- 0 if matches
+                                        -- -1 if smaller
+
+        x <- sumFromD 0 -< step
+
+    id -< x
+~~~
+
+~~~haskell
+ghci> streamAuto' (chaseFrom 0) [3,3,3,3,3,-1,-1,-1,-1,-1]
+  [0,1,2,3,3,3,2,1,0,-1]
+-- ^ chasing 3 ^
+--             ^ chasing -1
+~~~
+
+`x` is the cumulative sum of each `step` and the `step` is determined based on
+the `target` and the current position `x`.  So `x`'s relationship is that it
+is the cumulative sum of `step`, and `step`'s relationship is that it is the
+difference between `x` and `target`.  It's a recursive relationship!
+
+The *auto* library will attempt to find a "fixed point" of the recursive
+relationship...sort of "solving for" the output stream that will match this
+recursive relationship.  However, it needs a little help.  For every step, it
+needs a way to get a "first value" from *something* without needing any input.
+That is, at least *one* of the `Auto`s in your proc block has to be able to
+pop out its *first* result without an input.
+
+This is what `sumFromD` is for...we don't use `sumFrom`, but `sumFromD`.
+`sumFromD` will always output *its original accumulator first*, before taking
+into account the inputs:
+
+~~~haskell
+ghci> streamAuto' (sumFrom 0) [1..10]
+[1,3,6,10,15,21,28,36,45,55]
+ghci> streamAuto' (sumFromD 0) [1..10]
+[0,1,3,6,10,15,21,28,36,45]
+~~~
+
+This is how the *auto* library will "tie" the loop and find the fixed point.
+Have this, and everything works!  Cyclic relationships and feedback loops...
+just like in real life!
+
+
 Serialization
 -------------
 
@@ -870,10 +924,10 @@ ghci> let (y, _)        = stepAuto' resumed 0
 ~~~
 
 Note that not all `Auto`s in this library can be resumed.  By default, you can
-assume that they *are*...however, those that aren't will by naming convention
-be suffixed with a `_`:  `sumFrom` vs. `sumFrom_`, for example.  This means
-that when you "save" the `Auto`, you don't really save any state...and when
-you "resume" it, nothing is really resumed, and resuming is a no-op:
+assume that they *can*...while those that can't will by naming convention be
+suffixed with a `_`:  `sumFrom` vs. `sumFrom_`, for example.  This means that
+when you "save" the `Auto`, you don't really save any state...and when you
+"resume" it, nothing is really resumed, and resuming is a no-op:
 
 ~~~haskell
 -- sumFrom_ can't be saved/resumed, so it "goes nowhere" when resumed.
