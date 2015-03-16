@@ -98,6 +98,7 @@ module Control.Auto (
   , count
   -- ** Switches
   , (-->)
+  , (-?>)
   -- ** Blips
   , emitJusts
   , emitOn
@@ -113,6 +114,7 @@ module Control.Auto (
   , during
   , off
   , toOn
+  , fromInterval
   -- * Running
   , interactAuto
   , interactRS

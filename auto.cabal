@@ -1,5 +1,5 @@
 name:                auto
-version:             0.2.0.2
+version:             0.2.0.3
 synopsis:            Denotative, locally stateful programming DSL & platform
 description:         (Up to date documentation is maintained at
                      <https://mstksg.github.com/auto>)
@@ -33,6 +33,9 @@ description:         (Up to date documentation is maintained at
                      <https://github.com/mstksg/auto-examples auto-examples>
                      repository on github for plenty of real-world and toy
                      examples to learn from!
+                     .
+                     Support available on freenode's #haskell, and also on
+                     the github's issue tracker.
                      .
                      Import "Control.Auto" to begin!
 

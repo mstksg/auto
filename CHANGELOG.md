@@ -1,3 +1,12 @@
+0.2.0.3
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.2.0.3>
+
+*   Bug for `dynZipF` fixed, where newly added `Auto`s would overwrite ones
+    alreay stored.
+*   `fromInterval` added to `Control.Auto`'s exports.
+
+
 0.2.0.2
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.2>

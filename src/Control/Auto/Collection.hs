@@ -453,7 +453,7 @@ _dynMapF :: Monad m
          -> (IntMap a, Blip [k])
          -> m (IntMap b, Auto m (IntMap a, Blip [k]) (IntMap b))
 _dynMapF f x0 go i ks as (xs, news) = do
-    let newks  = zip [1..] (blip [] id news)
+    let newks  = zip [i..] (blip [] id news)
         newas  = (map . second) f newks
         newks' = ks `IM.union` IM.fromList newks
         newas' = as `IM.union` IM.fromList newas

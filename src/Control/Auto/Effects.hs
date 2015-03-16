@@ -263,6 +263,10 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- stream is the result of running the stream through @f@, first with an
 -- initial state of @s0@, and afterwards with each next updated state.
 --
+-- This can be extended to sealing 'RandT' from the /MonadRandom/ package
+-- as well, as long as you 'hoistA' first with @'StateT' . 'runRandT'@.
+--
+--
 sealState :: (Monad m, Serialize s)
           => Auto (StateT s m) a b
           -> s
