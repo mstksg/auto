@@ -13,22 +13,22 @@ import Control.Auto
 import Prelude hiding ((.), id)
 
 -- We represent a system as `System`, an `Auto` that takes stream of `Double`s
--- as input and transforms it into a stream of `Double`s as output.  A
--- `System IO` might do IO in the process of creating its ouputs, for
--- instance.
+-- as input and transforms it into a stream of `Double`s as output.  The `m`
+-- means that a `System IO` might do IO in the process of creating its ouputs,
+-- for instance.
 --
 type System m = Auto m Double Double
 
--- A PID controller adjusts the input to the black box system until the response
--- matches the target.  It does this by adjusting the input based on the
--- current error, the cumulative sum, and the consecutative differences.
+-- A PID controller adjusts the input to the black box system until the
+-- response matches the target.  It does this by adjusting the input based on
+-- the current error, the cumulative sum, and the consecutative differences.
 --
 -- See http://en.wikipedia.org/wiki/PID_controller
 --
 -- Here, we just lay out the "concepts"/time-varying values in our system as a
 -- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
 --
-pid :: (Double, Double, Double) -> System m -> System m
+pid :: Monad m => (Double, Double, Double) -> System m -> System m
 pid (kp, ki, kd) blackbox = proc target -> do
     rec --  err :: Double
         --  the difference of the response from the target
