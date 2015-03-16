@@ -42,7 +42,10 @@ category:            Control
 homepage:            https://github.com/mstksg/auto
 bug-reports:         https://github.com/mstksg/issues
 build-type:          Simple
-extra-source-files:  tutorial/tutorial.md
+extra-source-files:  README.md
+                     CHANGELOG.md
+                     tutorial/tutorial.md
+                     .gitignore
 cabal-version:       >=1.10
 
 library

@@ -1,6 +1,4 @@
 /cabal.sandbox.config
 /dist
 /.cabal-sandbox
-/tutorial/Tests.hs
 /tmp
-/release-timeline.md
