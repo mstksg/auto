@@ -1,5 +1,5 @@
 name:                auto
-version:             0.2.0.1
+version:             0.2.0.2
 synopsis:            Denotative, locally stateful programming DSL & platform
 description:         /auto/ is a Haskell DSL and platform providing
                      declarative, compositional, denotative semantics for

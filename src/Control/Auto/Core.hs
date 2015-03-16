@@ -868,12 +868,13 @@ mkAuto = AutoArb
 -- 'Auto's, to get our resumed @'zipAuto' x0 as@.
 --
 -- So, it might be complicated.  In the end, it might be all worth it, too,
--- to have implicit serialization compose like this.  Step back and think
--- about what you need to serialize at every step, and remember that it's
--- _the initial_ "resuming" function that has to "resume everything"...it's
--- not the resuming function that exists when you finally save your
--- 'Auto', it's the resuming 'Get' that was there /at the beginning/.  For
--- '-?>', the intial @l@ had to know how to "skip ahead".
+-- to have implicit serialization compose like this.  Think about your
+-- serialization strategy first.  Step back and think about what you need
+-- to serialize at every step, and remember that it's _the initial_
+-- "resuming" function that has to "resume everything"...it's not the
+-- resuming function that exists when you finally save your 'Auto', it's
+-- the resuming 'Get' that was there /at the beginning/.  For '-?>', the
+-- intial @l@ had to know how to "skip ahead".
 --
 -- And of course as always, test.
 --

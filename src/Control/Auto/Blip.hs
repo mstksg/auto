@@ -32,8 +32,8 @@ module Control.Auto.Blip (
   , foldrB
   , foldlB'
   -- ** Blip stream creation (dangerous!)
-  , emitOn
   , emitJusts
+  , emitOn
   , onJusts
   -- ** Blip stream collapse
   , fromBlips
@@ -57,6 +57,7 @@ module Control.Auto.Blip (
   , lagBlips
   , lagBlips_
   , filterB
+  , joinB
   , mapMaybeB
   , takeB
   , takeWhileB
@@ -373,7 +374,9 @@ emitOn p = mkFunc $ \x -> if p x then Blip x else NoBlip
 -- | An 'Auto' that runs every input through a @a -> 'Maybe' b@ test and
 -- produces a blip stream that emits the value inside every 'Just' result.
 --
--- A less "boolean-blind" version of 'emitOn'.
+-- Particularly useful with prisms from the /lens/ package, where things
+-- like @emitJusts (preview _Right)@ will emit the @b@ whenever the input
+-- @Either a b@ stream is a @Right@.
 --
 -- Warning!  Carries all of the same dangers of 'emitOn'.  You can easily
 -- break blip semantics with this if you aren't sure what you are doing.
@@ -438,6 +441,11 @@ filterB :: (a -> Bool)      -- ^ filtering predicate
 filterB p = mkFunc $ \x -> case x of
                              Blip x' | p x' -> x
                              _              -> NoBlip
+
+-- | "Collapses" a blip stream of blip streams into single blip stream.
+-- that emits whenever the inner-nested stream emits.
+joinB :: Auto m (Blip (Blip a)) (Blip a)
+joinB = mkFunc (blip NoBlip id)
 
 -- | Applies the given function to every emitted value, and suppresses all
 -- those for which the result is 'Nothing'.  Otherwise, lets it pass

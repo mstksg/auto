@@ -386,7 +386,9 @@ switchFromF f = go Nothing
         Just z  -> go mz <$> resumeAuto (f z)
         Nothing -> go mz <$> resumeAuto a
 
--- | The non-serializing/non-resuming version of 'switchFromF'.
+-- | The non-serializing/non-resuming version of 'switchFromF'.  You sort
+-- of might as well use 'switchFrom_'; this version might give rise to more
+-- "disciplined" code, however, by being more restricted in power.
 switchFromF_ :: Monad m
              => (c -> Auto m a (b, Blip c)) -- ^ function to generate the
                                             --   next 'Auto' to behave like
@@ -504,7 +506,9 @@ switchOnF f = go Nothing
           (y, a1)  <- stepAuto (f z) x
           return (y, go (Just z) a1)
 
--- | The non-serializing/non-resuming version of 'switchOnF'.
+-- | The non-serializing/non-resuming version of 'switchOnF'. You sort of
+-- might as well use 'switchOn_'; this version might give rise to more
+-- "disciplined" code, however, by being more restricted in power.
 switchOnF_ :: Monad m
            => (c -> Auto m a b)   -- ^ function to generate the next 'Auto'
                                   --   to behave like
