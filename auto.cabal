@@ -34,6 +34,9 @@ description:         (Up to date documentation is maintained at
                      repository on github for plenty of real-world and toy
                      examples to learn from!
                      .
+                     Support available on freenode's #haskell, and also on
+                     the github's issue tracker.
+                     .
                      Import "Control.Auto" to begin!
 
 license:             MIT

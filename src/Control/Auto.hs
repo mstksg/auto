@@ -98,6 +98,7 @@ module Control.Auto (
   , count
   -- ** Switches
   , (-->)
+  , (-?>)
   -- ** Blips
   , emitJusts
   , emitOn
