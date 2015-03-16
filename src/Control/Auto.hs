@@ -106,6 +106,13 @@ module Control.Auto (
   , holdWith
   , holdWith_
   , perBlip
+  , never
+  , immediately
+  -- ** Intervals
+  , onFor
+  , during
+  , off
+  , toOn
   -- * Running
   , interactAuto
   , interactRS

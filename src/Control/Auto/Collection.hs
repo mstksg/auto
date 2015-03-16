@@ -52,7 +52,11 @@ module Control.Auto.Collection (
   , dZipAutoB_
   -- * Dynamic collections
   , dynZip_
+  , dynZipF
+  , dynZipF_
   , dynMap_
+  , dynMapF
+  , dynMapF_
   -- * Multiplexers
   -- ** Single input, single output
   , mux
@@ -263,6 +267,12 @@ dZipAutoB_ = dZipAuto_ NoBlip
 -- Because of this, it is suggested that you use 'dynMap_', which allows
 -- you to "target" labeled 'Auto's with your inputs.
 --
+-- This 'Auto' is inherently unserializable, but you can use 'dynZipF' for
+-- more or less the same functionality, with serialization possible.  It's
+-- only slightly less powerful...for all intents and purposes, you should
+-- be able to use both in the same situations.  All of the examples here
+-- can be also done with 'dynZipF'.
+--
 dynZip_ :: Monad m
         => a    -- "default" input to feed in
         -> Auto m ([a], Blip [Interval m a b]) [b]
@@ -273,6 +283,64 @@ dynZip_ x0 = go []
                          res <- zipWithM stepAuto newas (xs ++ repeat x0)
                          let (ys, as') = unzip [ (y, a) | (Just y, a) <- res ]
                          return (ys, go as')
+
+-- | Like 'dynZip_', but instead of taking in a blip stream of 'Interval's
+-- directly, takes in a blip stream of 'k's to trigger adding more
+-- 'Interval's to the "box", using the given @k -> 'Interval' m a b@
+-- function to make the new 'Interval' to add.
+--
+-- Pretty much all of the power of 'dynZip_', but with serialization.
+--
+-- See 'dynZip_' for examples and caveats.
+--
+-- You could theoretically recover the behavior of 'dynZip_' with
+-- @'dynZipF' id@, if there wasn't a 'Serialize' constraint on the @k@.
+dynZipF :: (Serialize k, Monad m)
+        => (k -> Interval m a b)      -- ^ function to generate a new
+                                      --     'Interval' for each coming @k@
+                                      --     in the blip stream.
+        -> a                          -- ^ "default" input to feed in
+        -> Auto m ([a], Blip [k]) [b]
+dynZipF f x0 = go []
+  where
+    go ksas = mkAutoM (do ks <- get
+                          as <- mapM (resumeAuto . f) ks
+                          return $ go (zip ks as) )
+                      (do let (ks,as) = unzip ksas
+                          put ks
+                          mapM_ saveAuto as)
+                      (goFunc ksas)
+    goFunc = _dynZipF f x0 go
+
+-- | The non-serializing/non-resuming version of 'dynZipF'.  Well, you
+-- really might as well use 'dynZip_', which is more powerful...but maybe
+-- using this can inspire more disciplined usage.  Also works as a drop-in
+-- replacement for 'dynZipF'.
+dynZipF_ :: Monad m
+         => (k -> Interval m a b)
+         -> a
+         -> Auto m ([a], Blip [k]) [b]
+dynZipF_ f x0 = go []
+  where
+    go ksas = mkAutoM_ (goFunc ksas)
+    goFunc = _dynZipF f x0 go
+
+_dynZipF :: Monad m
+         => (k -> Interval m a b)
+         -> a
+         -> ([(k, Interval m a b)] -> Auto m ([a], Blip [k]) [b])
+         -> [(k, Interval m a b)]
+         -> ([a], Blip [k])
+         -> m ([b], Auto m ([a], Blip [k]) [b])
+_dynZipF f x0 go ksas (xs, news) = do
+    let adds    = blip [] (map (id &&& f)) news
+        newksas = ksas ++ adds
+        (newks,newas) = unzip newksas
+    res <- zipWithM stepAuto newas (xs ++ repeat x0)
+    let resks = zip newks res
+        (ys, ksas') = unzip [ (y, (k,a)) | (k, (Just y, a)) <- resks ]
+    return (ys, go ksas')
+
 
 -- | A dynamic box of 'Auto's, indexed by an 'Int'.  Takes an 'IntMap' of
 -- inputs to feed into their corresponding 'Auto's, and collect all of the
@@ -311,14 +379,20 @@ dynZip_ x0 = go []
 -- output preserved in the aggregate output.  As such, 'gatherMany' might
 -- be seen more often.
 --
+-- This 'Auto' is inherently unserializable, but you can use 'dynMapF' for
+-- more or less the same functionality, with serialization possible.  It's
+-- only slightly less powerful...for all intents and purposes, you should
+-- be able to use both in the same situations.  All of the examples here
+-- can be also done with 'dynMapF'.
+--
 dynMap_ :: Monad m
         => a    -- ^ "default" input to feed in
         -> Auto m (IntMap a, Blip [Interval m a b]) (IntMap b)
-dynMap_ x0 = go 0 mempty
+dynMap_ x0 = go 0 IM.empty
   where
     go i as = mkAutoM_ $ \(xs, news) -> do
                            let newas  = zip [i..] (blip [] id news)
-                               newas' = IM.union as (IM.fromList newas)
+                               newas' = as `IM.union` IM.fromList newas
                                newc   = i + length newas
                                resMap = zipIntMapWithDefaults stepAuto Nothing (Just x0) newas' xs
                            res <- sequence resMap
@@ -326,6 +400,71 @@ dynMap_ x0 = go 0 mempty
                                ys   = fromJust . fst <$> res'
                                as'  = snd <$> res'
                            return (ys, go newc as')
+
+-- | Like 'dynMap_', but instead of taking in a blip stream of 'Interval's
+-- directly, takes in a blip stream of 'k's to trigger adding more
+-- 'Interval's to the "box", using the given @k -> 'Interval' m a b@
+-- function to make the new 'Interval' to add.
+--
+-- Pretty much all of the power of 'dynMap_', but with serialization.
+--
+-- See 'dynMap_' for examples and use cases.
+--
+-- You could theoretically recover the behavior of 'dynMap_' with
+-- @'dynMapF' id@, if there wasn't a 'Serialize' constraint on the @k@.
+dynMapF :: (Serialize k, Monad m)
+        => (k -> Interval m a b)      -- ^ function to generate a new
+                                      --     'Interval' for each coming @k@
+                                      --     in the blip stream.
+        -> a                          -- ^ "default" input to feed in
+        -> Auto m (IntMap a, Blip [k]) (IntMap b)
+dynMapF f x0 = go 0 IM.empty IM.empty
+  where
+    go i ks as = mkAutoM (do i'  <- get
+                             ks' <- get
+                             as' <- mapM (resumeAuto . f) ks'
+                             return (go i' ks' as') )
+                         (put i *> put ks *> mapM_ saveAuto as)
+                         (goFunc i ks as)
+    goFunc = _dynMapF f x0 go
+
+-- | The non-serializing/non-resuming version of 'dynMapF'.  Well, you
+-- really might as well use 'dynMap_', which is more powerful...but maybe
+-- using this can inspire more disciplined usage.  Also works as a drop-in
+-- replacement for 'dynMapF'.
+dynMapF_ :: Monad m
+         => (k -> Interval m a b)
+         -> a
+         -> Auto m (IntMap a, Blip [k]) (IntMap b)
+dynMapF_ f x0 = go 0 IM.empty IM.empty
+  where
+    go i ks as = mkAutoM_ (goFunc i ks as)
+    goFunc = _dynMapF f x0 go
+
+-- just splitting out the functionality so that I can write this logic once
+-- for both the serializing and non serializing versions
+_dynMapF :: Monad m
+         => (k -> Interval m a b)
+         -> a
+         -> (Int -> IntMap k -> IntMap (Interval m a b) -> Auto m (IntMap a, Blip [k]) (IntMap b))
+         -> Int
+         -> IntMap k
+         -> IntMap (Interval m a b)
+         -> (IntMap a, Blip [k])
+         -> m (IntMap b, Auto m (IntMap a, Blip [k]) (IntMap b))
+_dynMapF f x0 go i ks as (xs, news) = do
+    let newks  = zip [1..] (blip [] id news)
+        newas  = (map . second) f newks
+        newks' = ks `IM.union` IM.fromList newks
+        newas' = as `IM.union` IM.fromList newas
+        newc   = i + length newks
+        resMap = zipIntMapWithDefaults stepAuto Nothing (Just x0) newas' xs
+    res <- sequence resMap
+    let ys' = IM.mapMaybe fst res
+        as' = snd <$> IM.intersection res ys'
+        ks' = IM.intersection newks' ys'
+    return (ys', go newc ks' as')
+
 
 -- | 'Auto' multiplexer.  Stores a bunch of internal 'Auto's indexed by
 -- a key.  At every step, takes a key-input pair, feeds the input to the
