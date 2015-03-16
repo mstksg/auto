@@ -114,6 +114,7 @@ module Control.Auto (
   , during
   , off
   , toOn
+  , fromInterval
   -- * Running
   , interactAuto
   , interactRS
