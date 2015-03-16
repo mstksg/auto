@@ -64,7 +64,9 @@ What is it?
 **Auto** is a Haskell DSL and platform providing an API with declarative,
 compositional, denotative semantics for discrete-step, locally stateful,
 interactive programs, games, and automations, with implicitly derived
-serialization.
+serialization.  At the high-level, it allows you to describe your interactive
+program or simulation as a *stream transformer*, by composition and
+transformation of other stream transformers.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -273,16 +275,6 @@ superior semantics and set of concepts for working in such contexts.
 [frp]: http://en.wikipedia.org/wiki/Functional_reactive_programming
 [netwire]: https://hackage.haskell.org/package/netwire
 
-Open questions
---------------
-
-*   In principle very little of your program should be over `IO` as a
-    monad...but sometimes, it becomes quite convenient for abstraction
-    purposes.  Handling IO errors in a robust way isn't quite my strong point,
-    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
-    applications it might be unavoidable.  Providing industry-grade tools for
-    making `IO` robust would be a good next priority.
-
 A chatbot
 ---------
 
@@ -403,3 +395,22 @@ chatBot = mconcat [seenBot, karmaBot, echoBot]
 chatBotSerialized :: ChatBot IO
 chatBotSerialized = serializing' "data.dat" chatBot
 ~~~
+
+Open questions
+--------------
+
+*   In principle very little of your program should be over `IO` as a
+    monad...but sometimes, it becomes quite convenient for abstraction
+    purposes.  Handling IO errors in a robust way isn't quite my strong point,
+    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
+    applications it might be unavoidable.  Providing industry-grade tools for
+    making `IO` robust would be a good next priority.
+
+*   "Safecopy problem"; serialization schemes are implicitly derived, but if
+    your program changes, it is unlikely that the new serialization scheme
+    will be able to resume something from the old one.  Right now the solution
+    is to only serialize small aspects of your program that you *can* manage
+    and manipulate directly when changing your program.  A better solution
+    might exist.
+
+*   Tests; tests aren't really done yet, sorry!  Working on those :)

@@ -1,7 +1,10 @@
 name:                auto
 version:             0.2.0.2
 synopsis:            Denotative, locally stateful programming DSL & platform
-description:         /auto/ is a Haskell DSL and platform providing
+description:         (Up to date documentation is maintained at
+                     <https://mstksg.github.com/auto>)
+                     .
+                     /auto/ is a Haskell DSL and platform providing
                      declarative, compositional, denotative semantics for
                      discrete-step, locally stateful, interactive programs,
                      games, and automations, with implicitly derived
@@ -42,8 +45,15 @@ category:            Control
 homepage:            https://github.com/mstksg/auto
 bug-reports:         https://github.com/mstksg/issues
 build-type:          Simple
-extra-source-files:  tutorial/tutorial.md
+extra-source-files:  README.md
+                     CHANGELOG.md
+                     tutorial/tutorial.md
+                     .gitignore
 cabal-version:       >=1.10
+
+source-repository head
+  type:              git
+  location:          git://github.com/mstksg/auto.git
 
 library
   exposed-modules:     Control.Auto
