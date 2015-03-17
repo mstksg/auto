@@ -291,6 +291,11 @@ hoistA g (AutoArbM gt pt f)  = AutoArbM (fmap (hoistA g) gt)
 -- | Generalizes an @'Auto'' a b@ to an @'Auto' m a b'@ for any 'Monad'
 -- @m@, using 'hoist'.
 --
+-- You generally should be able to avoid using this if you never directly
+-- write any 'Auto''s and always write 'Auto m' parameterized over all
+-- 'Monad's, but...in case you import one from a library or something, you
+-- can use this.
+--
 generalizeA :: Monad m => Auto' a b -> Auto m a b
 generalizeA = hoistA (return . runIdentity)
 

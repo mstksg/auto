@@ -48,6 +48,7 @@ module Control.Auto (
   , decodeAuto
   , readAuto
   , writeAuto
+  , unserialize
   -- ** Strictness
   , forcer
   , seqer
@@ -95,6 +96,8 @@ module Control.Auto (
   , mappendFrom
   , lastVal
   , lastVal_
+  , delay
+  , delay_
   , count
   -- ** Switches
   , (-->)
