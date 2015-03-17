@@ -276,6 +276,10 @@ stretchBy_ f n = go (1, Nothing)
 -- Here, instead of feeding in a number every step, it "accumulates" all of
 -- the inputs using '+' and "blasts them into" @'sumFrom' 0@ every 4 steps.
 -- In between the blasts, it outputs the negated last seen result.
+--
+-- You can recover the behavior of 'stretch' with
+-- @'stretchAccumBy' (flip const) id@.
+--
 stretchAccumBy :: (Serialize a, Serialize b, Monad m)
                => (a -> a -> a)
                -> (b -> b)

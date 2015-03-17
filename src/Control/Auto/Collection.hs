@@ -84,7 +84,7 @@ import Control.Auto.Time
 import Control.Category
 import Control.Monad hiding         (mapM, mapM_, sequence, sequence_)
 import Data.Foldable
-import Data.IntMap           (IntMap)
+import Data.IntMap.Strict           (IntMap)
 import Data.Map.Strict              (Map)
 import Data.Maybe
 import Data.Monoid
@@ -92,7 +92,7 @@ import Data.Profunctor
 import Data.Serialize
 import Data.Traversable
 import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id, sequence_)
-import qualified Data.IntMap as IM
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict    as M
 
 -- | Give a list of @'Auto' m a b@ and get back an @'Auto' m [a] [b]@  ---
