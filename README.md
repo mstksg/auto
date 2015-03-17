@@ -28,7 +28,7 @@ type System m = Auto m Double Double
 -- Here, we just lay out the "concepts"/time-varying values in our system as a
 -- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
 --
-pid :: Monad m => (Double, Double, Double) -> System m -> System m
+pid :: MonadFix m => (Double, Double, Double) -> System m -> System m
 pid (kp, ki, kd) blackbox = proc target -> do
     rec --  err :: Double
         --  the difference of the response from the target

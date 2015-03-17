@@ -57,6 +57,7 @@ module Control.Auto.Blip (
   , lagBlips
   , lagBlips_
   , filterB
+  , forkB
   , joinB
   , mapMaybeB
   , takeB
@@ -367,6 +368,11 @@ inB n = mkState f (n, False)
 --
 -- These bad examples would be good use cases of 'Interval'.
 --
+-- Can be particularly useful with prisms from the /lens/ package, where
+-- things like @emitOn (has _Right)@ and @emitOn (hasn't _Right)@ will emit
+-- the input @Either a b@ whenever it is or isn't a 'Right'.  See
+-- 'emitJusts' for more common uses with /lens/.
+--
 emitOn :: (a -> Bool)   -- ^ predicate to emit on
        -> Auto m a (Blip a)
 emitOn p = mkFunc $ \x -> if p x then Blip x else NoBlip
@@ -441,6 +447,17 @@ filterB :: (a -> Bool)      -- ^ filtering predicate
 filterB p = mkFunc $ \x -> case x of
                              Blip x' | p x' -> x
                              _              -> NoBlip
+
+-- | "Forks" a blip stream based on a predicate.  Takes in one blip stream
+-- and produces two: the first emits whenever the input emits with a value
+-- that passes the predicate, and the second emits whenever the input emits
+-- with a value that doesn't.
+forkB :: (a -> Bool)
+      -> Auto m (Blip a) (Blip a, Blip a)
+forkB p = mkFunc $ \x -> case x of
+                           Blip x' | p x'      -> (x, NoBlip)
+                                   | otherwise -> (NoBlip, x)
+                           _                   -> (NoBlip, NoBlip)
 
 -- | "Collapses" a blip stream of blip streams into single blip stream.
 -- that emits whenever the inner-nested stream emits.

@@ -53,6 +53,8 @@ module Control.Auto.Time (
   , stretch
   , stretch_
   , stretchB
+  , stretchAccumBy
+  , stretchAccumBy_
   -- ** Accelerating
   , accelerate
   , accelerateWith
@@ -74,6 +76,7 @@ import Control.Category
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Writer
+import Data.Maybe
 import Data.Monoid
 import Data.Serialize
 import Prelude hiding             ((.), id)
@@ -216,17 +219,7 @@ stretch :: (Serialize b, Monad m)
         => Int              -- ^ stretching factor
         -> Auto m a b       -- ^ 'Auto' to stretch
         -> Auto m a b
-stretch n = go (1, undefined)
-  where
-    go (i, y) a = mkAutoM (go <$> get <*> resumeAuto a)
-                          (put (i, y) *> saveAuto a)
-                          $ \x ->
-                              if i <= 1
-                                 then do
-                                   (y', a') <- stepAuto a x
-                                   return (y', go (n    , y') a')
-                                 else
-                                   return (y , go (i - 1, y ) a )
+stretch = stretchBy id
 
 
 -- | The non-resuming/non-serializing version of 'stretch'.
@@ -234,15 +227,94 @@ stretch_ :: Monad m
          => Int               -- ^ stretching factor
          -> Auto m a b        -- ^ 'Auto' to stretch
          -> Auto m a b
-stretch_ n = go (1, undefined)
+stretch_ = stretchBy_ id
+
+stretchBy :: (Serialize b, Monad m)
+          => (b -> b)
+          -> Int
+          -> Auto m a b
+          -> Auto m a b
+stretchBy f n = go (1, Nothing)
+  where
+    go (i, y) a = mkAutoM (go <$> get <*> resumeAuto a)
+                          (put (i, y) *> saveAuto a)
+                        $ \x ->
+                            if i <= 1
+                               then do
+                                 (y', a') <- stepAuto a x
+                                 return (y', go (n, Just y') a')
+                               else
+                                 return (f (fromJust y), go (i - 1, y) a)
+
+stretchBy_ :: (Monad m)
+           => (b -> b)
+           -> Int
+           -> Auto m a b
+           -> Auto m a b
+stretchBy_ f n = go (1, Nothing)
   where
     go (i, y) a = mkAutoM_ $ \x ->
                                if i <= 1
                                   then do
                                     (y', a') <- stepAuto a x
-                                    return (y, go (n    , y') a')
+                                    return (y', go (n, Just y') a')
                                   else
-                                    return (y, go (i - 1, y ) a )
+                                    return (f (fromJust y), go (i - 1, y) a)
+
+-- | A more general version of 'stretch'; instead of just ignoring and
+-- dropping the "stretched/skipped intervals", accumulate all of them up
+-- with the given accumulating function and then "step" them all at once on
+-- every @n@th tick.  Also, stead of returning exactly the same output
+-- every time over the stretched interval, output a function of the
+-- original output during the stretched intervals.
+--
+-- >>> streamAuto' (sumFrom 0) [1..10]
+-- [1, 3, 6, 10, 15, 21, 28, 36, 45 ,55]
+-- >>> streamAuto' (stretchAccumBy (+) negate 4 (sumFrom 0)) [1..10]
+-- [1,-1,-1, -1, 15,-15,-15,-15, 45,-45]
+--
+-- Here, instead of feeding in a number every step, it "accumulates" all of
+-- the inputs using '+' and "blasts them into" @'sumFrom' 0@ every 4 steps.
+-- In between the blasts, it outputs the negated last seen result.
+stretchAccumBy :: (Serialize a, Serialize b, Monad m)
+               => (a -> a -> a)
+               -> (b -> b)
+               -> Int
+               -> Auto m a b
+               -> Auto m a b
+stretchAccumBy fx fy n = go (1, Nothing, Nothing)
+  where
+    go (i, x0, y) a = mkAutoM (go <$> get <*> resumeAuto a)
+                              (put (i, x0, y) *> saveAuto a)
+                            $ \x ->
+                                if i <= 1
+                                  then do
+                                    (y', a') <- stepAuto a . fromJust $ acm x0 x
+                                    return (y', go (n, Nothing, Just y') a')
+                                  else
+                                    return (fy (fromJust y), go (i-1, acm x0 x, y) a)
+    acm Nothing  x = Just x
+    acm (Just x) y = Just (fx x y)
+
+-- | The non-serialized/non-resuming version of 'stretchAccumBy'.
+stretchAccumBy_ :: Monad m
+                => (a -> a -> a)
+                -> (b -> b)
+                -> Int
+                -> Auto m a b
+                -> Auto m a b
+stretchAccumBy_ fx fy n = go (1, Nothing, Nothing)
+  where
+    go (i, x0, y) a = mkAutoM_ $ \x ->
+                                   if i <= 1
+                                     then do
+                                       (y', a') <- stepAuto a . fromJust $ acm x0 x
+                                       return (y', go (n, Nothing, Just y') a')
+                                     else
+                                       return (fy (fromJust y), go (i-1, acm x0 x, y) a)
+    acm Nothing  x = Just x
+    acm (Just x) y = Just (fx x y)
+
 
 -- | Like 'stretch', but instead of holding the the "stretched" outputs,
 -- outputs a blip stream that emits every time the stretched 'Auto'
