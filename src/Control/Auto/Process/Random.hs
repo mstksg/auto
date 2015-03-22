@@ -181,7 +181,7 @@ import Prelude hiding             (id, (.), concat, concatMap, sum)
 --
 rands :: (Serialize g, RandomGen g)
       => (g -> (b, g)) -- ^ random generating function
-      -> g             -- ^ initial generator
+      -> g             -- ^ random generator seed
       -> Auto m a b
 rands r = mkState (\_ g -> g `seq` r g)
 {-# INLINE rands #-}
@@ -193,7 +193,7 @@ rands r = mkState (\_ g -> g `seq` r g)
 -- See the documentation of 'rands' for more information on this 'Auto'.
 --
 stdRands :: (StdGen -> (b, StdGen)) -- ^ random generating function
-         -> StdGen                  -- ^ initial generator
+         -> StdGen                  -- ^ random generator seed
          -> Auto m a b
 stdRands r = mkState' (read <$> get) (put . show) (\_ g -> r g)
 {-# INLINE stdRands #-}
@@ -202,7 +202,7 @@ stdRands r = mkState' (read <$> get) (put . show) (\_ g -> r g)
 -- | The non-serializing/non-resuming version of 'rands'.
 rands_ :: RandomGen g
        => (g -> (b, g))   -- ^ random generating function
-       -> g               -- ^ initial generator
+       -> g               -- ^ random generator seed
        -> Auto m a b
 rands_ r = mkState_ (\_ g -> r g)
 {-# INLINE rands_ #-}
@@ -222,8 +222,8 @@ rands_ r = mkState_ (\_ g -> r g)
 -- @
 --
 randsM :: (Serialize g, RandomGen g, Monad m)
-       => (g -> m (b, g))
-       -> g
+       => (g -> m (b, g))     -- ^ (monadic) random generating function
+       -> g                   -- ^ random generator seed
        -> Auto m a b
 randsM r = mkStateM (\_ g -> r g)
 {-# INLINE randsM #-}
@@ -235,16 +235,16 @@ randsM r = mkStateM (\_ g -> r g)
 -- See the documentation of 'randsM' for more information on this 'Auto'.
 --
 stdRandsM :: Monad m
-          => (StdGen -> m (b, StdGen))
-          -> StdGen
+          => (StdGen -> m (b, StdGen))  -- ^ (monadic) random generating function
+          -> StdGen                     -- ^ random generator seed
           -> Auto m a b
 stdRandsM r = mkStateM' (read <$> get) (put . show) (\_ g -> r g)
 {-# INLINE stdRandsM #-}
 
 -- | The non-serializing/non-resuming version of 'randsM'.
 randsM_ :: (RandomGen g, Monad m)
-        => (g -> m (b, g))
-        -> g
+        => (g -> m (b, g))    -- ^ (monadic) random generating function
+        -> g                  -- ^ random generator seed
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
 {-# INLINE randsM_ #-}
@@ -271,8 +271,8 @@ randsM_ r = mkStateM_ (\_ g -> r g)
 --
 -- (This is basically 'mkState', specialized.)
 arrRand :: (Serialize g, RandomGen g)
-        => (a -> g -> (b, g))
-        -> g
+        => (a -> g -> (b, g))   -- ^ random arrow
+        -> g                    -- ^ random generator seed
         -> Auto m a b
 arrRand = mkState
 
@@ -288,8 +288,8 @@ arrRand = mkState
 -- ('runRandT' .) :: 'RandomGen' g => (a -> 'RandT' g b) -> (a -> g -> m (b, g))
 -- @
 arrRandM :: (Monad m, Serialize g, RandomGen g)
-         => (a -> g -> m (b, g))
-         -> g
+         => (a -> g -> m (b, g))    -- ^ (monadic) random arrow
+         -> g                       -- ^ random generator seed
          -> Auto m a b
 arrRandM = mkStateM
 
@@ -299,8 +299,8 @@ arrRandM = mkStateM
 --
 -- See the documentation of 'arrRand' for more information on this 'Auto'.
 --
-arrRandStd :: (a -> StdGen -> (b, StdGen))
-           -> StdGen
+arrRandStd :: (a -> StdGen -> (b, StdGen))  -- ^  random arrow
+           -> StdGen                        -- ^ random generator seed
            -> Auto m a b
 arrRandStd = mkState' (read <$> get) (put . show)
 
@@ -310,22 +310,22 @@ arrRandStd = mkState' (read <$> get) (put . show)
 --
 -- See the documentation of 'arrRandM' for more information on this 'Auto'.
 --
-arrRandStdM :: (a -> StdGen -> m (b, StdGen))
-            -> StdGen
+arrRandStdM :: (a -> StdGen -> m (b, StdGen)) -- ^ (mondic) random arrow
+            -> StdGen                         -- ^ random generator seed
             -> Auto m a b
 arrRandStdM = mkStateM' (read <$> get) (put . show)
 
 -- | The non-serializing/non-resuming version of 'arrRand'.
 arrRand_ :: RandomGen g
-         => (a -> g -> (b, g))
-         -> g
+         => (a -> g -> (b, g))        -- ^ random arrow
+         -> g                         -- ^ random generator seed
          -> Auto m a b
 arrRand_ = mkState_
 
 -- | The non-serializing/non-resuming version of 'arrRandM'.
 arrRandM_ :: RandomGen g
-          => (a -> g -> m (b, g))
-          -> g
+          => (a -> g -> m (b, g))     -- ^ (monadic) random arrow
+          -> g                        -- ^ random generator seed
           -> Auto m a b
 arrRandM_ = mkStateM_
 
@@ -343,8 +343,8 @@ arrRandM_ = mkStateM_
 -- on average once every @1/p@ ticks.
 --
 bernoulli :: (Serialize g, RandomGen g)
-          => Double       -- ^ probability of success per step
-          -> g            -- ^ initial seed
+          => Double       -- ^ probability of any step emitting
+          -> g            -- ^ random generator seed
           -> Auto m a (Blip a)
 bernoulli p = mkState (_bernoulliF p)
 
@@ -356,14 +356,16 @@ bernoulli p = mkState (_bernoulliF p)
 -- 'Auto'.
 --
 stdBernoulli :: Double    -- ^ probability of any step emitting
-             -> StdGen    -- ^ initial seed
+             -> StdGen    -- ^ random generator seed
+                          --         (between 0 and 1)
              -> Auto m a (Blip a)
 stdBernoulli p = mkState' (read <$> get) (put . show) (_bernoulliF p)
 
 -- | The non-serializing/non-resuming version of 'bernoulli'.
 bernoulli_ :: RandomGen g
            => Double      -- ^ probability of any step emitting
-           -> g           -- ^ initial seed
+           -> g           -- ^ random generator seed
+                          --         (between 0 and 1)
            -> Auto m a (Blip a)
 bernoulli_ p = mkState_ (_bernoulliF p)
 
@@ -383,8 +385,11 @@ _bernoulliF p x g = (outp, g')
 --
 -- You can recover exactly @'bernoulli' p@ by using @'sealRandom'
 -- ('bernoulliMR' p)@.
+--
+-- See 'sealRandom' for more information.
 bernoulliMR :: MonadRandom m
-            => Double
+            => Double         -- ^ probability of any step emiting
+                              --     (between 0 and 1)
             -> Auto m a (Blip a)
 bernoulliMR p = arrM $ \x -> do
     roll <- getRandomR (0, 1)
@@ -411,8 +416,8 @@ bernoulliMR p = arrM $ \x -> do
 -- parameter of @1 / l@.
 --
 randIntervals :: (Serialize g, RandomGen g)
-              => Double
-              -> g
+              => Double         -- ^ expected length of on/off intervals
+              -> g              -- ^ random generator seed
               -> Interval m a a
 randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 
@@ -423,8 +428,8 @@ randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 -- See the documentation of 'randIntervals' for more information on this
 -- 'Auto'.
 --
-stdRandIntervals :: Double
-                 -> StdGen
+stdRandIntervals :: Double      -- ^ expected length of on/off intervals
+                 -> StdGen      -- ^ random generator seed
                  -> Interval m a a
 stdRandIntervals l = mkState' (read <$> get)
                               (put . show)
@@ -433,8 +438,8 @@ stdRandIntervals l = mkState' (read <$> get)
 
 -- | The non-serializing/non-resuming version of 'randIntervals'.
 randIntervals_ :: RandomGen g
-               => Double
-               -> g
+               => Double        -- ^ expected length of on/off intervals
+               -> g             -- ^ random generator seed
                -> Interval m a a
 randIntervals_ l = mkState_ (_randIntervalsF (1/l)) . swap . random
 
@@ -455,8 +460,11 @@ _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
 --
 -- You can recover exactly @'randIntervals' l@ by using @'sealRandom'
 -- ('randIntervalsMR' l)@.
+--
+-- See 'sealRandom' for more information.
+--
 randIntervalsMR :: MonadRandom m
-                => Double
+                => Double           -- ^ expected length of on/off intervals
                 -> Interval m a a
 randIntervalsMR l = flip mkStateM Nothing $ \x monoff -> do
     onoff <- case monoff of
@@ -484,8 +492,8 @@ randIntervalsMR l = flip mkStateM Nothing $ \x monoff -> do
 -- of it all, use/compose it with normal 'Auto's as if it were a "pure"
 -- 'Auto'.
 sealRandom :: (RandomGen g, Serialize g, Monad m)
-           => Auto (RandT g m) a b
-           -> g
+           => Auto (RandT g m) a b        -- ^ 'Auto' to seal
+           -> g                           -- ^ initial seed
            -> Auto m a b
 sealRandom a = sealState (hoistA (StateT . runRandT) a)
 
@@ -493,8 +501,8 @@ sealRandom a = sealState (hoistA (StateT . runRandT) a)
 -- seed is not re-loaded/resumed, so every time you resume, the stream of
 -- available randomness begins afresh.
 sealRandom_ :: (RandomGen g, Serialize g, Monad m)
-            => Auto (RandT g m) a b
-            -> g
+            => Auto (RandT g m) a b         -- ^ 'Auto' to seal
+            -> g                            -- ^ initial seed
             -> Auto m a b
 sealRandom_ a = sealState_ (hoistA (StateT . runRandT) a)
 
@@ -506,8 +514,8 @@ sealRandom_ a = sealState_ (hoistA (StateT . runRandT) a)
 -- combinator.
 --
 sealRandomStd :: Monad m
-              => Auto (RandT StdGen m) a b
-              -> StdGen
+              => Auto (RandT StdGen m) a b    -- ^ 'Auto' to seal
+              -> StdGen                       -- ^ initial seed
               -> Auto m a b
 sealRandomStd a g0 = mkAutoM (sealRandomStd <$> resumeAuto a <*> (read <$> get))
                              (saveAuto a *> put (show g0))

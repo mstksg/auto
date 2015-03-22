@@ -266,8 +266,8 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- initial state of @s0@, and afterwards with each next updated state.
 --
 sealState :: (Monad m, Serialize s)
-          => Auto (StateT s m) a b
-          -> s
+          => Auto (StateT s m) a b    -- ^ 'Auto' run over 'State'
+          -> s                        -- ^ initial state
           -> Auto m a b
 sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
                          (saveAuto a *> put s0)
@@ -277,8 +277,8 @@ sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
 
 -- | The non-resuming/non-serializing version of 'sealState'.
 sealState_ :: Monad m
-           => Auto (StateT s m) a b
-           -> s
+           => Auto (StateT s m) a b   -- ^ 'Auto' run over 'State'
+           -> s                       -- ^ initial state
            -> Auto m a b
 sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                           (saveAuto a)
@@ -286,12 +286,12 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
--- | Turns an @a -> 'StateT' s m b@ kleisli arrow into an @'Auto' m a b@,
+-- | Turns an @a -> 'StateT' s m b@ Kleisli arrow into an @'Auto' m a b@,
 -- when given an initial state.  Will continually "run the function", using
 -- the state returned from the last run.
 fromState :: (Serialize s, Monad m)
-          => (a -> StateT s m b)
-          -> s
+          => (a -> StateT s m b)      -- ^ 'State' arrow
+          -> s                        -- ^ initial state
           -> Auto m a b
 fromState st = mkStateM (runStateT . st)
 
@@ -299,8 +299,8 @@ fromState st = mkStateM (runStateT . st)
 -- serialized/resumed, so every time the 'Auto' is resumed, it starts over
 -- with the given initial state.
 fromState_ :: Monad m
-           => (a -> StateT s m b)
-           -> s
+           => (a -> StateT s m b)     -- ^ 'State' arrow
+           -> s                       -- ^ initial state
            -> Auto m a b
 fromState_ st = mkStateM_ (runStateT . st)
 

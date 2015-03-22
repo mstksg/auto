@@ -1,3 +1,11 @@
+0.2.0.5
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.2.0.5>
+
+*   **Control.Auto.Process.Random**: Added combinators and sealers dealing
+    for working with an underlying `Rand` or `RandT` monad.
+*   Because of this, committed to adding `MonadRandom` as a dependency.
+
 0.2.0.4
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.4>
