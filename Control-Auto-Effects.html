@@ -128,8 +128,8 @@ bar = proc x -&gt; do
  <code>Reader</code> with <code><a href="Control-Auto-Core.html#v:stepAuto">stepAuto</a></code> and friends.</p><p>When used with <code><code>Reader</code> r</code>, it turns an <code><code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> (<code>Reader</code> r) a b</code> into
  an <code><code><a href="Control-Auto-Core.html#t:Auto-39-">Auto'</a></code> (a, r) b</code>.</p></div></div><div class="top"><p class="src"><a name="v:runWriterA" class="def">runWriterA</a> :: (<a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a> m, <a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Data-Monoid.html#t:Monoid">Monoid</a> w) =&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> (<a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/transformers-0.4.3.0/html/Control-Monad-Trans-Writer-Lazy.html#t:WriterT">WriterT</a> w m) a b -&gt; <a href="Control-Auto-Core.html#t:Auto">Auto</a> m a (b, w)</p><div class="doc"><p><a href="Unrolls.html">Unrolls</a> the underlying <code><code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/transformers-0.4.3.0/html/Control-Monad-Trans-Writer-Lazy.html#t:WriterT">WriterT</a></code> w m</code> <code><a href="file:///usr/local/ghc-7.8.3/share/doc/ghc/html/libraries/base-4.7.0.1/Control-Monad.html#t:Monad">Monad</a></code>, so that an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>
  that takes in a stream of <code>a</code> and outputs a stream of <code>b</code> will now
- output a stream <code>(b, w)</code>, where <code>w</code> is the accumulated log of the
- underlying <code>Writer</code> at every step.</p><pre>foo :: Auto (Writer (Sum Int)) Int Int
+ output a stream <code>(b, w)</code>, where <code>w</code> is the &quot;new log&quot; of the underlying
+ <code>Writer</code> at every step.</p><pre>foo :: Auto (Writer (Sum Int)) Int Int
 foo = effect (tell 1) *&gt; effect (tell 1) *&gt; sumFrom 0
 </pre><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let fooWriter = streamAuto foo
 </code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>runWriter $ fooWriter [1..10]
@@ -138,7 +138,12 @@ foo = effect (tell 1) *&gt; effect (tell 1) *&gt; sumFrom 0
  its &quot;result&quot; is just the cumulative sum of the inputs.</p><p>When we &quot;stream&quot; it, we get a <code>[Int] -&gt; <code>Writer</code> (Sum Int)
  [Int]</code>...which we can give an input list and <code>runWriter</code> it, getting
  a list of outputs and a &quot;final accumulator state&quot; of 10, for stepping it
- ten times.</p><p>We can write and compose own <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s under <code>Writer</code>, using the
+ ten times.</p><p>However, if we use <code><a href="Control-Auto-Effects.html#v:runWriterA">runWriterA</a></code> before streaming it, we get:</p><pre class="screen"><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>let fooW = runWriterA foo
+</code></strong><code class="prompt">&gt;&gt;&gt; </code><strong class="userinput"><code>streamAuto' fooW [1..10]
+</code></strong>[ (1 , Sum 2), (3 , Sum 2), (6 , Sum 2)
+, (10, Sum 2), (15, Sum 2), (21, Sum 2), -- ...
+</pre><p>Instead of accumulating it between steps, we get to &quot;catch&quot; the <code>Writer</code>
+ output at every individual step.</p><p>We can write and compose our own <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s under <code>Writer</code>, using the
  convenience of a shared accumulator, and then &quot;use them&quot; with other
  <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>s:</p><pre>bar :: Auto' Int Int
 bar = proc x -&gt; do
