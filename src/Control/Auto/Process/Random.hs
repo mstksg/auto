@@ -8,17 +8,21 @@
 -- Portability : portable
 --
 -- This module provides 'Auto's (purely) generating entropy in the form of
--- random or noisy processes.  Note that every 'Auto' here is completely
--- deterministic --- given the same initial seed, one would expect the same
--- stream of outputs on every run.  Furthermore, if a serializable 'Auto'
--- is serialized and resumed, it will continue along the deterministic path
+-- random or noisy processes, as well as 'Auto's to purify/seal
+-- 'Auto's with underlying entropy.
+--
+-- Note that every 'Auto' and combinator here is completely deterministic
+-- --- given the same initial seed, one would expect the same stream of
+-- outputs on every run.  Furthermore, if a serializable 'Auto' is
+-- serialized and resumed, it will continue along the deterministic path
 -- dictated by the /original/ seed given.
 --
--- All of these 'Auto's come in three flavors: one serializing one that
--- works with any serializable 'RandomGen' instance, one serializing one
--- that works specifically with 'StdGen' from "System.Random", and one that
--- takes any 'RandomGen' (including 'StdGen') and runs it without the
--- ability to serialize and resume deterministically.
+-- All of these 'Auto's and combinators come in three flavors: one
+-- serializing one that works with any serializable 'RandomGen' instance,
+-- one serializing one that works specifically with 'StdGen' from
+-- "System.Random", and one that takes any 'RandomGen' (including 'StdGen')
+-- and runs it without the ability to serialize and resume
+-- deterministically.
 --
 -- The reason why there's a specialized 'StdGen' version for all of these
 -- is that 'StdGen' actually doesn't have a 'Serialize' instance, so a
@@ -37,7 +41,7 @@
 -- @
 --
 -- These are useful for generating noise...a new random value at every
--- stoep.  They are entropy sources.
+-- step.  They are entropy sources.
 --
 -- Alternatively, if you want to give up parallelizability and determinism
 -- and have your entire 'Auto' be sequential, you can make your entire
@@ -65,24 +69,17 @@
 -- you re-load your 'Auto'.  Also, 'Auto''s are parallelizable, while
 -- @'Auto' ('Rand' g)@s are not.
 --
--- As a compromise, you can then "seal" away the stateful part with
--- 'sealState' and 'hoistA':
---
--- @
--- sealRandom :: 'Monad' m => 'Auto' ('RandT' g m) a b -> g -> 'Auto' m a b
--- sealRandom a0 = 'sealState' . 'hoistA' ('StateT' . 'runRandT')
---
--- sealRandom' :: 'Auto' ('Rand' g) a b -> g -> 'Auto'' a b
--- sealRandom' = sealRandom
--- @
---
--- Where 'hoistA' turns an @'Auto' ('RandT' g m)@ into an @'Auto' m@.
+-- As a compromise, you can then "seal" away the underlying monad with
+-- 'sealRandom', which takes an @'Auto' ('RandT' g m) a b@, a starting @g@,
+-- and turns it into a normal @'Auto' m a b@, with no underlying randomness
+-- monad.
 --
 -- In this way, you can run any 'Auto' under 'Rand' or 'RandT' as if it was
--- a normal 'Auto' "without" underlying randomness.  (These functions
--- aren't given here so that this library doesn't incurr a dependency on
--- /MonadRandom/). This lets you compose your sequential/non-parallel parts
--- in 'Rand' and use it as a part of an 'Auto''.
+-- a normal 'Auto' "without" underlying randomness.  This lets you compose
+-- your sequential/non-parallel parts in 'Rand'...and the later, use it as
+-- a part of a parallelizable/potentially non-sequential 'Auto''.  It's
+-- also convenient because you don't have to manually split and pass around
+-- seeds to every 'Auto' that requires entropy.
 --
 -- The other generators given are for useful random processes you might run
 -- into.  The first is a 'Blip' stream that emits at random times with the
@@ -116,19 +113,30 @@ module Control.Auto.Process.Random (
   , randIntervals
   , stdRandIntervals
   , randIntervals_
+  -- * Underlying entropy monads
+  -- ** Sealers
+  , sealRandom
+  , sealRandomStd
+  , sealRandom_
+  -- ** Processes
+  , bernoulliMR
+  , randIntervalsMR
   ) where
 
 import Control.Applicative
 import Control.Auto.Blip
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
+import Control.Auto.Effects
 import Control.Auto.Interval
 import Control.Category
+import Control.Monad              (guard)
+import Control.Monad.Random
+import Control.Monad.Trans.State  (StateT(..))
 import Data.Bits
 import Data.Serialize
 import Data.Tuple
 import Prelude hiding             (id, (.), concat, concatMap, sum)
-import System.Random
 
 -- | Given a seed-consuming generating function of form @g -> (b, g)@
 -- (where @g@ is the seed, and @b@ is the result) and an initial seed,
@@ -182,7 +190,7 @@ rands r = mkState (\_ g -> g `seq` r g)
 -- that you can serialize and resume.  This is needed because 'StdGen'
 -- doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'rands' for more information.
+-- See the documentation of 'rands' for more information on this 'Auto'.
 --
 stdRands :: (StdGen -> (b, StdGen)) -- ^ random generating function
          -> StdGen                  -- ^ initial generator
@@ -224,7 +232,7 @@ randsM r = mkStateM (\_ g -> r g)
 -- that you can serialize and resume.  This is needed because 'StdGen'
 -- doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'randsM' for more information.
+-- See the documentation of 'randsM' for more information on this 'Auto'.
 --
 stdRandsM :: Monad m
           => (StdGen -> m (b, StdGen))
@@ -289,7 +297,7 @@ arrRandM = mkStateM
 -- that you can serialize and resume.  This is needed because 'StdGen'
 -- doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'arrRand' for more information.
+-- See the documentation of 'arrRand' for more information on this 'Auto'.
 --
 arrRandStd :: (a -> StdGen -> (b, StdGen))
            -> StdGen
@@ -300,7 +308,7 @@ arrRandStd = mkState' (read <$> get) (put . show)
 -- that you can serialize and resume.  This is needed because 'StdGen'
 -- doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'arrRandM' for more information.
+-- See the documentation of 'arrRandM' for more information on this 'Auto'.
 --
 arrRandStdM :: (a -> StdGen -> m (b, StdGen))
             -> StdGen
@@ -344,7 +352,8 @@ bernoulli p = mkState (_bernoulliF p)
 -- so that you can serialize and resume.  This is needed because 'StdGen'
 -- doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'bernoulli' for more information.
+-- See the documentation of 'bernoulli' for more information on this
+-- 'Auto'.
 --
 stdBernoulli :: Double    -- ^ probability of any step emitting
              -> StdGen    -- ^ initial seed
@@ -365,9 +374,25 @@ _bernoulliF :: RandomGen g
             -> (Blip a, g)
 _bernoulliF p x g = (outp, g')
   where
-    (roll, g') = randomR (0, 1 :: Double) g
+    (roll, g') = randomR (0, 1) g
     outp | roll <= p = Blip x
          | otherwise = NoBlip
+
+-- | 'bernoulli', but uses an underlying entropy source ('MonadRandom')
+-- to get its randomness from, instead of an initially passed seed.
+--
+-- You can recover exactly @'bernoulli' p@ by using @'sealRandom'
+-- ('bernoulliMR' p)@.
+bernoulliMR :: MonadRandom m
+            => Double
+            -> Auto m a (Blip a)
+bernoulliMR p = arrM $ \x -> do
+    roll <- getRandomR (0, 1)
+    return $ if roll <= p
+               then Blip x
+               else NoBlip
+-- TODO: rewrite for AMP
+
 
 -- | An 'Interval' that is "on" and "off" for contiguous but random
 -- intervals of time...when "on", allows values to pass as "on" ('Just'),
@@ -395,7 +420,8 @@ randIntervals l = mkState (_randIntervalsF (1/l)) . swap . random
 -- "System.Random", so that you can serialize and resume.  This is needed
 -- because 'StdGen' doesn't have a 'Serialize' instance.
 --
--- See the documentation of 'randIntervals' for more information.
+-- See the documentation of 'randIntervals' for more information on this
+-- 'Auto'.
 --
 stdRandIntervals :: Double
                  -> StdGen
@@ -419,9 +445,72 @@ _randIntervalsF :: RandomGen g
                 -> (Maybe a, (g, Bool))
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    (roll, g') = randomR (0, 1 :: Double) g
+    (roll, g') = randomR (0, 1) g
     onoff' = onoff `xor` (roll <= thresh)
-    outp | onoff     = Just x
-         | otherwise = Nothing
+    outp = x <$ guard onoff
     -- should this be onoff' ?
 
+-- | 'randIntervals', but uses an underlying entropy source ('MonadRandom')
+-- to get its randomness from, instead of an initially passed seed.
+--
+-- You can recover exactly @'randIntervals' l@ by using @'sealRandom'
+-- ('randIntervalsMR' l)@.
+randIntervalsMR :: MonadRandom m
+                => Double
+                -> Interval m a a
+randIntervalsMR l = flip mkStateM Nothing $ \x monoff -> do
+    onoff <- case monoff of
+                    Just oo -> return oo
+                    Nothing -> getRandom
+    roll <- getRandomR (0, 1)
+    let onoff' = onoff `xor` (roll <= thresh)
+    return (x <$ guard onoff, Just onoff')
+  where
+    thresh = 1/l
+
+-- | Takes an 'Auto' over an 'Rand' or 'RandT' underlying monad as an
+-- entropy source, and "seals it away" to just be a normal 'Auto' or
+-- 'Auto'':
+--
+-- @
+-- 'sealRandom' :: 'Auto' ('Rand' g) a b -> g -> 'Auto'' a b
+-- @
+--
+-- You can now compose your entropic 'Auto' with other 'Auto's (using '.',
+-- and other combinators) as if it were a normal 'Auto'.
+--
+-- Useful because you can create entire programs that have access to an
+-- underlying entropy souce by composing with 'Rand'...and then, at the end
+-- of it all, use/compose it with normal 'Auto's as if it were a "pure"
+-- 'Auto'.
+sealRandom :: (RandomGen g, Serialize g, Monad m)
+           => Auto (RandT g m) a b
+           -> g
+           -> Auto m a b
+sealRandom a = sealState (hoistA (StateT . runRandT) a)
+
+-- | The non-serializing/non-resuming version of 'sealRandom_'.  The random
+-- seed is not re-loaded/resumed, so every time you resume, the stream of
+-- available randomness begins afresh.
+sealRandom_ :: (RandomGen g, Serialize g, Monad m)
+            => Auto (RandT g m) a b
+            -> g
+            -> Auto m a b
+sealRandom_ a = sealState_ (hoistA (StateT . runRandT) a)
+
+-- | Like 'sealRandom', but specialized for 'StdGen' from "System.Random",
+-- so that you can serialize and resume.  This is needed because 'StdGen'
+-- doesn't have a 'Serialize' instance.
+--
+-- See the documentation of 'sealRandom' for more information on this
+-- combinator.
+--
+sealRandomStd :: Monad m
+              => Auto (RandT StdGen m) a b
+              -> StdGen
+              -> Auto m a b
+sealRandomStd a g0 = mkAutoM (sealRandomStd <$> resumeAuto a <*> (read <$> get))
+                             (saveAuto a *> put (show g0))
+                           $ \x -> do
+                               ((y, a'), g1) <- runRandT (stepAuto a x) g0
+                               return (y, sealRandomStd a' g1)

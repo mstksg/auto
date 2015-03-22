@@ -242,7 +242,9 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- @foo@ be written using 'State', and being able to use it in a program
 -- with no global state?
 --
--- Using 'sealState'!
+-- Using 'sealState'!  Write the part of your program that would like
+-- shared global state with 'State'...and compose it with the rest as if it
+-- doesn't, locking it away!
 --
 -- @
 -- sealState       :: Auto (State s) a b -> s -> Auto' a b
@@ -262,10 +264,6 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- We say that @'sealState' f s0@ takes an input stream, and the output
 -- stream is the result of running the stream through @f@, first with an
 -- initial state of @s0@, and afterwards with each next updated state.
---
--- This can be extended to sealing 'RandT' from the /MonadRandom/ package
--- as well, as long as you 'hoistA' first with @'StateT' . 'runRandT'@.
---
 --
 sealState :: (Monad m, Serialize s)
           => Auto (StateT s m) a b
@@ -288,9 +286,9 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
--- | Turns an @a -> 'StateT' s m b@ arrow into an @'Auto' m a b@, when
--- given an initial state.  Will continually "run the function", using the
--- state returned from the last run.
+-- | Turns an @a -> 'StateT' s m b@ kleisli arrow into an @'Auto' m a b@,
+-- when given an initial state.  Will continually "run the function", using
+-- the state returned from the last run.
 fromState :: (Serialize s, Monad m)
           => (a -> StateT s m b)
           -> s
