@@ -317,8 +317,10 @@ dynZipF f x0 = go []
 -- using this can inspire more disciplined usage.  Also works as a drop-in
 -- replacement for 'dynZipF'.
 dynZipF_ :: Monad m
-         => (k -> Interval m a b)
-         -> a
+         => (k -> Interval m a b)     -- ^ function to generate a new
+                                      --     'Interval' for each coming @k@
+                                      --     in the blip stream.
+         -> a                         -- ^ "default" input to feed in
          -> Auto m ([a], Blip [k]) [b]
 dynZipF_ f x0 = go []
   where
@@ -433,8 +435,10 @@ dynMapF f x0 = go 0 IM.empty IM.empty
 -- using this can inspire more disciplined usage.  Also works as a drop-in
 -- replacement for 'dynMapF'.
 dynMapF_ :: Monad m
-         => (k -> Interval m a b)
-         -> a
+         => (k -> Interval m a b)     -- ^ function to generate a new
+                                      --     'Interval' for each coming @k@
+                                      --     in the blip stream.
+         -> a                         -- ^ "default" input to feed in
          -> Auto m (IntMap a, Blip [k]) (IntMap b)
 dynMapF_ f x0 = go 0 IM.empty IM.empty
   where

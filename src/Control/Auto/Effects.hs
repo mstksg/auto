@@ -242,7 +242,9 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- @foo@ be written using 'State', and being able to use it in a program
 -- with no global state?
 --
--- Using 'sealState'!
+-- Using 'sealState'!  Write the part of your program that would like
+-- shared global state with 'State'...and compose it with the rest as if it
+-- doesn't, locking it away!
 --
 -- @
 -- sealState       :: Auto (State s) a b -> s -> Auto' a b
@@ -263,13 +265,9 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- stream is the result of running the stream through @f@, first with an
 -- initial state of @s0@, and afterwards with each next updated state.
 --
--- This can be extended to sealing 'RandT' from the /MonadRandom/ package
--- as well, as long as you 'hoistA' first with @'StateT' . 'runRandT'@.
---
---
 sealState :: (Monad m, Serialize s)
-          => Auto (StateT s m) a b
-          -> s
+          => Auto (StateT s m) a b    -- ^ 'Auto' run over 'State'
+          -> s                        -- ^ initial state
           -> Auto m a b
 sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
                          (saveAuto a *> put s0)
@@ -279,8 +277,8 @@ sealState a s0 = mkAutoM (sealState <$> resumeAuto a <*> get)
 
 -- | The non-resuming/non-serializing version of 'sealState'.
 sealState_ :: Monad m
-           => Auto (StateT s m) a b
-           -> s
+           => Auto (StateT s m) a b   -- ^ 'Auto' run over 'State'
+           -> s                       -- ^ initial state
            -> Auto m a b
 sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                           (saveAuto a)
@@ -288,12 +286,12 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
--- | Turns an @a -> 'StateT' s m b@ arrow into an @'Auto' m a b@, when
--- given an initial state.  Will continually "run the function", using the
--- state returned from the last run.
+-- | Turns an @a -> 'StateT' s m b@ Kleisli arrow into an @'Auto' m a b@,
+-- when given an initial state.  Will continually "run the function", using
+-- the state returned from the last run.
 fromState :: (Serialize s, Monad m)
-          => (a -> StateT s m b)
-          -> s
+          => (a -> StateT s m b)      -- ^ 'State' arrow
+          -> s                        -- ^ initial state
           -> Auto m a b
 fromState st = mkStateM (runStateT . st)
 
@@ -301,15 +299,15 @@ fromState st = mkStateM (runStateT . st)
 -- serialized/resumed, so every time the 'Auto' is resumed, it starts over
 -- with the given initial state.
 fromState_ :: Monad m
-           => (a -> StateT s m b)
-           -> s
+           => (a -> StateT s m b)     -- ^ 'State' arrow
+           -> s                       -- ^ initial state
            -> Auto m a b
 fromState_ st = mkStateM_ (runStateT . st)
 
 -- | "Unrolls" the underlying @'WriterT' w m@ 'Monad', so that an 'Auto'
 -- that takes in a stream of @a@ and outputs a stream of @b@ will now
--- output a stream @(b, w)@, where @w@ is the accumulated log of the
--- underlying 'Writer' at every step.
+-- output a stream @(b, w)@, where @w@ is the "new log" of the underlying
+-- 'Writer' at every step.
 --
 -- @
 -- foo :: Auto (Writer (Sum Int)) Int Int
@@ -328,7 +326,17 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- a list of outputs and a "final accumulator state" of 10, for stepping it
 -- ten times.
 --
--- We can write and compose own 'Auto's under 'Writer', using the
+-- However, if we use 'runWriterA' before streaming it, we get:
+--
+-- >>> let fooW = runWriterA foo
+-- >>> streamAuto' fooW [1..10]
+-- [ (1 , Sum 2), (3 , Sum 2), (6 , Sum 2)
+-- , (10, Sum 2), (15, Sum 2), (21, Sum 2), -- ...
+--
+-- Instead of accumulating it between steps, we get to "catch" the 'Writer'
+-- output at every individual step.
+--
+-- We can write and compose our own 'Auto's under 'Writer', using the
 -- convenience of a shared accumulator, and then "use them" with other
 -- 'Auto's:
 --
