@@ -308,8 +308,8 @@ fromState_ st = mkStateM_ (runStateT . st)
 
 -- | "Unrolls" the underlying @'WriterT' w m@ 'Monad', so that an 'Auto'
 -- that takes in a stream of @a@ and outputs a stream of @b@ will now
--- output a stream @(b, w)@, where @w@ is the accumulated log of the
--- underlying 'Writer' at every step.
+-- output a stream @(b, w)@, where @w@ is the "new log" of the underlying
+-- 'Writer' at every step.
 --
 -- @
 -- foo :: Auto (Writer (Sum Int)) Int Int
@@ -328,7 +328,17 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- a list of outputs and a "final accumulator state" of 10, for stepping it
 -- ten times.
 --
--- We can write and compose own 'Auto's under 'Writer', using the
+-- However, if we use 'runWriterA' before streaming it, we get:
+--
+-- >>> let fooW = runWriterA foo
+-- >>> streamAuto' fooW [1..10]
+-- [ (1 , Sum 2), (3 , Sum 2), (6 , Sum 2)
+-- , (10, Sum 2), (15, Sum 2), (21, Sum 2), -- ...
+--
+-- Instead of accumulating it between steps, we get to "catch" the 'Writer'
+-- output at every individual step.
+--
+-- We can write and compose our own 'Auto's under 'Writer', using the
 -- convenience of a shared accumulator, and then "use them" with other
 -- 'Auto's:
 --
