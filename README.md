@@ -54,6 +54,7 @@ pid (kp, ki, kd) blackbox = proc target -> do
         -- the response of the system, feeding the control into the blackbox
         response <- blackbox   -< control
 
+    -- the output of this all is the value of the response
     id -< response
 ~~~
 
@@ -64,9 +65,11 @@ What is it?
 **Auto** is a Haskell DSL and platform providing an API with declarative,
 compositional, denotative semantics for discrete-step, locally stateful,
 interactive programs, games, and automations, with implicitly derived
-serialization.  At the high-level, it allows you to describe your interactive
-program or simulation as a *stream transformer*, by composition and
-transformation of other stream transformers.
+serialization.  It is suited for any domain where your program's input or
+output is a stream of values, input events, or output views.  At the
+high-level, it allows you to describe your interactive program or simulation
+as a *stream transformer*, by composition and transformation of other stream
+transformers.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
