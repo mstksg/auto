@@ -1,3 +1,13 @@
+0.2.0.6
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.2.0.6>
+
+*   *Control.Auto.Interval*: Added new combinator `holdJusts` dealing with
+    intervals; stretches the last received "on"/`Just` value over the duration
+    of any "off"/`Nothing` periods.
+*   Some documentation changes to the index page and README that were not
+    fixed with a manual re-upload.
+
 0.2.0.5
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.5>
