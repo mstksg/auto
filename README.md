@@ -292,8 +292,8 @@ import Control.Auto
 import Prelude hiding ((.), id)
 
 -- Let's build a big chat bot by combining small chat bots.
--- A "ChatBot" is going to be an `Auto` taking in a tuple of an incoming nick,
--- message, and timestamp at every step; the result is a "blip stream" that
+-- A "ChatBot" is going to be an `Auto` taking in a stream of tuples of
+-- incoming nick, message, and timestamps; the result is a "blip stream" that
 -- emits with messages whenever it wants to respond.
 
 type Message   = String

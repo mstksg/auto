@@ -4,6 +4,11 @@ synopsis:            Denotative, locally stateful programming DSL & platform
 description:         (Up to date documentation is maintained at
                      <https://mstksg.github.com/auto>)
                      .
+                     Read the README first!
+                     <https://github.com/mstksg/auto/blob/master/README.md>
+                     For motivating examples, and concrete explanations of
+                     things described here.
+                     .
                      /auto/ is a Haskell DSL and platform providing
                      declarative, compositional, denotative semantics for
                      discrete-step, locally stateful, interactive programs,
