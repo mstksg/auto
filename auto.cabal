@@ -1,5 +1,5 @@
 name:                auto
-version:             0.2.0.6
+version:             0.2.0.5
 synopsis:            Denotative, locally stateful programming DSL & platform
 description:         (Up to date documentation is maintained at
                      <https://mstksg.github.com/auto>)
@@ -8,9 +8,9 @@ description:         (Up to date documentation is maintained at
                      declarative, compositional, denotative semantics for
                      discrete-step, locally stateful, interactive programs,
                      games, and automations, with implicitly derived
-                     serialization.  It is suited for any domain where the
-                     either the input or the output can be described as
-                     a stream: a sream of input events, output views, etc.
+                     serialization.  It is suited for any domain where either
+                     the input or the output can be described as a stream: a
+                     stream of input events, output views, etc.
                      .
                      /auto/ works by providing a type that encapsulates
                      "stream transformers", or locally stateful functions; by
