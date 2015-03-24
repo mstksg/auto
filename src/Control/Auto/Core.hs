@@ -15,6 +15,10 @@
 -- This module defines and provides the core types, (smart) constructors,
 -- and general high and low-level utilities used by the /auto/ library.
 --
+-- Note that importing and using functions from this module in part voids
+-- some of the "semantic contracts" of the 'Auto' types you get, so use
+-- with caution!
+--
 -- A lot of low-level functionality is provided here which is most likely
 -- unnecessary for most applications; many are mostly for internal usage or
 -- advanced/fine-grained usage.  It also isn't really enough to do too many

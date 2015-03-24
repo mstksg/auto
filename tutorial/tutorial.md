@@ -252,7 +252,7 @@ We also have the Applicative-derived instances like `Monoid`, so any `Auto m
 a b` is a `Monoid` if `b` is a `Monoid`.
 
 ~~~haskell
-mconcat :: Monoid m => [Auto m a b] -> Auto m a b
+mconcat :: Monoid b => [Auto m a b] -> Auto m a b
 ~~~
 
 A lot of times you'll have a lot of things handling the same input in
