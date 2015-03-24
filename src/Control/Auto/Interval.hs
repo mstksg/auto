@@ -43,6 +43,9 @@ module Control.Auto.Interval (
   , hold_
   , holdFor
   , holdFor_
+  -- * Stretching
+  , holdJusts
+  , holdJusts_
   -- * Composition with 'Interval'
   , during
   , compI
@@ -526,6 +529,22 @@ _holdForF n = f   -- n should be >= 0
                    (Blip b,  _    ) -> (Just b , n    )
                    (_     , (_, 0)) -> (Nothing, 0    )
                    (_     , (z, j)) -> (z      , j - 1)
+
+-- | "Stretches" the last "on"/'Just' input over the entire range of
+-- following "off"/'Nothing' inputs.  Holds on to the last 'Just' until
+-- another one comes along.
+--
+-- >>> streamAuto' holdJusts [Nothing, Just 1, Just 3, Nothing, Nothing, Just 5]
+-- [Nothing, Just 1, Just 3, Just 3, Just 3, Just 5]
+--
+holdJusts :: Serialize a
+          => Interval m (Maybe a) a
+holdJusts = accum (flip (<|>)) Nothing
+
+-- | The non-resuming/non-serializing version of 'holdJusts'.
+--
+holdJusts_ :: Interval m (Maybe a) a
+holdJusts_ = accum_ (flip (<|>)) Nothing
 
 -- | Forks a common input stream between the two 'Interval's and returns,
 -- itself, an 'Interval'.  If the output of the first one is "on", the

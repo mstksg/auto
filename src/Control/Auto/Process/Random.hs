@@ -376,7 +376,7 @@ _bernoulliF :: RandomGen g
             -> (Blip a, g)
 _bernoulliF p x g = (outp, g')
   where
-    (roll, g') = randomR (0, 1) g
+    (roll, g') = randomR (0 :: Double, 1) g
     outp | roll <= p = Blip x
          | otherwise = NoBlip
 
@@ -450,7 +450,7 @@ _randIntervalsF :: RandomGen g
                 -> (Maybe a, (g, Bool))
 _randIntervalsF thresh x (g, onoff) = (outp, (g', onoff'))
   where
-    (roll, g') = randomR (0, 1) g
+    (roll, g') = randomR (0 :: Double, 1) g
     onoff' = onoff `xor` (roll <= thresh)
     outp = x <$ guard onoff
     -- should this be onoff' ?
