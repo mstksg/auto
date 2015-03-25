@@ -358,8 +358,9 @@ with forks and re-cominings from `Applicative` and `Arrow` methods.
 Speaking of `Arrow`, we also have a neat interface exposed by `Arrow`,
 `ArrowPlus`, and `ArrowLoop`.  First of all, we get `arr :: (a -> b) -> Auto m
 a b`, which basically an `Auto` that is a constant, pure function (the output
-is the corresponding input applied to the given function).  But more
-importantly, we get proc notation!
+is the corresponding input applied to the given function).  We get the ability
+to make an `Auto` run on "only the first item in a tuple" (`first`), or "only
+`Left`s that come in" (`left`).  Also, we get proc notation!
 
 ~~~haskell
 foo :: Auto' Int (Int, Maybe Int)
@@ -446,7 +447,7 @@ We can't do `sumFrom y`, because `y` is not an actual value that we have at
 "compile"/"building" time.  `y` is what we're calling the result of
 `productFrom 1`, at every step, so its value changes at every step, and every
 `Auto` has to be a **fixed `Auto`**.  Remember, `Auto` relationships are
-"forever" and fixed, declaritive style.  So the `Auto` where `sumFrom` is,
+"forever" and fixed, declarative style.  So the `Auto` where `sumFrom` is,
 there, has to be a fixed thing that doesn't change at every step...but `y` is
 a value that will very as the stream marches on.
 

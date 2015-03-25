@@ -127,7 +127,9 @@ overList' a (x:xs) = let (y, a')   = stepAuto' a x
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
 -- this "lazily" (over the Monad), so with most Monads, this should work
--- fine with infinite lists.
+-- fine with infinite lists.  (That is, @'streamAuto' ('arrM' f)@ behaves
+-- exactly like @'mapM' f@, and you can reason with 'Auto's as if you'd
+-- reason with @mapM@ on an infinite list)
 --
 -- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
 -- m [b]@.
@@ -147,6 +149,29 @@ overList' a (x:xs) = let (y, a')   = stepAuto' a x
 --
 -- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
 -- item to stdout as a side-effect.
+--
+-- Note that we use "stream" here slightly differently than in libraries
+-- like /pipes/ or /conduit/.  We don't stream over the @m@ Monad (like
+-- @IO@)...we stream over the __input elements__.  Using 'streamAuto' on an
+-- infinite list allows you to "stop", for example, to find the
+-- result...but it will still sequence all the *effects*.
+--
+-- For example:
+--
+-- >>> take 10 <$> streamAuto (arrM print *> id) [1..]
+--
+-- Will execute 'print' on every element before "returning" with [1..10].
+--
+-- >>> flip runState 0 $ take 10 <$> streamAuto (arrM (modify . (+)) *> id) [1..]
+-- ([1,2,3,4,5,6,7,8,9,10], .... (never terminates)
+--
+-- This will immediately return the "result", and you can bind to the
+-- result with `(>>=)`, but it'll never return a "final state", because the
+-- final state involves executing all of the 'modify's.
+--
+-- In short, treat this like you'd treat 'mapM'...but it's not a "stream"
+-- in the sense of IO streaming libraries; it streams over the /input
+-- values/, not the /effects/.
 --
 streamAuto :: Monad m
            => Auto m a b        -- ^ 'Auto' to stream

@@ -31,7 +31,7 @@ type System m = Auto m Double Double
 -- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
 --
 pid :: MonadFix m => (Double, Double, Double) -> System m -> System m
-pid (kp, ki, kd) blackbox = proc target -> do
+pid (kp, ki, kd) blackbox = proc target -> do       -- proc syntax; see tutorial
     rec --  err :: Double
         --  the difference of the response from the target
         let err        = target - response
@@ -303,7 +303,7 @@ type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
 
 -- Keeps track of last time a nick has spoken, and allows queries
 seenBot :: Monad m => ChatBot m
-seenBot = proc (nick, msg, time) -> do
+seenBot = proc (nick, msg, time) -> do          -- proc syntax; see tutorial
     -- seens :: Map Nick UTCTime
     -- Map containing last time each nick has spoken
     seens <- accum addToMap M.empty -< (nick, time)
