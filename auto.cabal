@@ -81,17 +81,17 @@ library
                      , Control.Auto.Serialize
                      , Control.Auto.Switch
                      , Control.Auto.Time
-  -- other-modules:       
-  -- other-extensions:    
-  build-depends:       base         >= 4.6      && < 4.8
+  -- other-modules:
+  -- other-extensions:
+  build-depends:       base         >= 4.6      && < 4.9
                      , MonadRandom  >= 0.3.0.1  && < 0.4
                      , bytestring   >= 0.10.4.0 && < 0.11
                      , cereal       >= 0.4.1.1  && < 0.5
                      , containers   >= 0.5.5.1  && < 0.6
                      , deepseq      >= 1.3.0.2  && < 2.0
-                     , profunctors  >= 4.4.1    && < 5.0
+                     , profunctors  >= 4.3      && < 5.0
                      , random       >= 1.1      && < 2.0
-                     , semigroups   >= 0.16.2.2 && < 0.17
+                     , semigroups   >= 0.16     && < 0.17
                      , transformers >= 0.4.2.0  && < 0.5
   hs-source-dirs:      src
   default-language:    Haskell2010
