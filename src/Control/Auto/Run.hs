@@ -45,18 +45,21 @@ module Control.Auto.Run (
   -- * Running on concurrent channels
   , runOnChan
   , runOnChanM
+  -- * Running on as a ListT-compatible stream
+  , toEffectStream
   ) where
 
 import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Concurrent
-import Control.Monad hiding  (mapM, mapM_)
+import Control.Monad hiding      (mapM, mapM_)
+import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Profunctor
-import Prelude hiding        (interact, mapM, mapM_)
-import Text.Read
+import Prelude hiding            (interact, mapM, mapM_)
+import Text.Read hiding          (lift)
 
 -- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
 -- -> m [b]@ inside.  Streaming is done in the context of the underlying
@@ -499,3 +502,28 @@ runOnChan :: (b -> IO Bool)           -- ^ function to "handle" each
            -> IO (Auto' a b)          -- ^ final 'Auto' after it all, when
                                       --     the handle resturns 'False'
 runOnChan = runOnChanM (return . runIdentity)
+
+-- | Turns an @Auto m' a b@ and an "input producer" @m a@ into a "ListT
+-- compatible effectful stream", described at
+-- <http://www.haskellforall.com/2014/11/how-to-build-library-agnostic-streaming.html>
+--
+-- Any library that offers a "@ListT@" type can use this result...and
+-- usually turn it into an effectful stream.
+--
+-- For example, the /pipes/ library offers @runListT@ so you can run this,
+-- constantly pulling out @a@s from the stream using the @m a@, feeding
+-- it in, and moving forward, all with the control and disciplined resource
+-- handling of /pipes/.
+toEffectStream :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
+               => (forall c. m' c -> m c)   -- ^ function to change the underyling monad from @m'@ to @m@
+               -> m a                       -- ^ action to generate inputs
+               -> Auto m' a b               -- ^ Auto to run as an effectful stream
+               -> t m b                     -- ^ @ListT@-compatible type
+toEffectStream nt getInp = go
+  where
+    go a0 = do
+      (y, a1) <- lift $ do x <- getInp
+                           nt $ stepAuto a0 x
+      return y `mplus` go a1
+
+

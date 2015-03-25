@@ -169,9 +169,9 @@ continues.
 ### Support
 
 Though this library is not officially released yet, the official support and
-discussion channel is #haskell-auto on freenode.  You can also usually find me
-(the maintainer and developer) as *jle`* on #haskell and #haskell-game.  Also,
-contributions to documentation and tests are welcome! :D
+discussion channel is *#haskell-auto* on freenode.  You can also usually find
+me (the maintainer and developer) as *jle`* on *#haskell* and *#haskell-game*.
+Also, contributions to documentation and tests are welcome! :D
 
 Why Auto?
 ---------
