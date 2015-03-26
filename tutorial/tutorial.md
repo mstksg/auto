@@ -4,16 +4,11 @@ Auto
 Welcome to the tutorial for getting started with Auto!
 
 This is actually just a basic overview of the library and some basic programs,
-enough to get started, hopefully; for further information, check out
-[auto-examples][] for more real-world examples, and some of my writeups on [my
-blog][blog].  Up-to-date documentation is, at the moment, hosted [on
-github][docs]...and the latest version of this tutorial itself can be found on
-[the development branch][tutorial], normally!
-
-[auto-examples]: https://github.com/mstksg/auto-examples
-[blog]: http://blog.jle.im
-[docs]: https://mstksg.github.io/auto/
-[tutorial]: https://github.com/mstksg/auto/blob/develop/tutorial/tutorial.md
+enough to get started, hopefully; for more, check out the [All About
+Auto][aaa] series on my blog where I break down real world projects and
+[auto-examples][] for more real-world examples, Up-to-date documentation is,
+at the moment, hosted [on github][docs]...and the latest version of this
+tutorial itself can be found on [the development branch][tutorial], normally!
 
 Auto
 ----
@@ -999,7 +994,7 @@ Final partings
 --------------
 
 One last note before finishing up...if you ever want to implement a low-level
-library, or implement a "backend", defining your own `Auto`s and working with
+library, or implement a "back-end", defining your own `Auto`s and working with
 them has its own rules.  You're a bit "on your own", in this sense; the
 optimization game might take you to places that really get rid of the nice
 semantic denotative ideals of this library. I plan on writing a
@@ -1019,28 +1014,38 @@ Anyways, I recommend just looking over the combinators available to you in the
 various modules, like *[Control.Auto.Blip][]*, *[Control.Auto.Interval][]*,
 and *[Control.Auto.Switch][]*.  We didn't go over anything close to all of
 them in this tutorial, so it's nice for getting a good overview.  The most
-up-to-date documentation at this point in time is on [the github pages][docs]
+up-to-date documentation at this point in time is on [the github pages][docs],
+but there's also the [hackage docs][hackage] as well.
 
-A good next step too wouild be also just looking at the [auto-examples][]
-directory and peruse over the examples, which each highlight a different
-aspect of the library, so you can see how all of these ideas work together.
-There will also be writeups on [my blog][blog] coming up too!
+A good next step too would be to check out my [All About Auto][aaa] series on
+my blog, where I break down approaching and finishing real-world problems with
+the library using the tools described here. You can also look at the
+[auto-examples][] directory and peruse over the examples, which each highlight
+a different aspect of the library, so you can see how all of these ideas work
+together.
 
 Help is always available on the *#haskell-auto* channel on freenode IRC; you
 can also email me at <justin@jle.im>, or find me on twitter as
 [mstk][twitter].  There is no mailing list or message board yet, but for now,
 feel free to abuse the [github issue tracker][issues].
 
-[twitter]: https://twitter.com/mstk
-[issues]: https://github.com/mstksg/auto/issues
-
 Now go forth and make locally stateful, denotative, declarative programs!
+
+[aaa]: http://blog.jle.im/entries/series/+all-about-auto
+[auto-examples]: https://github.com/mstksg/auto-examples
+[blog]: http://blog.jle.im
+[docs]: https://mstksg.github.io/auto/
+[hackage]: http://hackage.haskell.org/package/auto
+[issues]: https://github.com/mstksg/auto/issues
+[mkAutoM]: http://mstksg.github.io/auto/Control-Auto-Core.html#v:mkAutoM
+[tutorial]: https://github.com/mstksg/auto/blob/develop/tutorial/tutorial.md
+[twitter]: https://twitter.com/mstk
 
 [Control.Auto.Blip]: http://mstksg.github.io/auto/Control-Auto-Blip.html
 [Control.Auto.Collection]: http://mstksg.github.io/auto/Control-Auto-Collection.html
+[Control.Auto.Core]: http://mstksg.github.io/auto/Control-Auto-Core.html
 [Control.Auto.Interval]: http://mstksg.github.io/auto/Control-Auto-Interval.html
 [Control.Auto.Run]: http://mstksg.github.io/auto/Control-Auto-Run.html
 [Control.Auto.Serialize]: http://mstksg.github.io/auto/Control-Auto-Serialize.html
 [Control.Auto.Switch]: http://mstksg.github.io/auto/Control-Auto-Switch.html
-[Control.Auto.Core]: http://mstksg.github.io/auto/Control-Auto-Core.html
-[mkAutoM]: http://mstksg.github.io/auto/Control-Auto-Core.html#v:mkAutoM
+

@@ -157,10 +157,14 @@ Intrigued?  Excited?  Start at [the tutorial][tutorial]!
 
 It's a part of this package directory and also on github at the above link.
 The current development documentation server is found at
-<https://mstksg.github.io/auto>. You can find examples and demonstrations in
-the [auto-examples][] repo on github; they are constantly being kept
-up-to-date with the currently super unstable API.
+<https://mstksg.github.io/auto>.
 
+From there, you can check out my [All About Auto][aaa] series on my blog,
+where I break sample projects and show to approach projects in real life.  You
+can also find examples and demonstrations in the [auto-examples][] repo on
+github.
+
+[aaa]: http://blog.jle.im/entries/series/+all-about-auto
 [auto-examples]: https://github.com/mstksg/auto-examples
 
 More examples and further descriptions will appear here as development
@@ -168,10 +172,10 @@ continues.
 
 ### Support
 
-Though this library is not officially released yet, the official support and
-discussion channel is *#haskell-auto* on freenode.  You can also usually find
-me (the maintainer and developer) as *jle`* on *#haskell* and *#haskell-game*.
-Also, contributions to documentation and tests are welcome! :D
+The official support and discussion channel is *#haskell-auto* on freenode.
+You can also usually find me (the maintainer and developer) as *jle`* on
+*#haskell-game* or *#haskell*. Also, contributions to documentation and tests
+are welcome! :D
 
 Why Auto?
 ---------
