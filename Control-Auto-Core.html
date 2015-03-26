@@ -2,7 +2,9 @@
 window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Core.html");};
 //]]>
 </script></head><body><div id="package-header"><ul class="links" id="page-menu"><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul><p class="caption">auto-0.2.0.6: Denotative, locally stateful programming DSL &amp; platform</p></div><div id="content"><div id="module-header"><table class="info"><tr><th>Copyright</th><td>(c) Justin Le 2015</td></tr><tr><th>License</th><td>MIT</td></tr><tr><th>Maintainer</th><td>justin@jle.im</td></tr><tr><th>Stability</th><td>unstable</td></tr><tr><th>Portability</th><td>portable</td></tr><tr><th>Safe Haskell</th><td>None</td></tr><tr><th>Language</th><td>Haskell2010</td></tr></table><p class="caption">Control.Auto.Core</p></div><div id="table-of-contents"><p class="caption">Contents</p><ul><li><a href="#g:1">Auto</a><ul><li><a href="#g:2">Type</a></li><li><a href="#g:3">Running</a></li><li><a href="#g:4">Serializing</a></li><li><a href="#g:5">Underlying monad</a></li><li><a href="#g:6">Special modifiers</a></li></ul></li><li><a href="#g:7">Auto constructors</a><ul><li><a href="#g:8">Lifting values and functions</a></li><li><a href="#g:9">from State transformers</a></li><li><a href="#g:10">from Accumulators</a><ul><li><a href="#g:11">Result-first</a></li><li><a href="#g:12">Initial accumulator-first</a></li></ul></li><li><a href="#g:13">Arbitrary Autos</a></li></ul></li><li><a href="#g:14">Strictness</a></li></ul></div><div id="description"><p class="caption">Description</p><div class="doc"><p>This module defines and provides the core types, (smart) constructors,
- and general high and low-level utilities used by the <em>auto</em> library.</p><p>A lot of low-level functionality is provided here which is most likely
+ and general high and low-level utilities used by the <em>auto</em> library.</p><p>Note that importing and using functions from this module in part voids
+ some of the &quot;semantic contracts&quot; of the <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> types you get, so use
+ with caution!</p><p>A lot of low-level functionality is provided here which is most likely
  unnecessary for most applications; many are mostly for internal usage or
  advanced/fine-grained usage.  It also isn't really enough to do too many
  useful things, either.  It's recommended that you import <a href="Control-Auto.html">Control.Auto</a>
@@ -15,14 +17,18 @@ window.onload = function () {pageLoad();setSynopsis("mini_Control-Auto-Core.html
  represents<em>denotes a </em>a relationship/ between an input and an
  output that is preserved over multiple steps, where that relationship is
  (optionally) maintained within the context of a monad.</p><p>A lot of fancy words, I know...but you can think of an <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> as nothing
- more than a &quot;stream transformer&quot;.  A stream of sequential inputs come in
- one at a time, and a stream of outputs pop out one at a time, as well.</p><p>Using the <code>streamAuto</code> function, you can &quot;unwrap&quot; the inner stream
+ more than a &quot;stream transformer&quot; of value streams.  A stream of
+ sequential input values come in one at a time, and a stream of outputs
+ pop out one at a time, as well.</p><p>Using the <code>streamAuto</code> function, you can &quot;unwrap&quot; the inner value stream
  transformer from any <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code>: if <code>a :: <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> m a b</code>, <code>streamAuto</code> lets
  you turn it into an <code>[a] -&gt; m [b]</code>.  &quot;Give me a stream of <code>a</code>s, one at
  a time, and I'll give you a list of <code>b</code>s, matching a relationship to
  your stream of <code>a</code>s.&quot;</p><pre>-- unwrap your inner [a] -&gt; m [b]!
 <code>streamAuto</code> :: Monad m =&gt; <code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> m a b -&gt; ([a] -&gt; m [b])
-</pre><p>There's a handy type synonym <code><a href="Control-Auto-Core.html#t:Auto-39-">Auto'</a></code> for relationships that don't really
+</pre><p>You can also turn an <code><code><a href="Control-Auto-Core.html#t:Auto">Auto</a></code> m a b</code> into an <em>effects stream</em> that
+ executes effects sequentially with <code>toEffectStream</code> and
+ <code>streamAutoEffects</code>, so you can run it with a ListT-compatible library
+ like <em>pipes</em>.</p><p>There's a handy type synonym <code><a href="Control-Auto-Core.html#t:Auto-39-">Auto'</a></code> for relationships that don't really
  need a monadic context; the <code>m</code> is just <code><a href="file:///home/justin/projects/haskell/auto/.cabal-sandbox/share/doc/x86_64-linux-ghc-7.8.3/transformers-0.4.3.0/html/Data-Functor-Identity.html#t:Identity">Identity</a></code>:</p><pre>type Auto' = Auto Identity
 </pre><p>So if you had an <code>a :: <code><a href="Control-Auto-Core.html#t:Auto-39-">Auto'</a></code> a b</code>, you can use <code>streamAuto'</code> to
  &quot;unwrap&quot; the inner stream transformer, <code>[a] -&gt; [b]</code>.</p><pre>-- unwrap your inner [a] -&gt; [b]!

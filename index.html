@@ -2,18 +2,21 @@
 window.onload = function () {pageLoad();};
 //]]>
 </script></head><body><div id="package-header"><ul class="links" id="page-menu"><li><a href="index.html">Contents</a></li><li><a href="doc-index.html">Index</a></li></ul><p class="caption">auto-0.2.0.6: Denotative, locally stateful programming DSL &amp; platform</p></div><div id="content"><div id="description"><h1>auto-0.2.0.6: Denotative, locally stateful programming DSL &amp; platform</h1><div class="doc"><p>(Up to date documentation is maintained at
-<a href="https://mstksg.github.com/auto">https://mstksg.github.com/auto</a>)</p><p><em>auto</em> is a Haskell DSL and platform providing
+<a href="https://mstksg.github.com/auto">https://mstksg.github.com/auto</a>)</p><p>Read the README first!
+<a href="https://github.com/mstksg/auto/blob/master/README.md">https://github.com/mstksg/auto/blob/master/README.md</a>
+, for motivating examples, and concrete explanations of
+things described here.</p><p><em>auto</em> is a Haskell DSL and platform providing
 declarative, compositional, denotative semantics for
 discrete-step, locally stateful, interactive programs,
 games, and automations, with implicitly derived
-serialization.  It is suited for any domain where the
-either the input or the output can be described as
-a stream: a sream of input events, output views, etc.</p><p><em>auto</em> works by providing a type that encapsulates
-&quot;stream transformers&quot;, or locally stateful functions; by
-specifying your program as a (potentially cyclic) graph
-of relationships between streams, you create a way of
-&quot;declaring&quot; a system based simply on static relationships
-between quantities.</p><p>Instead of a &quot;state monad&quot; type solution, where all
+serialization.  It is suited for any domain where either
+the input or the output can be described as a stream of
+values: a stream of input events, output views, etc.</p><p><em>auto</em> works by providing a type that encapsulates
+&quot;value stream transformers&quot;, or locally stateful
+functions; by specifying your program as a (potentially
+cyclic) graph of relationships between value streams, you
+create a way of &quot;declaring&quot; a system based simply on
+static relationships between quantities.</p><p>Instead of a &quot;state monad&quot; type solution, where all
 functions have access to a global state, <em>auto</em> works by
 specifying relationships which each exist independently
 and on their own, without any global state.</p><p>A more fuller exposition is in the <code>md</code>, in this
