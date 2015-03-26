@@ -7,7 +7,7 @@
     `toEffectStream`, which convert `Auto m a b`'s to *streams of effects* in
     `m` that can be processed and manipulated and integrated with any
     [`ListT`-compatible library][1], like *pipes*.  See documentation for more
-    details.
+    details.  These were also added to the exports of `Control.Auto`.
 *   **Control.Auto.Interval**: New `Auto` `holdJusts`, which stretches the
     last seen "on"/`Just` value over the duration of a "off"/`Nothing`
     interval.
