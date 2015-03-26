@@ -121,6 +121,7 @@ module Control.Auto (
   -- * Running
   , interactAuto
   , interactRS
+  , streamAutoEffects
   , toEffectStream
   -- * Re-exports
   , module Control.Applicative

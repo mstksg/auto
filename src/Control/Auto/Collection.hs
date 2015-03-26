@@ -819,7 +819,7 @@ _gatherFManyF f go as ys xs = do
         as'           = M.difference allas rems
         ys'           = M.difference ys rems
         as''          = M.union (fmap (second snd) outs') as'
-        newys         = fmap (fromJust . fst . snd) outs'
+        newys         = fmap (fromJust . fst . snd) outs'       -- TODO: there is bug here!!!
         ys''          = M.union newys ys'
     return (ys'', go as'' ys'')
   where

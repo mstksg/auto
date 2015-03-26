@@ -70,8 +70,8 @@ interactive programs, games, and automations, with implicitly derived
 serialization.  It is suited for any domain where your program's input or
 output is a stream of values, input events, or output views.  At the
 high-level, it allows you to describe your interactive program or simulation
-as a *stream transformer*, by composition and transformation of other stream
-transformers.
+as a *value stream transformer*, by composition and transformation of other
+stream transformers.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -257,7 +257,8 @@ not very helpful.
     can be useful for file processing and stream modification, but only if you
     separately handle the IO portions.  **Auto** works very well with *pipes*
     or *conduit*; those libraries are used to "connect" **Auto** to the
-    outside word, and provide a safe interface.
+    outside word, and provide a safe interface.  In other words, Auto handles
+    "value streams", while pipes/conduit handle "effect streams"
 
 
 Relation to FRP

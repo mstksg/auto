@@ -32,10 +32,13 @@ import Prelude hiding ((.), id)     -- we use generalized versions from
 Semantically, a `Auto` describes *a relationship* between an input and an
 output that is preserved over multiple steps.
 
-In a way, you can think about `Auto`s as *stream transformers*.  A stream of
-sequential inputs come in one at a time, and a stream of outputs pop out one
-at a time as well.  You can think of `streamAuto'` as taking an `Auto' a b`
-and "unwrapping" its internal `[a] -> [b]`.
+In a way, you can think about `Auto`s as *value stream transformers*.  A
+stream of sequential input values come in one at a time, and a stream of
+output values pop out one at a time as well.  You can think of `streamAuto'` as
+taking an `Auto' a b` and "unwrapping" its internal `[a] -> [b]`.
+
+(We say a "value stream" to contrast from an "effect stream", a stream from an
+effectful process like IO)
 
 An `Auto` is a relationship; the simplest relationship is probably a straight
 up apply-a-function-to-each-input-to-get-each-output relationship.  For that,

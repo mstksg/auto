@@ -14,15 +14,15 @@ description:         (Up to date documentation is maintained at
                      discrete-step, locally stateful, interactive programs,
                      games, and automations, with implicitly derived
                      serialization.  It is suited for any domain where either
-                     the input or the output can be described as a stream: a
-                     stream of input events, output views, etc.
+                     the input or the output can be described as a stream of
+                     values: a stream of input events, output views, etc.
                      .
                      /auto/ works by providing a type that encapsulates
-                     "stream transformers", or locally stateful functions; by
-                     specifying your program as a (potentially cyclic) graph
-                     of relationships between streams, you create a way of
-                     "declaring" a system based simply on static relationships
-                     between quantities.
+                     "value stream transformers", or locally stateful
+                     functions; by specifying your program as a (potentially
+                     cyclic) graph of relationships between value streams, you
+                     create a way of "declaring" a system based simply on
+                     static relationships between quantities.
                      .
                      Instead of a "state monad" type solution, where all
                      functions have access to a global state, /auto/ works by

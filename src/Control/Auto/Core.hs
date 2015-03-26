@@ -118,10 +118,11 @@ import Prelude hiding         ((.), id, sequence)
 -- (optionally) maintained within the context of a monad.
 --
 -- A lot of fancy words, I know...but you can think of an 'Auto' as nothing
--- more than a "stream transformer".  A stream of sequential inputs come in
--- one at a time, and a stream of outputs pop out one at a time, as well.
+-- more than a "stream transformer" of value streams.  A stream of
+-- sequential input values come in one at a time, and a stream of outputs
+-- pop out one at a time, as well.
 --
--- Using the 'streamAuto' function, you can "unwrap" the inner stream
+-- Using the 'streamAuto' function, you can "unwrap" the inner value stream
 -- transformer from any 'Auto': if @a :: 'Auto' m a b@, 'streamAuto' lets
 -- you turn it into an @[a] -> m [b]@.  "Give me a stream of @a@s, one at
 -- a time, and I'll give you a list of @b@s, matching a relationship to
@@ -131,6 +132,11 @@ import Prelude hiding         ((.), id, sequence)
 -- -- unwrap your inner [a] -> m [b]!
 -- 'streamAuto' :: Monad m => 'Auto' m a b -> ([a] -> m [b])
 -- @
+--
+-- You can also turn an @'Auto' m a b@ into an /effects stream/ that
+-- executes effects sequentially with 'toEffectStream' and
+-- 'streamAutoEffects', so you can run it with a ListT-compatible library
+-- like /pipes/.
 --
 -- There's a handy type synonym 'Auto'' for relationships that don't really
 -- need a monadic context; the @m@ is just 'Identity':
