@@ -518,8 +518,13 @@ runOnChan = runOnChanM (return . runIdentity)
 --
 -- For example, the /pipes/ library offers @runListT@ so you can run this,
 -- constantly pulling out @a@s from the stream using the @m a@, feeding
--- it in, and moving forward, all with the control and disciplined resource
--- handling of /pipes/.
+-- it in, and moving forward, all with the effect stream manipulation tools
+-- and resource handling of /pipes/.
+--
+-- This is useful because /auto/, the library, mainly provides tools for
+-- working with transformers for /value/ streams, and not effect streams or
+-- streams of effects.  Using this, you can potentially have the best of
+-- both worlds.
 toEffectStream :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
                => (forall c. m' c -> m c)   -- ^ function to change the underyling monad from @m'@ to @m@
                -> m a                       -- ^ action to generate inputs
@@ -540,8 +545,13 @@ toEffectStream nt getInp = go
 -- usually turn it into an effectful stream.
 --
 -- For example, the /pipes/ library offers @runListT@ so you can run this,
--- running the 'Auto' over the input list, all with the control and
--- disciplined resource handling of /pipes/.
+-- running the 'Auto' over the input list, all with the effect stream
+-- manipulation tools and resource handling of /pipes/.
+--
+-- This is useful because /auto/, the library, mainly provides tools for
+-- working with transformers for /value/ streams, and not effect streams or
+-- streams of effects.  Using this, you can potentially have the best of
+-- both worlds.
 streamAutoEffects :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
                   => (forall c. m' c -> m c)
                   -> [a]

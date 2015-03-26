@@ -2,7 +2,7 @@ Auto
 ====
 
 ~~~bash
-cabal install auto
+$ cabal install auto
 ~~~
 
 Check it out!
@@ -166,9 +166,6 @@ github.
 
 [aaa]: http://blog.jle.im/entries/series/+all-about-auto
 [auto-examples]: https://github.com/mstksg/auto-examples
-
-More examples and further descriptions will appear here as development
-continues.
 
 ### Support
 
@@ -411,18 +408,22 @@ chatBotSerialized = serializing' "data.dat" chatBot
 Open questions
 --------------
 
-*   In principle very little of your program should be over `IO` as a
-    monad...but sometimes, it becomes quite convenient for abstraction
-    purposes.  Handling IO errors in a robust way isn't quite my strong point,
-    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
-    applications it might be unavoidable.  Providing industry-grade tools for
-    making `IO` robust would be a good next priority.
-
 *   "Safecopy problem"; serialization schemes are implicitly derived, but if
     your program changes, it is unlikely that the new serialization scheme
     will be able to resume something from the old one.  Right now the solution
     is to only serialize small aspects of your program that you *can* manage
     and manipulate directly when changing your program.  A better solution
     might exist.
+
+*   In principle very little of your program should be over `IO` as a
+    monad...but sometimes, it becomes quite convenient for abstraction
+    purposes.  Handling IO errors in a robust way isn't quite my strong point,
+    and so while almost all *auto* idioms avoid `IO` and runtime, for some
+    applications it might be unavoidable.  *auto* is not and will never be
+    about streaming IO effects...but knowing what parts of IO fit into the
+    semantic model of *value stream transformers* would yield a lot of
+    insight.  Also, most of the `Auto` "runners" (the functions that translate
+    an `Auto` into `IO` that executes it) might be able to benefit from a more
+    rigorous look too.
 
 *   Tests; tests aren't really done yet, sorry!  Working on those :)

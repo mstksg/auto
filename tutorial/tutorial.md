@@ -66,7 +66,7 @@ between two `Int`s fixed over the stream", or "a one-by-one mapping of an
 `Int` stream to another `Int` stream".  For `sumFrom n`, the relationship is
 that the output is always the cumulative sum of the inputs.
 
-Note that these relationships are always *causual*; the nth item of the output
+Note that these relationships are always *causal*; the nth item of the output
 can only depend on the first n items of the input.  We say that they are
 "real-time" stream transformers in that every time you get an input, exactly
 one output pops out.
@@ -130,7 +130,7 @@ with internal state that, when fed an `a`, gives you a `b` and a "next/updated
 `Auto`".  With `stepAuto'`, an `Auto' a b` gives you an `a -> (b, Auto' a b)`.
 An `Auto' a b` is basically a `a -> b` with "internal state".
 
-The more general type is actually `Auto m a b` --- an `Auto' a b` is actaully
+The more general type is actually `Auto m a b` --- an `Auto' a b` is actually
 just a type alias for `Auto Identity a b`.
 
 An `Auto m a b` describes *a relationship*, again, between a stream of inputs
@@ -321,14 +321,14 @@ ghci> streamAuto' (productFrom 1 . sumFrom 0) $ [1..5]
 ~~~
 
 (Math nuts might recognize this as saying that `streamAuto'` is a "category
-homomorphism"...aka, a functr :)  Seeing that `streamAuto' (id :: Auto' a a)
+homomorphism"...aka, a functor :)  Seeing that `streamAuto' (id :: Auto' a a)
 == (id :: [a] -> [a])`, of course!)
 
 Operationally, at every "step", it passes in each input to the first `Auto`,
 and gets the output of that and passes it into the second `Auto`, and uses the
 output of the second `Auto` as the result, updating *each* internal state.
 
-Another example, here we have an `Auto` that takes an input stream and and
+Another example, here we have an `Auto` that takes an input stream and
 outputs a `Blip` stream (more on that later) that emits whenever there is a
 multiple of 5:
 
@@ -351,7 +351,7 @@ Neat!
 
 This can be used in conjunction with the `Applicative` instance for great
 power.  In the end, your programs will really just be `(.)`-composed `Auto`s
-with forks and re-cominings from `Applicative` and `Arrow` methods.
+with forks and re-combinings from `Applicative` and `Arrow` methods.
 
 Speaking of `Arrow`, we also have a neat interface exposed by `Arrow`,
 `ArrowPlus`, and `ArrowLoop`.  First of all, we get `arr :: (a -> b) -> Auto m
@@ -431,7 +431,7 @@ By the way, there are some "scoping" issues to be aware of.  Remember that
 proc more or less builds a graph of relationships between values using `Auto`s
 at compile-time; the whole graph and chaining-together-of-`Auto`s is done at
 compile time.  So, the `Auto`s themselves have to be known at compile time.
-We can't do someothing like this:
+We can't do something like this:
 
 ~~~haskell
 foo :: Auto' Int Int
@@ -593,7 +593,7 @@ stateful operations on different states.
 This locally stateful property truly allows us to "compose" ideas together and
 relationships together and think of them as fixed invariants in a big picture.
 Because each `Auto` "denotes" a relationship, and we build up bigger `Auto`s
-by combining small denotative promitives to create bigger things that denote
+by combining small denotative primitives to create bigger things that denote
 more complex relationships, it really allows us to create a denotative
 "language", where we declare relationships by building up smaller units of
 meaning into bigger units of meaning.
@@ -795,10 +795,10 @@ output blip stream emit a value.  The value determines what it wants to
 replace itself with.
 
 These are really useful for implementing things like "modes" --- your program
-has different modes of behavior, which you can represet with a different
+has different modes of behavior, which you can represent with a different
 `Auto` for each mode...and you can switch between them with these switches!
 
-See the documentation for thise at the *[Control.Auto.Swtich][]* module for
+See the documentation for these at the *[Control.Auto.Swtich][]* module for
 more information!
 
 #### Collections
@@ -955,7 +955,7 @@ with serialization, see the mini-tutorial at the documentation for
 
 ### Serialization composes
 
-The magic of implicit serialization is that the serliazation of complex
+The magic of implicit serialization is that the serialization of complex
 `Auto`s is preserved under combination and manipulation with the various
 instances and combinators in this library.  For example, serializing the
 complex `blippy` example above, or a huge complex application, is all done
@@ -1017,7 +1017,7 @@ them in this tutorial, so it's nice for getting a good overview.  The most
 up-to-date documentation at this point in time is on [the github pages][docs],
 but there's also the [hackage docs][hackage] as well.
 
-A good next step too would be to check out my [All About Auto][aaa] series on
+A good next step too would be to check out the [All About Auto][aaa] series on
 my blog, where I break down approaching and finishing real-world problems with
 the library using the tools described here. You can also look at the
 [auto-examples][] directory and peruse over the examples, which each highlight
