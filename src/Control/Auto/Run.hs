@@ -45,18 +45,22 @@ module Control.Auto.Run (
   -- * Running on concurrent channels
   , runOnChan
   , runOnChanM
+  -- * Running on as a ListT-compatible stream
+  , streamAutoEffects
+  , toEffectStream
   ) where
 
 import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Concurrent
-import Control.Monad hiding  (mapM, mapM_)
+import Control.Monad hiding      (mapM, mapM_)
+import Control.Monad.Trans.Class
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Profunctor
-import Prelude hiding        (interact, mapM, mapM_)
-import Text.Read
+import Prelude hiding            (interact, mapM, mapM_)
+import Text.Read hiding          (lift)
 
 -- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
 -- -> m [b]@ inside.  Streaming is done in the context of the underlying
@@ -127,7 +131,9 @@ overList' a (x:xs) = let (y, a')   = stepAuto' a x
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
 -- this "lazily" (over the Monad), so with most Monads, this should work
--- fine with infinite lists.
+-- fine with infinite lists.  (That is, @'streamAuto' ('arrM' f)@ behaves
+-- exactly like @'mapM' f@, and you can reason with 'Auto's as if you'd
+-- reason with @mapM@ on an infinite list)
 --
 -- Note that, conceptually, this turns an @'Auto' m a b@ into an @[a] ->
 -- m [b]@.
@@ -147,6 +153,34 @@ overList' a (x:xs) = let (y, a')   = stepAuto' a x
 --
 -- @a@ here is like @'sumFrom' 0@, except at every step, prints the input
 -- item to stdout as a side-effect.
+--
+-- Note that we use "stream" here slightly differently than in libraries
+-- like /pipes/ or /conduit/.  We don't stream over the @m@ Monad (like
+-- @IO@)...we stream over the __input elements__.  Using 'streamAuto' on an
+-- infinite list allows you to "stop", for example, to find the
+-- result...but it will still sequence all the *effects*.
+--
+-- For example:
+--
+-- >>> take 10 <$> streamAuto (arrM print *> id) [1..]
+--
+-- Will execute 'print' on every element before "returning" with [1..10].
+--
+-- >>> flip runState 0 $ take 10 <$> streamAuto (arrM (modify . (+)) *> id) [1..]
+-- ([1,2,3,4,5,6,7,8,9,10], .... (never terminates)
+--
+-- This will immediately return the "result", and you can bind to the
+-- result with `(>>=)`, but it'll never return a "final state", because the
+-- final state involves executing all of the 'modify's.
+--
+-- In other words, we stream /values/, not /effects/.  You would analyze
+-- this behavior the same way you would look at something like 'mapM'.
+--
+-- If you want to stream effects, you can use 'streamAutoEffects' or
+-- 'toEffectStream', and use an effects streaming library like /pipes/ (or
+-- anything with /ListT/)...this will give the proper streaming of effects
+-- with resource handling, handling infinite streams in finite space with
+-- finite effects, etc.
 --
 streamAuto :: Monad m
            => Auto m a b        -- ^ 'Auto' to stream
@@ -474,3 +508,58 @@ runOnChan :: (b -> IO Bool)           -- ^ function to "handle" each
            -> IO (Auto' a b)          -- ^ final 'Auto' after it all, when
                                       --     the handle resturns 'False'
 runOnChan = runOnChanM (return . runIdentity)
+
+-- | Turns an @Auto m' a b@ and an "input producer" @m a@ into a "ListT
+-- compatible effectful stream", as described at
+-- <http://www.haskellforall.com/2014/11/how-to-build-library-agnostic-streaming.html>
+--
+-- Any library that offers a "@ListT@" type can use this result...and
+-- usually turn it into an effectful stream.
+--
+-- For example, the /pipes/ library offers @runListT@ so you can run this,
+-- constantly pulling out @a@s from the stream using the @m a@, feeding
+-- it in, and moving forward, all with the effect stream manipulation tools
+-- and resource handling of /pipes/.
+--
+-- This is useful because /auto/, the library, mainly provides tools for
+-- working with transformers for /value/ streams, and not effect streams or
+-- streams of effects.  Using this, you can potentially have the best of
+-- both worlds.
+toEffectStream :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
+               => (forall c. m' c -> m c)   -- ^ function to change the underyling monad from @m'@ to @m@
+               -> m a                       -- ^ action to generate inputs
+               -> Auto m' a b               -- ^ Auto to run as an effectful stream
+               -> t m b                     -- ^ @ListT@-compatible type
+toEffectStream nt getInp = go
+  where
+    go a0 = do
+      (y, a1) <- lift $ do x <- getInp
+                           nt $ stepAuto a0 x
+      return y `mplus` go a1
+
+-- | Turns an @Auto m' a b@ with a list of inputs into a "ListT compatible
+-- effectful stream", as described at
+-- <http://www.haskellforall.com/2014/11/how-to-build-library-agnostic-streaming.html>
+--
+-- Any library that offers a "@ListT@" type can use this result...and
+-- usually turn it into an effectful stream.
+--
+-- For example, the /pipes/ library offers @runListT@ so you can run this,
+-- running the 'Auto' over the input list, all with the effect stream
+-- manipulation tools and resource handling of /pipes/.
+--
+-- This is useful because /auto/, the library, mainly provides tools for
+-- working with transformers for /value/ streams, and not effect streams or
+-- streams of effects.  Using this, you can potentially have the best of
+-- both worlds.
+streamAutoEffects :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
+                  => (forall c. m' c -> m c)
+                  -> [a]
+                  -> Auto m' a b
+                  -> t m b
+streamAutoEffects nt = go
+  where
+    go [] _      = mzero
+    go (x:xs) a0 = do
+      (y, a1) <- lift . nt $ stepAuto a0 x
+      return y `mplus` go xs a1

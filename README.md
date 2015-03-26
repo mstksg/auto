@@ -2,7 +2,7 @@ Auto
 ====
 
 ~~~bash
-cabal install auto
+$ cabal install auto
 ~~~
 
 Check it out!
@@ -31,7 +31,7 @@ type System m = Auto m Double Double
 -- recursive/cyclic graph of dependencies.  It's a feedback system, after all.
 --
 pid :: MonadFix m => (Double, Double, Double) -> System m -> System m
-pid (kp, ki, kd) blackbox = proc target -> do
+pid (kp, ki, kd) blackbox = proc target -> do       -- proc syntax; see tutorial
     rec --  err :: Double
         --  the difference of the response from the target
         let err        = target - response
@@ -70,8 +70,8 @@ interactive programs, games, and automations, with implicitly derived
 serialization.  It is suited for any domain where your program's input or
 output is a stream of values, input events, or output views.  At the
 high-level, it allows you to describe your interactive program or simulation
-as a *stream transformer*, by composition and transformation of other stream
-transformers.
+as a *value stream transformer*, by composition and transformation of other
+stream transformers.
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -157,21 +157,22 @@ Intrigued?  Excited?  Start at [the tutorial][tutorial]!
 
 It's a part of this package directory and also on github at the above link.
 The current development documentation server is found at
-<https://mstksg.github.io/auto>. You can find examples and demonstrations in
-the [auto-examples][] repo on github; they are constantly being kept
-up-to-date with the currently super unstable API.
+<https://mstksg.github.io/auto>.
 
+From there, you can check out my [All About Auto][aaa] series on my blog,
+where I break sample projects and show to approach projects in real life.  You
+can also find examples and demonstrations in the [auto-examples][] repo on
+github.
+
+[aaa]: http://blog.jle.im/entries/series/+all-about-auto
 [auto-examples]: https://github.com/mstksg/auto-examples
-
-More examples and further descriptions will appear here as development
-continues.
 
 ### Support
 
-Though this library is not officially released yet, the official support and
-discussion channel is #haskell-auto on freenode.  You can also usually find me
-(the maintainer and developer) as *jle`* on #haskell and #haskell-game.  Also,
-contributions to documentation and tests are welcome! :D
+The official support and discussion channel is *#haskell-auto* on freenode.
+You can also usually find me (the maintainer and developer) as *jle`* on
+*#haskell-game* or *#haskell*. Also, contributions to documentation and tests
+are welcome! :D
 
 Why Auto?
 ---------
@@ -257,7 +258,8 @@ not very helpful.
     can be useful for file processing and stream modification, but only if you
     separately handle the IO portions.  **Auto** works very well with *pipes*
     or *conduit*; those libraries are used to "connect" **Auto** to the
-    outside word, and provide a safe interface.
+    outside word, and provide a safe interface.  In other words, Auto handles
+    "value streams", while pipes/conduit handle "effect streams"
 
 
 Relation to FRP
@@ -303,7 +305,7 @@ type ChatBot m = Auto m (Nick, Message, UTCTime) (Blip [Message])
 
 -- Keeps track of last time a nick has spoken, and allows queries
 seenBot :: Monad m => ChatBot m
-seenBot = proc (nick, msg, time) -> do
+seenBot = proc (nick, msg, time) -> do          -- proc syntax; see tutorial
     -- seens :: Map Nick UTCTime
     -- Map containing last time each nick has spoken
     seens <- accum addToMap M.empty -< (nick, time)
@@ -406,18 +408,22 @@ chatBotSerialized = serializing' "data.dat" chatBot
 Open questions
 --------------
 
-*   In principle very little of your program should be over `IO` as a
-    monad...but sometimes, it becomes quite convenient for abstraction
-    purposes.  Handling IO errors in a robust way isn't quite my strong point,
-    and so while almost all `Auto` idioms avoid `IO` and runtime, for some
-    applications it might be unavoidable.  Providing industry-grade tools for
-    making `IO` robust would be a good next priority.
-
 *   "Safecopy problem"; serialization schemes are implicitly derived, but if
     your program changes, it is unlikely that the new serialization scheme
     will be able to resume something from the old one.  Right now the solution
     is to only serialize small aspects of your program that you *can* manage
     and manipulate directly when changing your program.  A better solution
     might exist.
+
+*   In principle very little of your program should be over `IO` as a
+    monad...but sometimes, it becomes quite convenient for abstraction
+    purposes.  Handling IO errors in a robust way isn't quite my strong point,
+    and so while almost all *auto* idioms avoid `IO` and runtime, for some
+    applications it might be unavoidable.  *auto* is not and will never be
+    about streaming IO effects...but knowing what parts of IO fit into the
+    semantic model of *value stream transformers* would yield a lot of
+    insight.  Also, most of the `Auto` "runners" (the functions that translate
+    an `Auto` into `IO` that executes it) might be able to benefit from a more
+    rigorous look too.
 
 *   Tests; tests aren't really done yet, sorry!  Working on those :)

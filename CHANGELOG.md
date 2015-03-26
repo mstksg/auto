@@ -1,3 +1,21 @@
+0.2.0.6
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.2.0.6>
+
+*   **Control.Auto.Run**: As a part of an effort to provide integration with
+    *disciplined* effectful streaming, introduced `streamAutoEffects` and
+    `toEffectStream`, which convert `Auto m a b`'s to *streams of effects* in
+    `m` that can be processed and manipulated and integrated with any
+    [`ListT`-compatible library][1], like *pipes*.  See documentation for more
+    details.  These were also added to the exports of `Control.Auto`.
+*   **Control.Auto.Interval**: New `Auto` `holdJusts`, which stretches the
+    last seen "on"/`Just` value over the duration of a "off"/`Nothing`
+    interval.
+*   Documentation fixes to emphasize *auto*'s focus on *value* streams, not
+    *effect* streams, in contrast to *pipes*, *conduit*, etc.
+
+[1]: http://www.haskellforall.com/2014/11/how-to-build-library-agnostic-streaming.html
+
 0.2.0.5
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.5>
