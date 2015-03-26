@@ -13,6 +13,8 @@
     interval.
 *   Documentation fixes to emphasize *auto*'s focus on *value* streams, not
     *effect* streams, in contrast to *pipes*, *conduit*, etc.
+*   Version restrictions on some packages relaxed on *profunctors*,
+    *semigroups*, and *base*.
 
 [1]: http://www.haskellforall.com/2014/11/how-to-build-library-agnostic-streaming.html
 
