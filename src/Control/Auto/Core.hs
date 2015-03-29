@@ -1578,7 +1578,7 @@ instance Monad m => Choice (Auto m) where
     right' = right
 
 -- | See 'ArrowLoop' instance
-instance MonadFix m => Costrong (Auto m) where
+instance Monad m => Costrong (Auto m) where
     unfirst = loop
 
 -- | Gives us 'arr', which is a "stateless" 'Auto' that behaves just like
@@ -1726,16 +1726,16 @@ instance Monad m => ArrowChoice (Auto m) where
 -- | Finds the fixed point of self-referential 'Auto's (for example,
 -- feeding the output stream of an 'Auto' to itself).  Mostly used with
 -- proc notation to allow recursive bindings.
-instance MonadFix m => ArrowLoop (Auto m) where
+instance Monad m => ArrowLoop (Auto m) where
     loop a = case a of
                 AutoFunc f        ->
                     AutoFunc (\x -> fst . fix $ \(_, d) -> f (x, d))
                 AutoFuncM f       ->
-                    AutoFuncM (\x -> liftM fst . mfix $ \(_, d) -> f (x, d))
+                    AutoFuncM (\x -> liftM fst $ fix (>>= \ ~(_, d) -> f (x, d)))
                 AutoState gp f s  ->
                     AutoState gp (\x s' -> first fst . fix $ \ ~((_, d), _) -> f (x, d) s') s
                 AutoStateM gp f s ->
-                    AutoStateM gp (\x s' -> liftM (first fst) . mfix $ \ ~((_, d), _) -> f (x, d) s') s
+                    AutoStateM gp (\x s' -> liftM (first fst) $ fix (>>= \ ~((_, d), _) -> f (x, d) s')) s
                 AutoArb l s f     ->
                     AutoArb (loop <$> l)
                             s
@@ -1746,8 +1746,7 @@ instance MonadFix m => ArrowLoop (Auto m) where
                     AutoArbM (loop <$> l)
                              s
                            $ \x -> liftM (fst *** loop)
-                                 . mfix
-                                 $ \ ~((_, d), _) -> f (x, d)
+                                 $ fix (>>= \ ~((_, d), _) -> f (x, d))
     {-# INLINE loop #-}
 
 -- Utility instances
