@@ -37,10 +37,16 @@ module Control.Auto.Effects (
   , sealState_
   , sealReader
   , sealReader_
-  -- ** "Unrolling"/"reifying" monadic 'Auto's
+  -- ** 'StateT'
   , runStateA
+  , stateA
+  -- ** 'ReaderT'
   , runReaderA
+  , readerA
+  -- ** 'WriterT'
   , runWriterA
+  , writerA
+  -- ** 'Traversable'
   , runTraversableA
   -- ** Hoists
   , hoistA
@@ -56,13 +62,13 @@ import Control.Applicative
 import Control.Auto.Blip
 import Control.Exception
 import Control.Auto.Core
-import Control.Monad.Trans.Writer (WriterT, runWriterT)
+import Control.Monad.Trans.Writer (WriterT(WriterT), runWriterT)
 import Control.Auto.Generate
 import Control.Category
 import Control.Monad hiding       (mapM, mapM_)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Control.Monad.Trans.Reader (ReaderT(ReaderT), runReaderT)
 import Data.Monoid
-import Control.Monad.Trans.State  (StateT, runStateT)
+import Control.Monad.Trans.State  (StateT(StateT), runStateT)
 import Data.Foldable
 import Data.Serialize
 import Data.Traversable
@@ -309,6 +315,15 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- output a stream @(b, w)@, where @w@ is the "new log" of the underlying
 -- 'Writer' at every step.
 --
+-- 'writerA' is the inverse to this function:
+--
+-- @
+-- 'writerA' . 'runWriterA' == 'id'
+-- 'runWriterA' . 'writerA' == 'id'
+-- @
+--
+-- Examples:
+--
 -- @
 -- foo :: Auto (Writer (Sum Int)) Int Int
 -- foo = effect (tell 1) *> effect (tell 1) *> sumFrom 0
@@ -350,7 +365,6 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- And now you have access to the underlying accumulator of @foo@ to
 -- access.  There, @w@ represents the continually updating accumulator
 -- under @foo@, and will be different/growing at every "step".
---
 runWriterA :: (Monad m, Monoid w)
            => Auto (WriterT w m) a b
            -> Auto m a (b, w)
@@ -359,6 +373,25 @@ runWriterA a = mkAutoM (runWriterA <$> resumeAuto a)
                      $ \x -> do
                          ((y, a'), w) <- runWriterT (stepAuto a x)
                          return ((y, w), runWriterA a')
+
+-- | Given an 'Auto' that alongside its normal output provides “a log”,
+-- move the explicit logging to an underlying 'WriterT' monad.
+--
+-- 'runWriterA' is the inverse to this function:
+--
+-- @
+-- 'writerA' . 'runWriterA' == 'id'
+-- 'runWriterA' . 'writerA' == 'id'
+-- @
+writerA
+  :: (Monad m, Monoid w)
+  => Auto m a (b, w)
+  -> Auto (WriterT w m) a b
+writerA a = mkAutoM (writerA <$> resumeAuto a)
+                    (saveAuto a)
+                  $ \x -> WriterT $ do
+                      ((y, w), a') <- stepAuto a x
+                      return ((y, writerA a'), w)
 
 -- | Takes an 'Auto' that operates under the context of a read-only
 -- environment, an environment value, and turns it into a normal 'Auto'
@@ -416,6 +449,13 @@ sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
 -- takes in an input state every turn (in addition to the normal input) and
 -- outputs, along with the original result, the modified state.
 --
+-- 'stateA' is the inverse to this function:
+--
+-- @
+-- 'stateA' . 'runStateA' == 'id'
+-- 'runStateA' . 'stateA' == 'id'
+-- @
+--
 -- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
 -- you want to compose and create some isolated 'Auto's with access to an
 -- underlying state, but not your entire program.
@@ -425,18 +465,48 @@ sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
 --
 -- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
 -- @'Auto'' (a, s) (b, s)@.
+--
 runStateA :: Monad m
           => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
-          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a start transformer
+          -> Auto m (a, s) (b, s)       -- ^ 'Auto' whose inputs and outputs are a state transformer
 runStateA a = mkAutoM (runStateA <$> resumeAuto a)
                       (saveAuto a)
                     $ \(x, s) -> do
                         ((y, a'), s') <- runStateT (stepAuto a x) s
                         return ((y, s'), runStateA a')
 
+
+-- | Given an 'Auto' that alongside its normal input and output explicitely
+-- receives the current state and outputs a new state, move the explicit state
+-- passing to an underlying 'StateT' monad.
+--
+-- 'runStateA' is the inverse to this function:
+--
+-- @
+-- 'stateA' . 'runStateA' == 'id'
+-- 'runStateA' . 'stateA' == 'id'
+-- @
+stateA
+  :: Monad m
+  => Auto m (a, s) (b, s)   -- ^ 'Auto' whose inputs and outputs are a state transformer
+  -> Auto (StateT s m) a b  -- ^ 'Auto' run over a state transformer
+stateA a = mkAutoM (stateA <$> resumeAuto a)
+                   (saveAuto a)
+                 $ \x -> StateT $ \s -> do
+                     ((y, s'), a') <- stepAuto a (x, s)
+                     return ((y, stateA a'), s')
+
+
 -- | "Unrolls" the underlying 'ReaderT' of an 'Auto' into an 'Auto' that
 -- takes in the input "environment" every turn in addition to the normal
 -- input.
+--
+-- 'readerA' is the inverse to this function:
+--
+-- @
+-- 'readerA' . 'runReaderA' == 'id'
+-- 'runReaderA' . 'readerA' == 'id'
+-- @
 --
 -- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
 -- want to compose and create some isolated 'Auto's with access to an
@@ -455,6 +525,26 @@ runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                      $ \(x, r) -> do
                          (y, a') <- runReaderT (stepAuto a x) r
                          return (y, runReaderA a')
+
+-- | Given an 'Auto' that alongside its normal input receives an environment,
+-- move the explicit environment passing to an underlying 'ReaderT' monad.
+--
+-- 'runReaderA' is the inverse to this function:
+--
+-- @
+-- 'readerA' . 'runReaderA' == 'id'
+-- 'runReaderA' . 'readerA' == 'id'
+-- @
+readerA
+  :: Monad m
+  => Auto m (a, r) b           -- ^ 'Auto' receiving an environment.
+  -> Auto (ReaderT r m) a b    -- ^ 'Auto' run over an environment.
+readerA a = mkAutoM (readerA <$> resumeAuto a)
+                    (saveAuto a)
+                  $ \x -> ReaderT $ \r -> do
+                      (y, a') <- stepAuto a (x, r)
+                      return (y, readerA a')
+
 
 -- | "Unrolls" the underlying 'Monad' of an 'Auto' if it happens to be
 -- 'Traversable' ('[]', 'Maybe', etc.).
