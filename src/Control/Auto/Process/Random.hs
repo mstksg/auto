@@ -132,7 +132,6 @@ import Control.Auto.Interval
 import Control.Category
 import Control.Monad              (guard)
 import Control.Monad.Random
-import Control.Monad.Trans.State  (StateT(..))
 import Data.Bits
 import Data.Serialize
 import Data.Tuple
@@ -495,7 +494,11 @@ sealRandom :: (RandomGen g, Serialize g, Monad m)
            => Auto (RandT g m) a b        -- ^ 'Auto' to seal
            -> g                           -- ^ initial seed
            -> Auto m a b
-sealRandom a = sealState (hoistA (StateT . runRandT) a)
+sealRandom a g0 = mkAutoM (sealRandom <$> resumeAuto a <*> get)
+                          (saveAuto a *> put g0)
+                        $ \x -> do
+                            ((y, a'), g1) <- runRandT (stepAuto a x) g0
+                            return (y, sealRandom a' g1)
 
 -- | The non-serializing/non-resuming version of 'sealRandom_'.  The random
 -- seed is not re-loaded/resumed, so every time you resume, the stream of
@@ -504,7 +507,11 @@ sealRandom_ :: (RandomGen g, Serialize g, Monad m)
             => Auto (RandT g m) a b         -- ^ 'Auto' to seal
             -> g                            -- ^ initial seed
             -> Auto m a b
-sealRandom_ a = sealState_ (hoistA (StateT . runRandT) a)
+sealRandom_ a g0 = mkAutoM (sealRandom_ <$> resumeAuto a <*> pure g0)
+                           (saveAuto a)
+                         $ \x -> do
+                             ((y, a'), g1) <- runRandT (stepAuto a x) g0
+                             return (y, sealRandom_ a' g1)
 
 -- | Like 'sealRandom', but specialized for 'StdGen' from "System.Random",
 -- so that you can serialize and resume.  This is needed because 'StdGen'
