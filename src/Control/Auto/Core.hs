@@ -75,15 +75,15 @@ module Control.Auto.Core (
   , mkStateM'
   -- ** from Accumulators
   -- *** Result-first
-  , accum
-  , accum_
-  , accumM
-  , accumM_
+  , accuml
+  , accuml_
+  , accumlM
+  , accumlM_
   -- *** Initial accumulator-first
-  , accumD
-  , accumD_
-  , accumMD
-  , accumMD_
+  , accumlD
+  , accumlD_
+  , accumlMD
+  , accumlMD_
   -- ** Arbitrary Autos
   , mkAuto
   , mkAuto_
@@ -1084,14 +1084,14 @@ mkStateM_ :: (a -> s -> m (b, s))   -- ^ (monadic) state transformer
 mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 {-# INLINE mkStateM_ #-}
 
--- | Construct an 'Auto' from a "folding" function: @b -> a -> b@ yields an
+-- | Construct an 'Auto' from a "folding" function: @a -> b -> b@ yields an
 -- @'Auto' m a b@.  Basically acts like a 'foldl' or a 'scanl'.  There is
 -- an internal accumulator that is "updated" with an @a@ at every step.
 -- Must be given an initial accumulator.
 --
 -- Example: an 'Auto' that sums up all of its input.
 --
--- >>> let summer = accum (+) 0
+-- >>> let summer = accuml (+) 0
 -- >>> let (sum1, summer')  = stepAuto' summer 3
 -- >>> sum1
 -- 3
@@ -1103,66 +1103,66 @@ mkStateM_ f s0 = AutoStateM (return s0, \_ -> return ()) f s0
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'accum_'.
-accum :: Serialize b
-      => (b -> a -> b)      -- ^ accumulating function
+-- use 'accuml_'.
+accuml :: Serialize b
+      => (a -> b -> b)      -- ^ accumulating function
       -> b                  -- ^ initial accumulator
       -> Auto m a b
-accum f = mkState (\x s -> let y = f s x in (y, y))
-{-# INLINE accum #-}
+accuml f = mkState (\x s -> let y = f x s in (y, y))
+{-# INLINE accuml #-}
 
--- | Construct an 'Auto' from a "monadic" "folding" function: @b -> a ->
+-- | Construct an 'Auto' from a "monadic" "folding" function: @a -> b ->
 -- m b@ yields an @'Auto' m a b@.  Basically acts like a 'foldM' or 'scanM'
 -- (if it existed).  here is an internal accumulator that is "updated" with
 -- an input @a@ with the result of the executed @m b@ at every step.  Must
 -- be given an initial accumulator.
 --
--- See 'accum' for more details.
+-- See 'accuml' for more details.
 --
 -- If your accumulator @b@ does not have a 'Serialize' instance, then you
 -- should either write a meaningful one, or throw away serializability and
--- use 'accumM_'.
-accumM :: (Serialize b, Monad m)
-       => (b -> a -> m b)       -- ^ (monadic) accumulating function
+-- use 'accumlM_'.
+accumlM :: (Serialize b, Monad m)
+       => (a -> b -> m b)       -- ^ (monadic) accumulating function
        -> b                     -- ^ initial accumulator
        -> Auto m a b
-accumM f = mkStateM (\x s -> liftM (join (,)) (f s x))
-{-# INLINE accumM #-}
+accumlM f = mkStateM (\x s -> liftM (join (,)) (f x s))
+{-# INLINE accumlM #-}
 
--- | A version of 'accum', where the internal accumulator isn't
+-- | A version of 'accuml', where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
--- See 'accum' for more details.
+-- See 'accuml' for more details.
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-accum_ :: (b -> a -> b)   -- ^ accumulating function
-         -> b               -- ^ intial accumulator
-         -> Auto m a b
-accum_ f = mkState_ (\x s -> let y = f s x in (y, y))
-{-# INLINE accum_ #-}
+accuml_ :: (a -> b -> b)   -- ^ accumulating function
+       -> b               -- ^ intial accumulator
+       -> Auto m a b
+accuml_ f = mkState_ (\x s -> let y = f x s in (y, y))
+{-# INLINE accuml_ #-}
 
--- | A version of 'accumM_, where the internal accumulator isn't
+-- | A version of 'accumlM_, where the internal accumulator isn't
 -- serialized. It can be "saved" and "loaded", but the state is lost in the
 -- process.
 --
--- See 'accumM' for more details.
+-- See 'accumlM' for more details.
 --
 -- Useful if your accumulator @b@ cannot have a meaningful 'Serialize'
 -- instance.
-accumM_ :: Monad m
-          => (b -> a -> m b)    -- ^ (monadic) accumulating function
+accumlM_ :: Monad m
+          => (a -> b -> m b)    -- ^ (monadic) accumulating function
           -> b                  -- ^ initial accumulator
           -> Auto m a b
-accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
-{-# INLINE accumM_ #-}
+accumlM_ f = mkStateM_ (\x s -> liftM (join (,)) (f x s))
+{-# INLINE accumlM_ #-}
 
--- | A "delayed" version of 'accum', where the first output is the initial
+-- | A "delayed" version of 'accuml', where the first output is the initial
 -- state of the accumulator, before applying the folding function. Useful
 -- in recursive bindings.
 --
--- >>> let summerD = accumD (+) 0
+-- >>> let summerD = accumlD (+) 0
 -- >>> let (sum1, summerD')  = stepAuto' summerD 3
 -- >>> sum1
 -- 0
@@ -1172,39 +1172,39 @@ accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 -- >>> streamAuto'  summerD'' [1..10]
 -- [13,14,16,19,23,28,34,41,49,58]
 --
--- (Compare with the example in 'accum')
+-- (Compare with the example in 'accuml')
 --
-accumD :: Serialize b
-         => (b -> a -> b)      -- ^ accumulating function
+accumlD :: Serialize b
+         => (a -> b -> b)      -- ^ accumulating function
          -> b                  -- ^ initial accumulator
          -> Auto m a b
-accumD f = mkState (\x s -> (s, f s x))
-{-# INLINE accumD #-}
+accumlD f = mkState (\x s -> (s, f x s))
+{-# INLINE accumlD #-}
 
--- | A "delayed" version of 'accumM', where the first output is the initial
+-- | A "delayed" version of 'accumlM', where the first output is the initial
 -- state of the accumulator, before applying the folding function. Useful
 -- in recursive bindings.
-accumMD :: (Serialize b, Monad m)
-          => (b -> a -> m b)       -- ^ (monadic) accumulating function
+accumlMD :: (Serialize b, Monad m)
+          => (a -> b -> m b)       -- ^ (monadic) accumulating function
           -> b                     -- ^ initial accumulator
           -> Auto m a b
-accumMD f = mkStateM (\x s -> liftM (s,) (f s x))
-{-# INLINE accumMD #-}
+accumlMD f = mkStateM (\x s -> liftM (s,) (f x s))
+{-# INLINE accumlMD #-}
 
--- | The non-resuming/non-serializing version of 'accumD'.
-accumD_ :: (b -> a -> b)   -- ^ accumulating function
-          -> b               -- ^ intial accumulator
-          -> Auto m a b
-accumD_ f = mkState_ (\x s -> (s, f s x))
-{-# INLINE accumD_ #-}
+-- | The non-resuming/non-serializing version of 'accumlD'.
+accumlD_ :: (a -> b -> b)   -- ^ accumulating function
+        -> b               -- ^ intial accumulator
+        -> Auto m a b
+accumlD_ f = mkState_ (\x s -> (s, f x s))
+{-# INLINE accumlD_ #-}
 
--- | The non-resuming/non-serializing version of 'accumMD'.
-accumMD_ :: Monad m
-           => (b -> a -> m b)    -- ^ (monadic) accumulating function
-           -> b                  -- ^ initial accumulator
-           -> Auto m a b
-accumMD_ f = mkStateM_ (\x s -> liftM (s,) (f s x))
-{-# INLINE accumMD_ #-}
+-- | The non-resuming/non-serializing version of 'accumlMD'.
+accumlMD_ :: Monad m
+         => (a -> b -> m b)    -- ^ (monadic) accumulating function
+         -> b                  -- ^ initial accumulator
+         -> Auto m a b
+accumlMD_ f = mkStateM_ (\x s -> liftM (s,) (f x s))
+{-# INLINE accumlMD_ #-}
 
 -- | Maps over the output stream of the 'Auto'.
 --
@@ -1760,7 +1760,7 @@ instance (Monad m, Semigroup b) => Semigroup (Auto m a b) where
 -- | Fork the input stream and mappend the outputs.  'mempty' is a constant
 -- stream of 'mempty's, ignoring its input.
 --
--- >>> streamAuto' (mconcat [arr (take 3), accum (++) ""]) ["hello","world","good","bye"]
+-- >>> streamAuto' (mconcat [arr (take 3), accuml (++) ""]) ["hello","world","good","bye"]
 -- ["helhello","worhelloworld","goohelloworldgood","byehelloworldgoodbye"]
 instance (Monad m, Monoid b) => Monoid (Auto m a b) where
     mempty  = pure mempty
