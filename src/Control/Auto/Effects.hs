@@ -271,6 +271,9 @@ execB mx = perBlip (arrM $ \x -> mx >> return x)
 -- stream is the result of running the stream through @f@, first with an
 -- initial state of @s0@, and afterwards with each next updated state.
 --
+-- For a convenient way of "creating" an 'Auto' under 'StateT' in the first
+-- place, see 'stateA'.
+--
 sealState :: (Monad m, Serialize s)
           => Auto (StateT s m) a b    -- ^ 'Auto' run over 'State'
           -> s                        -- ^ initial state
@@ -315,13 +318,6 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- output a stream @(b, w)@, where @w@ is the "new log" of the underlying
 -- 'Writer' at every step.
 --
--- 'writerA' is the inverse to this function:
---
--- @
--- 'writerA' . 'runWriterA' == 'id'
--- 'runWriterA' . 'writerA' == 'id'
--- @
---
 -- Examples:
 --
 -- @
@@ -365,6 +361,9 @@ fromState_ st = mkStateM_ (runStateT . st)
 -- And now you have access to the underlying accumulator of @foo@ to
 -- access.  There, @w@ represents the continually updating accumulator
 -- under @foo@, and will be different/growing at every "step".
+--
+-- For a convenient way to /create/ an 'Auto' under 'WriterT', and for
+-- motivating examples, see 'writerA'.
 runWriterA :: (Monad m, Monoid w)
            => Auto (WriterT w m) a b
            -> Auto m a (b, w)
@@ -374,10 +373,66 @@ runWriterA a = mkAutoM (runWriterA <$> resumeAuto a)
                          ((y, a'), w) <- runWriterT (stepAuto a x)
                          return ((y, w), runWriterA a')
 
--- | Given an 'Auto' that alongside its normal output provides “a log”,
--- move the explicit logging to an underlying 'WriterT' monad.
+
+-- | Transforms an 'Auto' on with two output streams (a "normal output
+-- stream" @b@, and a "logging output stream" @w@) into an 'Auto' with just
+-- one output stream @a@, funneling the logging stream @w@ into an
+-- underlying 'WriterT' monad.
 --
--- 'runWriterA' is the inverse to this function:
+-- Why is this useful?  If you have several 'Auto's that all output some
+-- "side-channel" value that is just all accumulated at the end, and you
+-- want to implicitly accumulate it all, you can just have them all dump
+-- into an underyling 'Writer' sink instead of aggregating them explicitly.
+--
+-- For example:
+--
+-- @
+-- foo :: Auto m Int (Bool, [String])
+-- bar :: Auto m Bool (Int, [String])
+-- baz :: Auto m Bool (String, [String])
+-- @
+--
+-- Each of these has a "logging output" that should be aggregated all at
+-- the end.
+--
+-- One way you can do this is by using an explicit proc block:
+--
+-- @
+-- full :: Auto m Int (String, [String])
+-- full = proc inp -> do
+--     x <- sumFrom 0 -< inp
+--     (fo, foW) <- foo -< inp + x
+--     (br, brW) <- bar -< fo
+--     (bz, bzW) <- baz -< fo
+--     id -< (replicate br bz, foW <> brW <> bzW)
+-- @
+--
+-- Or, you can handle the extra output implicitly using 'writerA':
+--
+-- @
+-- fullW :: Auto (WriterT [String] m) Int String
+-- fullW = proc inp -> do
+--     x  <- sumFrom 0   -< inp
+--     fo <- writerA foo -< inp + x
+--     br <- writerA bar -< fo
+--     bz <- writerA baz -< fo
+--     id -< replicate br bz
+-- @
+--
+-- Note that @'sumFrom' 0@ still works the same and doesn't interfere,
+-- logging nothing.
+--
+-- You can recover the original @full@ with 'runWriterA', which
+-- "unwraps" the underlying 'Writer':
+--
+-- @
+-- full' :: Auto m Int (String, [String])
+-- full' = runWriterA fullW
+-- @
+--
+--
+--
+-- Note: Function is an inverse with 'runWriterA':
 --
 -- @
 -- 'writerA' . 'runWriterA' == 'id'
@@ -421,6 +476,12 @@ writerA a = mkAutoM (writerA <$> resumeAuto a)
 -- when trying to resume it.  If this is not the behavior you want, use
 -- 'sealReader_'.
 --
+-- 'Reader' is convenient because it allows you to "chain" and "compose"
+-- 'Auto's with a common environment, instead of explicitly passing in
+-- values every time.  For a convenient way of generating 'Auto's under
+-- 'ReaderT', and also for some motivating examples, see 'readerA' and
+-- 'runReaderA'.
+--
 sealReader :: (Monad m, Serialize r)
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over 'Reader'
            -> r                         -- ^ the perpetual environment
@@ -449,13 +510,6 @@ sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
 -- takes in an input state every turn (in addition to the normal input) and
 -- outputs, along with the original result, the modified state.
 --
--- 'stateA' is the inverse to this function:
---
--- @
--- 'stateA' . 'runStateA' == 'id'
--- 'runStateA' . 'stateA' == 'id'
--- @
---
 -- So now you can use any @'StateT' s m@ as if it were an @m@.  Useful if
 -- you want to compose and create some isolated 'Auto's with access to an
 -- underlying state, but not your entire program.
@@ -465,6 +519,8 @@ sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
 --
 -- When used with @'State' s@, it turns an @'Auto' ('State' s) a b@ into an
 -- @'Auto'' (a, s) (b, s)@.
+--
+-- For a convenient way to "generate" an 'Auto' 'StateT', see 'stateA'
 --
 runStateA :: Monad m
           => Auto (StateT s m) a b      -- ^ 'Auto' run over a state transformer
@@ -476,11 +532,73 @@ runStateA a = mkAutoM (runStateA <$> resumeAuto a)
                         return ((y, s'), runStateA a')
 
 
--- | Given an 'Auto' that alongside its normal input and output explicitely
--- receives the current state and outputs a new state, move the explicit state
--- passing to an underlying 'StateT' monad.
+-- | Transforms an 'Auto' with two input streams and two output streams (a
+-- "normal" input @a@ output @b@ stream, and a "state transforming"
+-- side-stream taking in @s@ and outputting @s@), abstracts away the @s@
+-- stream as a modifcation to an underyling 'StateT' monad.  That is, your
+-- normal inputs and outputs are now your /only/ inputs and outputs, and
+-- your input @s@ comes from the underlying global mutable state, and the
+-- output @s@ goes to update the underlying global mutable state.
 --
--- 'runStateA' is the inverse to this function:
+-- For example, you might have a bunch of 'Auto's that interact with
+-- a global mutable state:
+--
+-- @
+-- foo :: Auto (StateT Double m) Int Bool
+-- bar :: Auto (StateT Double m) Bool Int
+-- baz :: Auto (StateT Double m) Bool String
+-- @
+--
+-- Where @foo@, @bar@, and @baz@ all interact with global mutable state.
+-- You'd use them like this:
+--
+-- @
+-- full :: Auto (StateT Double m) Int String
+-- full = proc inp -> do
+--     fo <- foo -< inp
+--     br <- bar -< fo
+--     bz <- baz -< fo
+--     id -< replicae br bz
+-- @
+--
+-- 'stateA' allows you generate a new @Auto@ under 'StateT':
+--
+-- @
+-- thing :: Auto m (Int, Double) (Bool, Double)
+-- stateA thing :: Auto (StateT Double m) Int Bool
+-- @
+--
+-- So now the two side-channels are interpreted as working with the global
+-- state:
+--
+-- @
+-- full :: Auto (StateT Double m) Int String
+-- full = proc inp -> do
+--     fo <- foo          -< inp
+--     tg <- stateA thing -< inp
+--     br <- bar          -< fo || tg
+--     bz <- baz          -< fo && tg
+--     id -< replicae br bz
+-- @
+--
+-- You can then "seal it all up" in the end with an initial state, that
+-- keeps on re-running itself with the resulting state every time:
+--
+-- @
+-- full' :: Double -> Auto m Int String
+-- full' = sealState full
+-- @
+--
+-- Admittedly, this is a bit more esoteric and dangerous (programming with
+-- global state? what?) than its components 'readerA' and 'writerA';
+-- I don't actually recommend you programming with global state unless it
+-- really is the best solution to your problem...it tends to encourage
+-- imperative code/loops, and "unreasonable" and manageable code.  See
+-- documentation for 'sealStateA' for best practices.  Basically every bad
+-- thing that comes with global mutable state.  But, this is provided here
+-- for sake of completeness with 'readerA' and 'writerA'.
+--
+-- Note: function is an inverse to 'runstateA'.
 --
 -- @
 -- 'stateA' . 'runStateA' == 'id'
@@ -501,13 +619,6 @@ stateA a = mkAutoM (stateA <$> resumeAuto a)
 -- takes in the input "environment" every turn in addition to the normal
 -- input.
 --
--- 'readerA' is the inverse to this function:
---
--- @
--- 'readerA' . 'runReaderA' == 'id'
--- 'runReaderA' . 'readerA' == 'id'
--- @
---
 -- So you can use any @'ReaderT' r m@ as if it were an @m@.  Useful if you
 -- want to compose and create some isolated 'Auto's with access to an
 -- underlying environment, but not your entire program.
@@ -517,6 +628,9 @@ stateA a = mkAutoM (stateA <$> resumeAuto a)
 --
 -- When used with @'Reader' r@, it turns an @'Auto' ('Reader' r) a b@ into
 -- an @'Auto'' (a, r) b@.
+--
+-- A convenient way to "make" an 'Auto' over 'ReaderT', instead of using
+-- @'effect' 'ask'@, for example, is to use 'readerA'.
 runReaderA :: Monad m
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over global environment
            -> Auto m (a, r) b           -- ^ 'Auto' receiving environments
@@ -526,10 +640,70 @@ runReaderA a = mkAutoM (runReaderA <$> resumeAuto a)
                          (y, a') <- runReaderT (stepAuto a x) r
                          return (y, runReaderA a')
 
--- | Given an 'Auto' that alongside its normal input receives an environment,
--- move the explicit environment passing to an underlying 'ReaderT' monad.
+-- | Transforms an 'Auto' on two input streams ( a "normal input" stream
+-- @a@ and an "environment input stream" @r@) into an 'Auto' on one input
+-- stream @a@ with an underlying environment @r@ through a 'Reader' monad.
 --
--- 'runReaderA' is the inverse to this function:
+-- Why is this useful?  Well, if you have several 'Auto's that all take in
+-- a side @r@ stream, and you want to convey that every single one should
+-- get the /same/ @r@ at every step, you can instead have all of them pull
+-- from a common underlying global environment.
+--
+-- For example, you might have:
+--
+-- @
+-- foo :: Auto m (Int, Database) Bool
+-- bar :: Auto m (Bool, Database) Int
+-- baz :: Auto m (Bool, Database) String
+-- @
+--
+-- Where every 'Auto' used a @Database@ parameter to do their job...and it
+-- only makes sense when all of them are composed under the same
+-- @Database@.  You can use normal proc notation:
+--
+-- @
+-- full :: Auto m (Int, Database) String
+-- full = proc (inp, db) -> do
+--     fo <- foo -< (inp, db)
+--     br <- bar -< (fo, db)
+--     bz <- baz -< (fo, db)
+--     id -< replicate br bz
+-- @
+--
+-- Or, you can put them all under 'Reader' and have the parameters pass
+-- implicitly:
+--
+-- @
+-- fullR :: Auto (ReaderT Database m) Int String
+-- fullR = proc inp -> do
+--     fo <- readerA foo -< inp
+--     br <- readerA bar -< fo
+--     bz <- readerA baz -< fo
+--     id -< replicate br bz
+-- @
+--
+-- And you can recover the original behavior of @full@ by using
+-- 'runReaderA' to "unroll" the implicit argument:
+--
+-- @
+-- full' :: Auto m (Int, Database) String
+-- full' = runReaderA fullR
+-- @
+--
+-- (See documentation for 'runReaderA' for more information)
+--
+-- You can also "seal" @fullR@ so that it always runs with the same
+-- @Database@ at every step using 'sealReader':
+--
+-- @
+-- fullSealed :: Database -> Auto m Int String
+-- fullSealed = sealReader fullR
+-- @
+--
+-- @fullSealed db@ will now assume that @foo@, @bar@, and @baz@ all get the
+-- same environment forever when they are stepped/streamed.
+--
+-- Note: Function is an inverse with 'runReaderA':
 --
 -- @
 -- 'readerA' . 'runReaderA' == 'id'
