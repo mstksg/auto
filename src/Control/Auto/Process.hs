@@ -62,13 +62,13 @@ import Data.Serialize
 sumFrom :: (Serialize a, Num a)
         => a             -- ^ initial count
         -> Auto m a a
-sumFrom = accum (+)
+sumFrom = accuml (+)
 
 -- | The non-resuming/non-serializing version of 'sumFrom'.
 sumFrom_ :: Num a
          => a             -- ^ initial count
          -> Auto m a a
-sumFrom_ = accum_ (+)
+sumFrom_ = accuml_ (+)
 
 -- | Like 'sumFrom', except the first output is the starting count.
 --
@@ -95,13 +95,13 @@ sumFrom_ = accum_ (+)
 sumFromD :: (Serialize a, Num a)
          => a             -- ^ initial count
          -> Auto m a a
-sumFromD = accumD (+)
+sumFromD = accumlD (+)
 
 -- | The non-resuming/non-serializing version of 'sumFromD'.
 sumFromD_ :: Num a
           => a             -- ^ initial count
           -> Auto m a a
-sumFromD_ = accumD_ (+)
+sumFromD_ = accumlD_ (+)
 
 -- | The output is the running/cumulative product of all of the inputs so
 -- far, starting from an initial product.
@@ -110,13 +110,13 @@ sumFromD_ = accumD_ (+)
 productFrom :: (Serialize a, Num a)
             => a            -- ^ initial product
             -> Auto m a a
-productFrom = accum (*)
+productFrom = accuml (*)
 
 -- | The non-resuming/non-serializing version of 'productFrom'.
 productFrom_ :: Num a
              => a           -- ^ initial product
              -> Auto m a a
-productFrom_ = accum_ (*)
+productFrom_ = accuml_ (*)
 
 -- | The output is the the difference between the input and the previously
 -- received input.
@@ -160,11 +160,11 @@ _deltasF x s = case s of
 --
 -- prop> mappender = accum mappend mempty
 mappender :: (Serialize a, Monoid a) => Auto m a a
-mappender = accum mappend mempty
+mappender = accuml (flip mappend) mempty
 
 -- | The non-resuming/non-serializing version of 'mappender'.
 mappender_ :: Monoid a => Auto m a a
-mappender_ = accum_ mappend mempty
+mappender_ = accuml_ (flip mappend) mempty
 
 -- | The output is the running '<>'-sum ('mappend' for 'Semigroup') of all
 -- of the input values so far, starting with a given starting value.
@@ -177,13 +177,13 @@ mappender_ = accum_ mappend mempty
 mappendFrom :: (Serialize a, Semigroup a)
             => a            -- ^ initial value
             -> Auto m a a
-mappendFrom = accum (<>)
+mappendFrom = accuml (flip (<>))
 
 -- | The non-resuming/non-serializing version of 'mappender'.
 mappendFrom_ :: Semigroup a
              => a           -- ^ initial value
              -> Auto m a a
-mappendFrom_ = accum_ (<>)
+mappendFrom_ = accuml_ (flip (<>))
 
 -- | The output is the sum of the past inputs, multiplied by a moving
 -- window of weights.

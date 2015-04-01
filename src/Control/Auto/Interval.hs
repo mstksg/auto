@@ -488,15 +488,11 @@ between = mkState f False
 -- "Control.Auto.Blip"...or also just 'hold' with '<|!>' or 'fromInterval'.
 hold :: Serialize a
      => Interval m (Blip a) a
-hold = accum f Nothing
-  where
-    f x = blip x Just
+hold = accuml (\x y -> blip y Just x) Nothing
 
 -- | The non-serializing/non-resuming version of 'hold'.
 hold_ :: Interval m (Blip a) a
-hold_ = accum_ f Nothing
-  where
-    f x = blip x Just
+hold_ = accuml_ (\x y -> blip y Just x) Nothing
 
 -- | For @'holdFor' n@, The output is only "on" if there was an emitted
 -- value from the input blip stream in the last @n@ steps.  Otherwise, is
@@ -539,12 +535,12 @@ _holdForF n = f   -- n should be >= 0
 --
 holdJusts :: Serialize a
           => Interval m (Maybe a) a
-holdJusts = accum (flip (<|>)) Nothing
+holdJusts = accuml (<|>) Nothing
 
 -- | The non-resuming/non-serializing version of 'holdJusts'.
 --
 holdJusts_ :: Interval m (Maybe a) a
-holdJusts_ = accum_ (flip (<|>)) Nothing
+holdJusts_ = accuml_ (<|>) Nothing
 
 -- | Forks a common input stream between the two 'Interval's and returns,
 -- itself, an 'Interval'.  If the output of the first one is "on", the

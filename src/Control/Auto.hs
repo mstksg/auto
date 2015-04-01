@@ -60,15 +60,15 @@ module Control.Auto (
   , arrD
   -- ** from Accumulators
   -- *** Result-first
-  , accum
-  , accum_
-  , accumM
-  , accumM_
+  , accuml
+  , accuml_
+  , accumlM
+  , accumlM_
   -- *** Initial accumulator-first
-  , accumD
-  , accumD_
-  , accumMD
-  , accumMD_
+  , accumlD
+  , accumlD_
+  , accumlMD
+  , accumlMD_
   -- ** from State transformers
   , mkState
   , mkStateM

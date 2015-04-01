@@ -586,16 +586,16 @@ scanB :: Serialize b
       => (b -> a -> b)      -- ^ folding function
       -> b                  -- ^ initial value
       -> Auto m (Blip a) b
-scanB f = accum (_scanBF f)
+scanB f = accuml (_scanBF f)
 
 -- | The non-serializing/non-resuming version of 'scanB'.
 scanB_ :: (b -> a -> b)
        -> b                   -- ^ folding function
        -> Auto m (Blip a) b   -- ^ initial value
-scanB_ f = accum_ (_scanBF f)
+scanB_ f = accuml_ (_scanBF f)
 
-_scanBF :: (b -> a -> b) -> b -> Blip a -> b
-_scanBF f y0 = blip y0 (f y0)
+_scanBF :: (b -> a -> b) -> Blip a -> b -> b
+_scanBF f x y = blip y (f y) x
 
 -- | The output is the 'mconcat' (monoid sum) of all emitted values seen
 -- this far.
@@ -611,14 +611,14 @@ mscanB_ = scanB_ (<>) mempty
 -- | The output is the number of emitted values received from the upstream
 -- blip stream so far.
 countB :: Auto m (Blip a) Int
-countB = accum (\i -> (i +) . blip 0 (const 1)) 0
+countB = accuml (\inp x -> blip x (const (x+1)) inp) 0
 
 -- | Blip stream that emits whenever the predicate applied to the input
 -- switches from false to true.  Emits with the triggering input value.
 became :: Serialize a
        => (a -> Bool)       -- ^ change condition
        -> Auto m a (Blip a)
-became p = accum (_becameF p) NoBlip
+became p = accuml (_becameF p) NoBlip
 
 -- | Blip stream that emits whenever the predicate applied to the input
 -- switches from true to false.  Emits with the triggering input value.
@@ -639,7 +639,7 @@ onFlip p = became p &> noLonger p
 became_ :: Monad m
         => (a -> Bool)      -- ^ change condition
         -> Auto m a (Blip a)
-became_ p = accum_ (_becameF p) NoBlip
+became_ p = accuml_ (_becameF p) NoBlip
 
 -- | The non-serializing/non-resumable version of 'noLonger'.
 noLonger_ :: Monad m
@@ -653,9 +653,9 @@ onFlip_ :: Monad m
         -> Auto m a (Blip a)
 onFlip_ p = became_ p &> noLonger_ p
 
-_becameF :: (a -> Bool) -> Blip a -> a -> Blip a
-_becameF p e x | p x       = blip (Blip x) (const NoBlip) e
-               | otherwise = NoBlip
+_becameF :: (a -> Bool) -> a -> Blip a -> Blip a
+_becameF p x | p x       = blip (Blip x) (const NoBlip)
+             | otherwise = const NoBlip
 
 -- | Like 'became', but emits a '()' instead of the triggering input value.
 --
@@ -664,10 +664,10 @@ _becameF p e x | p x       = blip (Blip x) (const NoBlip) e
 became' :: Monad m
         => (a -> Bool)        -- ^ change condition
         -> Auto m a (Blip ())
-became' p = accum f NoBlip
+became' p = accuml f NoBlip
   where
-    f e x | p x       = blip (Blip ()) (const NoBlip) e
-          | otherwise = NoBlip
+    f x | p x       = blip (Blip ()) (const NoBlip)
+        | otherwise = const NoBlip
 
 -- | Like 'noLonger', but emits a '()' instead of the triggering input
 -- value.
@@ -745,17 +745,12 @@ fromBlipsWith d f = mkFunc (blip d f)
 holdWith :: Serialize a
          => a
          -> Auto m (Blip a) a
-holdWith = accum f
-  where
-    f x = blip x id
+holdWith = accuml (\x y -> blip y id x)
 
 -- | A non-serializing/non-resumable version of 'holdWith'.
 holdWith_ :: a
           -> Auto m (Blip a) a
-holdWith_ = accum_ f
-  where
-    f x = blip x id
-
+holdWith_ = accuml_ (\x y -> blip y id x)
 
 -- | Re-emits every emission from the input blip stream, but replaces its
 -- value with the given value.
