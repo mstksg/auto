@@ -1,3 +1,13 @@
+0.3.0.0
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.3.0.0>
+
+*   **Control.Auto.Effects**: Breaking change: switched to strict `StateT`
+    and `WriterT`.
+*   **Control.Auto.Effects**: Added `readerA` and `writerA`, for convenience
+    in "creating" `Auto`s under `ReaderT` and `WriterT`; also added `stateA`
+    and `accumA` for completeness.
+
 0.2.0.6
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.6>
