@@ -402,6 +402,10 @@ prodX <- productFrom 1 -< x + sumX
 This reads as you are defining a binding `prodX`, and `prodX` is maintained as
 the cumulative product of `x + sumX`.
 
+All "values" in your proc block are actually *streams*.  `prodX` is a stream
+of numbers, `x` is a stream, `sumX` is a stream...and `productFrom 1` lets you
+describe the (static) *relationship* between those three streams.
+
 The result of the last line of the proc block is the result of the entire
 block:
 
@@ -409,8 +413,8 @@ block:
 id -< (prodX, lastEven)
 ~~~
 
-Means that the output of the entire block is just echoing the tuple `(prodX,
-lastEven)`.
+Means that the output stream of the entire block is just echoing the tuple
+`(prodX, lastEven)`.
 
 (Operationally, you can imagine that, at every step, `x` is "fed into"
 `sumFrom 0`, and the result is named `sumX`; `x + sumX` is "fed into"
@@ -441,13 +445,13 @@ foo = proc x -> do
     id -< y + z
 ~~~
 
-We can't do `sumFrom y`, because `y` is not an actual value that we have at
-"compile"/"building" time.  `y` is what we're calling the result of
-`productFrom 1`, at every step, so its value changes at every step, and every
-`Auto` has to be a **fixed `Auto`**.  Remember, `Auto` relationships are
-"forever" and fixed, declarative style.  So the `Auto` where `sumFrom` is,
-there, has to be a fixed thing that doesn't change at every step...but `y` is
-a value that will very as the stream marches on.
+We can't do `sumFrom y`, because `y` isn't actually a "value" we have at
+"compile"/"building" time...`y` is the stream that is the cumulative product
+of the stream `x`.  `y` changes at every "point in time".  Remember, `Auto`
+relationships in a proc block are "fixed", and "forever"; `productFrom 1` is
+the "static relationship" between `x` and `y`.  So the `Auto` where `sumFrom`
+is...it has to be a fixed thing that never changes.  But `y` changes every
+step!
 
 You can however do something like:
 
