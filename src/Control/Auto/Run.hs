@@ -552,11 +552,12 @@ toEffectStream nt getInp = go
 -- working with transformers for /value/ streams, and not effect streams or
 -- streams of effects.  Using this, you can potentially have the best of
 -- both worlds.
+--
 streamAutoEffects :: (Monad m, MonadTrans t, MonadPlus (t m), Monad m')
-                  => (forall c. m' c -> m c)
-                  -> [a]
-                  -> Auto m' a b
-                  -> t m b
+                  => (forall c. m' c -> m c)   -- ^ function to change the underyling monad from @m'@ to @m@
+                  -> [a]                       -- ^ inputs to stream on
+                  -> Auto m' a b               -- ^ 'Auto' to stream
+                  -> t m b                     -- ^ "ListT"-like structure sequencing effects
 streamAutoEffects nt = go
   where
     go [] _      = mzero

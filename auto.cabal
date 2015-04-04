@@ -1,5 +1,5 @@
 name:                auto
-version:             0.3.0.0
+version:             0.4.0.0
 synopsis:            Denotative, locally stateful programming DSL & platform
 description:         (Up to date documentation is maintained at
                      <https://mstksg.github.com/auto>)
@@ -25,9 +25,9 @@ description:         (Up to date documentation is maintained at
                      static relationships between quantities.
                      .
                      Instead of a "state monad" type solution, where all
-                     functions have access to a global state, /auto/ works by
-                     specifying relationships which each exist independently
-                     and on their own, without any global state.
+                     functions have access to a rigid global state, /auto/
+                     works by specifying relationships which each exist
+                     independently and on their own, without any global state.
                      .
                      A more fuller exposition is in the `README.md`, in this
                      project directory and also online at

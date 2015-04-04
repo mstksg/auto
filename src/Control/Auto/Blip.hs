@@ -57,7 +57,7 @@ module Control.Auto.Blip (
   , lagBlips
   , lagBlips_
   , filterB
-  , forkB
+  , splitB
   , joinB
   , mapMaybeB
   , takeB
@@ -448,16 +448,16 @@ filterB p = mkFunc $ \x -> case x of
                              Blip x' | p x' -> x
                              _              -> NoBlip
 
--- | "Forks" a blip stream based on a predicate.  Takes in one blip stream
+-- | "Splits" a blip stream based on a predicate.  Takes in one blip stream
 -- and produces two: the first emits whenever the input emits with a value
 -- that passes the predicate, and the second emits whenever the input emits
 -- with a value that doesn't.
-forkB :: (a -> Bool)
+splitB :: (a -> Bool)
       -> Auto m (Blip a) (Blip a, Blip a)
-forkB p = mkFunc $ \x -> case x of
-                           Blip x' | p x'      -> (x, NoBlip)
-                                   | otherwise -> (NoBlip, x)
-                           _                   -> (NoBlip, NoBlip)
+splitB p = mkFunc $ \x -> case x of
+                            Blip x' | p x'      -> (x, NoBlip)
+                                    | otherwise -> (NoBlip, x)
+                            _                   -> (NoBlip, NoBlip)
 
 -- | "Collapses" a blip stream of blip streams into single blip stream.
 -- that emits whenever the inner-nested stream emits.

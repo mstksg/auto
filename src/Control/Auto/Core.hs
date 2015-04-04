@@ -209,10 +209,8 @@ type Auto'   = Auto Identity
 -- | Re-structure 'Auto' internals to use the 'Arb' ("arbitrary")
 -- constructors, as recursion-based mealy machines.
 --
--- Almost always a bad idea in every conceivable situation.  Why is it even
--- here?
+-- Mostly here for performance comparisons and benchmarking purposes.
 --
--- I'm sorry.
 toArb :: Monad m => Auto m a b -> Auto m a b
 toArb a = a_
   where

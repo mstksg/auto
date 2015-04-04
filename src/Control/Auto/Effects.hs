@@ -71,15 +71,15 @@ import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
 import Control.Exception
-import Control.Monad hiding              (mapM, mapM_)
-import Control.Monad.Trans.Reader        (ReaderT(ReaderT), runReaderT)
-import Control.Monad.Trans.State.Strict  (StateT(StateT), runStateT)
-import Control.Monad.Trans.Writer.Strict (WriterT(WriterT), runWriterT)
+import Control.Monad hiding       (mapM, mapM_)
+import Control.Monad.Trans.Reader (ReaderT(ReaderT), runReaderT)
+import Control.Monad.Trans.State  (StateT(StateT), runStateT)
+import Control.Monad.Trans.Writer (WriterT(WriterT), runWriterT)
 import Data.Foldable
 import Data.Monoid
 import Data.Serialize
 import Data.Traversable
-import Prelude hiding                    ((.), id, mapM, mapM_)
+import Prelude hiding             ((.), id, mapM, mapM_)
 
 -- | The very first output executes a monadic action and uses the result as
 -- the output, ignoring all input.  From then on, it persistently outputs
