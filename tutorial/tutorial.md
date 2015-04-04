@@ -802,7 +802,7 @@ These are really useful for implementing things like "modes" --- your program
 has different modes of behavior, which you can represent with a different
 `Auto` for each mode...and you can switch between them with these switches!
 
-See the documentation for these at the *[Control.Auto.Swtich][]* module for
+See the documentation for these at the *[Control.Auto.Switch][]* module for
 more information!
 
 #### Collections
@@ -843,7 +843,7 @@ chaseFrom x0 = proc target -> do
                                         -- 0 if matches
                                         -- -1 if smaller
 
-        x <- sumFromD 0 -< step
+        x <- sumFromD x0 -< step
 
     id -< x
 ~~~
