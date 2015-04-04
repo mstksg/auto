@@ -371,7 +371,7 @@ foo = proc x -> do
 
 ~~~haskell
 ghci> streamAuto' foo [4,7,3,6,5,1]
-[ (    4, Just 4), (    144, Just 4), (    2448, Just 4)
+[ (    8, Just 4), (    144, Just 4), (    2448, Just 4)
 , (63648, Just 6), (1909440, Just 6), (51554880, Just 6) ]
 ~~~
 
