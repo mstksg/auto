@@ -1,6 +1,23 @@
+0.4.0.0
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.0.0>
+
+*   Bug fix version *reverting* breaking changes from `0.3.0.0`.  `0.4.x`
+    should be able to run all `0.2.x` programs with full backwards
+    compatibility.
+*   **Control.Auto.Effects**: Reverted back to lazy `StateT` and `WriterT`,
+    because of situations where *auto* cannot resolve fixed points for
+    recursive bindings.
+*   **Control.Auto.Blip**: `forkB` renamed to `splitB` to prevent confusion
+    with "fork", usually used in Haskell to refer to concurrency.  Also
+    anticipating adding concurrency-based `Auto`s, so this is a move to clear
+    the way for any possible conflicts.
+
 0.3.0.0
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.3.0.0>
+
+**DEPRECATED:** Please use `0.4.0.0`!
 
 *   **Control.Auto.Effects**: Breaking change: switched to strict `StateT`
     and `WriterT`.
@@ -64,6 +81,8 @@
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.2>
 
+**DEPRECATED:** Please use `0.2.0.3`!
+
 *   **Control.Auto.Collection**: `dynZipF` and `dynMapF`, implicit-serialization
     dynamic collections.
 
@@ -81,4 +100,5 @@
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.2.0.0>
 
-*   First official release.  No backwards-incompatible changes until 0.3.0.0.
+*   First official release.  No backwards-incompatible changes until
+    `0.3.0.0`.
