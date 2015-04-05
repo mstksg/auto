@@ -71,6 +71,8 @@ module Control.Auto.Blip (
   , scanB_
   , mscanB
   , mscanB_
+  , iterateB
+  , iterateB_
   , countB
   -- * Blips on edges
   , onChange
@@ -271,13 +273,48 @@ mergeRs = foldl' mergeR NoBlip
 
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the right.
+--
+-- _WARNING_: Be aware that in version @0.5@, this function will change to:
+--
+-- @
+-- foldrB :: (a -> a -> a) -> [Blip a] -> Blip b
+-- @
+--
+-- Which will not emit if nothing emits.  This really was supposed to be
+-- the intended behavior originally.
+--
+-- To use this behavior now, you can use:
+--
+-- @
+-- foldr (merge f) mempty
+-- @
+--
 foldrB :: (a -> a -> a) -> a -> [Blip a] -> Blip a
-foldrB f b0 = foldr (merge f) (Blip b0)
+foldrB f x0 = foldr (merge f) (Blip x0)
+-- foldrB :: (a -> a -> a) -> [Blip a] -> Blip a
+-- foldrB f = foldr (merge f) NoBlip
 
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the left.
+--
+-- _WARNING_: Be aware that in version @0.5@, this function will change to:
+--
+-- @
+-- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip b
+-- @
+--
+-- Which will not emit if nothing emits.  This really was supposed to be
+-- the intended behavior originally.
+--
+-- To use this behavior now, you can use:
+--
+-- @
+-- foldl' (merge f) mempty
+-- @
 foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
-foldlB' f b0 = foldl' (merge f) (Blip b0)
+foldlB' f x0 = foldl' (merge f) (Blip x0)
+-- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip a
+-- foldlB' f = foldl' (merge f) NoBlip
 
 
 -- | Takes two 'Auto's producing blip streams and returns a "merged"
@@ -337,11 +374,11 @@ immediately = mkState f False
 -- prop> immediately == inB 1
 inB :: Int                -- ^ number of steps before value is emitted.
     -> Auto m a (Blip a)
-inB n = mkState f (n, False)
+inB = mkState f . Just
   where
-    f _ (_, True )             = (NoBlip, (1  , True ))
-    f x (i, False) | i <= 1    = (Blip x, (1  , True ))
-                   | otherwise = (NoBlip, (i-1, False))
+    f _ Nothing              = (NoBlip, Nothing)
+    f x (Just i) | i <= 1    = (Blip x, Nothing)
+                 | otherwise = (NoBlip, Just (i - 1))
 
 -- | Produces a blip stream that emits the input value whenever the input
 -- satisfies a given predicate.
@@ -597,11 +634,26 @@ scanB_ f = accum_ (_scanBF f)
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
 
+iterateB :: Serialize a
+         => a
+         -> Auto m (Blip (a -> a)) (Blip a)
+iterateB = mkState _iterateBF
+
+iterateB_ :: a
+          -> Auto m (Blip (a -> a)) (Blip a)
+iterateB_ = mkState_ _iterateBF
+
+
+_iterateBF :: Blip (a -> a) -> a -> (Blip a, a)
+_iterateBF (Blip f) x = let y = f x in (Blip y, y)
+_iterateBF _        x = (NoBlip, x)
+
 -- | The output is the 'mconcat' (monoid sum) of all emitted values seen
 -- this far.
 mscanB :: (Monoid a, Serialize a)
        => Auto m (Blip a) a
 mscanB = scanB (<>) mempty
+-- should this be removed? is it worth having here?
 
 -- | The non-serializing/non-resuming version of 'mscanB'.
 mscanB_ :: Monoid a
@@ -636,14 +688,12 @@ onFlip :: (Serialize a, Monad m)
 onFlip p = became p &> noLonger p
 
 -- | The non-serializing/non-resumable version of 'became'.
-became_ :: Monad m
-        => (a -> Bool)      -- ^ change condition
+became_ :: (a -> Bool)      -- ^ change condition
         -> Auto m a (Blip a)
 became_ p = accum_ (_becameF p) NoBlip
 
 -- | The non-serializing/non-resumable version of 'noLonger'.
-noLonger_ :: Monad m
-          => (a -> Bool)    -- ^ change condition
+noLonger_ :: (a -> Bool)    -- ^ change condition
           -> Auto m a (Blip a)
 noLonger_ p = became_ (not . p)
 
@@ -661,8 +711,7 @@ _becameF p e x | p x       = blip (Blip x) (const NoBlip) e
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.
-became' :: Monad m
-        => (a -> Bool)        -- ^ change condition
+became' :: (a -> Bool)        -- ^ change condition
         -> Auto m a (Blip ())
 became' p = accum f NoBlip
   where
@@ -674,12 +723,13 @@ became' p = accum f NoBlip
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.
-noLonger' :: Monad m
-          => (a -> Bool)        -- ^ change condition
+noLonger' :: (a -> Bool)        -- ^ change condition
           -> Auto m a (Blip ())
 noLonger' p = became' (not . p)
 
--- | Like 'onFlip', but emits a '()' instead of the triggering input value.
+-- | Like 'onFlip', but emits a 'Bool' instead of the triggering input
+-- value.  An emitted 'True' indicates that the predicate just became true;
+-- an emitted 'False' indicates that the predicate just became false.
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.

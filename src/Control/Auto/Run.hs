@@ -27,6 +27,8 @@ module Control.Auto.Run (
   , streamAuto'
   , overList
   , overList'
+  , overTraversable
+  , overTraversable'
   -- ** Running over one item repetitively
   , stepAutoN
   , stepAutoN'
@@ -54,13 +56,15 @@ import Control.Applicative
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Concurrent
-import Control.Monad hiding      (mapM, mapM_)
+import Control.Monad hiding             (mapM, mapM_)
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.State.Strict
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Profunctor
-import Prelude hiding            (interact, mapM, mapM_)
-import Text.Read hiding          (lift)
+import Data.Traversable                 (Traversable(..))
+import Prelude hiding                   (interact, mapM, mapM_)
+import Text.Read hiding                 (lift, get)
 
 -- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
 -- -> m [b]@ inside.  Streaming is done in the context of the underlying
@@ -107,6 +111,19 @@ overList a (x:xs) = do
     (ys, a'') <- overList a' xs
     return (y:ys, a'')
 
+overTraversable :: (Monad m, Traversable t)
+                => Auto m a b
+                -> t a
+                -> m (t b, Auto m a b)
+overTraversable a0 = flip runStateT a0 . mapM f
+  where
+    f x = do
+      a <- get
+      (y, a') <- lift $ stepAuto a x
+      put a'
+      return y
+
+
 -- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]
 -- -> [b]@ inside.  When done comsuming the list, returns the outputs and
 -- the updated/next 'Auto''.
@@ -128,6 +145,17 @@ overList' a []     = ([], a)
 overList' a (x:xs) = let (y, a')   = stepAuto' a x
                          (ys, a'') = overList' a' xs
                      in  (y:ys, a'')
+
+overTraversable' :: Traversable t
+                 => Auto' a b
+                 -> t a
+                 -> (t b, Auto' a b)
+overTraversable' a0 = flip runState a0 . mapM f
+  where
+    f x = do
+      a <- get
+      let (y, a') = stepAuto' a x
+      y <$ put a'
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
 -- this "lazily" (over the Monad), so with most Monads, this should work

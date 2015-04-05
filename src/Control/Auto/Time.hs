@@ -75,7 +75,7 @@ import Control.Auto.Run
 import Control.Category
 import Control.Monad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Writer
+import Control.Monad.Trans.Writer.Strict
 import Data.Maybe
 import Data.Monoid
 import Data.Serialize

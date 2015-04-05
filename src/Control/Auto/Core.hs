@@ -1822,7 +1822,6 @@ instance (Monad m, Floating b) => Floating (Auto m a b) where
     atanh   = fmap atanh
     acosh   = fmap acosh
 
-
 -- Utility functions
 
 firstM :: Monad m => (a -> m b) -> (a, c) -> m (b, c)
