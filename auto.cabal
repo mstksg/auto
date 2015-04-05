@@ -68,6 +68,7 @@ source-repository head
 
 library
   exposed-modules:     Control.Auto
+                     , Control.Auto.AFunctor
                      , Control.Auto.Blip
                      , Control.Auto.Blip.Internal
                      , Control.Auto.Collection
