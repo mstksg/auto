@@ -158,8 +158,8 @@ import Prelude hiding             ((.), id, mapM)
 -- expect/.  By saying that a function expects an 'Interval':
 --
 -- @
---     chooseInterval :: [Interval m a b]
---                    -> Interval m a b
+-- chooseInterval :: [Interval m a b]
+--                -> Interval m a b
 -- @
 --
 -- 'chooseInterval' has the ability to "state" that it /expects/ things
@@ -513,22 +513,22 @@ hold_ = accum_ f Nothing
 holdFor :: Serialize a
         => Int      -- ^ number of steps to hold the last emitted value for
         -> Interval m (Blip a) a
-holdFor n = mkState (_holdForF n) (Nothing, max 0 n)
+holdFor n = mkState (_holdForF (max 0 n)) (Nothing, Nothing)
 
 -- | The non-serializing/non-resuming version of 'holdFor'.
 holdFor_ :: Int   -- ^ number of steps to hold the last emitted value for
          -> Interval m (Blip a) a
-holdFor_ n = mkState_ (_holdForF n) (Nothing, max 0 n)
+holdFor_ n = mkState_ (_holdForF (max 0 n)) (Nothing, Nothing)
 
-_holdForF :: Int -> Blip a -> (Maybe a, Int) -> (Maybe a, (Maybe a, Int))
+_holdForF :: Int -> Blip a -> (Maybe a, Maybe Int) -> (Maybe a, (Maybe a, Maybe Int))
 _holdForF n = f   -- n should be >= 0
   where
     f x s = (y, (y, i))
       where
         (y, i) = case (x, s) of
-                   (Blip b,  _    ) -> (Just b , n    )
-                   (_     , (_, 0)) -> (Nothing, 0    )
-                   (_     , (z, j)) -> (z      , j - 1)
+                   (Blip b,  _    )       -> (Just b , Just n )
+                   (_     , (z, Just j )) | j > 1 -> (z, Just (j - 1))
+                   _                      -> (Nothing, Nothing)
 
 -- | "Stretches" the last "on"/'Just' input over the entire range of
 -- following "off"/'Nothing' inputs.  Holds on to the last 'Just' until
@@ -673,7 +673,7 @@ choose = foldr (<|!>)
 --
 during :: Monad m
        => Auto m a b      -- ^ 'Auto' to lift to work over intervals
-       -> Auto m (Maybe a) (Maybe b)
+       -> Interval m (Maybe a) b
 during = dimap to from . right
   where
     from = either (const Nothing) Just

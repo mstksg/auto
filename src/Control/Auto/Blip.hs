@@ -271,13 +271,56 @@ mergeRs = foldl' mergeR NoBlip
 
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the right.
+--
+-- __DEPRECATED__: In its current form, 'foldrB' will disappear in @0.5@.
+-- The new version will be:
+--
+-- @
+-- foldrB :: (a -> a -> a) -> [Blip a] -> Blip b
+-- @
+--
+-- Which will not emit if nothing emits.  This really was supposed to be
+-- the intended behavior originally.
+--
+-- For this reason, please do not use this anymore.  As it is currently
+-- implemented, it doesn't really make any sense, either.
+--
+-- To begin using the new behavior, you can use:
+--
+-- @
+-- foldr (merge f) mempty
+-- @
+--
 foldrB :: (a -> a -> a) -> a -> [Blip a] -> Blip a
-foldrB f b0 = foldr (merge f) (Blip b0)
+foldrB f x0 = foldr (merge f) (Blip x0)
+-- foldrB :: (a -> a -> a) -> [Blip a] -> Blip a
+-- foldrB f = foldr (merge f) NoBlip
 
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the left.
+--
+-- __DEPRECATED__: In its current form, 'foldlB'' will disappear in @0.5@.
+-- The new version will be:
+--
+-- @
+-- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip b
+-- @
+--
+-- Which will not emit if nothing emits.  This really was supposed to be
+-- the intended behavior originally.
+--
+-- For this reason, please do not use this anymore.  As it is currently
+-- implemented, it doesn't really make any sense, either.
+--
+-- To begin using the new behavior, you can use:
+--
+-- @
+-- foldl' (merge f) mempty
+-- @
 foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
-foldlB' f b0 = foldl' (merge f) (Blip b0)
+foldlB' f x0 = foldl' (merge f) (Blip x0)
+-- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip a
+-- foldlB' f = foldl' (merge f) NoBlip
 
 
 -- | Takes two 'Auto's producing blip streams and returns a "merged"
@@ -337,11 +380,11 @@ immediately = mkState f False
 -- prop> immediately == inB 1
 inB :: Int                -- ^ number of steps before value is emitted.
     -> Auto m a (Blip a)
-inB n = mkState f (n, False)
+inB = mkState f . Just
   where
-    f _ (_, True )             = (NoBlip, (1  , True ))
-    f x (i, False) | i <= 1    = (Blip x, (1  , True ))
-                   | otherwise = (NoBlip, (i-1, False))
+    f _ Nothing              = (NoBlip, Nothing)
+    f x (Just i) | i <= 1    = (Blip x, Nothing)
+                 | otherwise = (NoBlip, Just (i - 1))
 
 -- | Produces a blip stream that emits the input value whenever the input
 -- satisfies a given predicate.
@@ -636,14 +679,12 @@ onFlip :: (Serialize a, Monad m)
 onFlip p = became p &> noLonger p
 
 -- | The non-serializing/non-resumable version of 'became'.
-became_ :: Monad m
-        => (a -> Bool)      -- ^ change condition
+became_ :: (a -> Bool)      -- ^ change condition
         -> Auto m a (Blip a)
 became_ p = accum_ (_becameF p) NoBlip
 
 -- | The non-serializing/non-resumable version of 'noLonger'.
-noLonger_ :: Monad m
-          => (a -> Bool)    -- ^ change condition
+noLonger_ :: (a -> Bool)    -- ^ change condition
           -> Auto m a (Blip a)
 noLonger_ p = became_ (not . p)
 
@@ -661,8 +702,7 @@ _becameF p e x | p x       = blip (Blip x) (const NoBlip) e
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.
-became' :: Monad m
-        => (a -> Bool)        -- ^ change condition
+became' :: (a -> Bool)        -- ^ change condition
         -> Auto m a (Blip ())
 became' p = accum f NoBlip
   where
@@ -674,12 +714,13 @@ became' p = accum f NoBlip
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.
-noLonger' :: Monad m
-          => (a -> Bool)        -- ^ change condition
+noLonger' :: (a -> Bool)        -- ^ change condition
           -> Auto m a (Blip ())
 noLonger' p = became' (not . p)
 
--- | Like 'onFlip', but emits a '()' instead of the triggering input value.
+-- | Like 'onFlip', but emits a 'Bool' instead of the triggering input
+-- value.  An emitted 'True' indicates that the predicate just became true;
+-- an emitted 'False' indicates that the predicate just became false.
 --
 -- Useful because it can be serialized without the output needing
 -- a 'Serialize' instance.

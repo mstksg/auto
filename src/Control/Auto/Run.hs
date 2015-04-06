@@ -21,12 +21,16 @@
 --
 
 module Control.Auto.Run (
+  -- * Lifting inputs and outputs
+    throughT
   -- * Special 'stepAuto' versions.
   -- ** Streaming over lists
-    streamAuto
+  , streamAuto
   , streamAuto'
   , overList
   , overList'
+  , overTraversable
+  , overTraversable'
   -- ** Running over one item repetitively
   , stepAutoN
   , stepAutoN'
@@ -51,16 +55,19 @@ module Control.Auto.Run (
   ) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Auto.Core
 import Control.Auto.Interval
 import Control.Concurrent
-import Control.Monad hiding      (mapM, mapM_)
+import Control.Monad hiding             (mapM, mapM_)
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.State.Strict
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Profunctor
-import Prelude hiding            (interact, mapM, mapM_)
-import Text.Read hiding          (lift)
+import Data.Traversable                 (Traversable(..))
+import Prelude hiding                   (interact, mapM, mapM_)
+import Text.Read hiding                 (lift, get)
 
 -- | Streams the 'Auto' over a list of inputs; that is, "unwraps" the @[a]
 -- -> m [b]@ inside.  Streaming is done in the context of the underlying
@@ -107,6 +114,21 @@ overList a (x:xs) = do
     (ys, a'') <- overList a' xs
     return (y:ys, a'')
 
+-- | Like 'overList', but "streams" the 'Auto' over all elements of any
+-- 'Traversable', returning the final updated 'Auto'.
+overTraversable :: (Monad m, Traversable t)
+                => Auto m a b           -- ^ the 'Auto' to run
+                -> t a                  -- ^ 'Traversable' of inputs to step the 'Auto' with
+                -> m (t b, Auto m a b)  -- ^ 'Traversable' of outputs and the updated 'Auto'
+overTraversable a0 = flip runStateT a0 . mapM f
+  where
+    f x = do
+      a <- get
+      (y, a') <- lift $ stepAuto a x
+      put a'
+      return y
+
+
 -- | Streams an 'Auto'' over a list of inputs; that is, "unwraps" the @[a]
 -- -> [b]@ inside.  When done comsuming the list, returns the outputs and
 -- the updated/next 'Auto''.
@@ -128,6 +150,19 @@ overList' a []     = ([], a)
 overList' a (x:xs) = let (y, a')   = stepAuto' a x
                          (ys, a'') = overList' a' xs
                      in  (y:ys, a'')
+
+-- | Like 'overList'', but "streams" the 'Auto'' over all elements of any
+-- 'Traversable'', returning the final updated 'Auto''.
+overTraversable' :: Traversable t
+                 => Auto' a b         -- ^ the 'Auto'' to run
+                 -> t a               -- ^ 'Traversable' of inputs to step the 'Auto'' with
+                 -> (t b, Auto' a b)  -- ^ 'Traversable' of outputs and the updated 'Auto''
+overTraversable' a0 = flip runState a0 . mapM f
+  where
+    f x = do
+      a <- get
+      let (y, a') = stepAuto' a x
+      y <$ put a'
 
 -- | Stream an 'Auto' over a list, returning the list of results.  Does
 -- this "lazily" (over the Monad), so with most Monads, this should work
@@ -335,6 +370,38 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 --            -> a
 --            -> Auto' a b
 -- execAutoN' n a0 = snd . stepAutoN' n a0
+
+-- | Lifts an @'Auto' m a b@ to one that runs "through a 'Traversable'@,
+-- @'Auto' m (t a) (t b)@.  It does this by running itself sequentially
+-- over every element "in" the 'Traversable' at every input.
+--
+-- This can be thought of as a polymorphic version of many other
+-- combinators in this library:
+--
+-- @
+-- during        = throughT :: Auto m a b -> Interval m (Maybe a) b
+-- perBlip       = throughT :: Auto m a b -> Auto m (Blip a) (Blip b)
+-- accelOverList = throughT :: Auto m a b -> Auto m [a] [b]
+-- @
+--
+-- The specialized versions will still be more performant, but this will be
+-- more general...you can run the 'Auto' through an input 'IntMap', for
+-- example.
+--
+-- Note that this is actually an endofunctor on the 'Auto' 'Category'. That
+-- is, for all 'Auto's lifted and all lawful 'Traversable's, usage should
+-- obey the laws:
+--
+-- @
+-- throughT id = id
+-- throughT g . throughT f = throughT (g . f)
+-- @
+throughT :: (Monad m, Traversable t)
+         => Auto m a b          -- ^ 'Auto' to run "through" a 'Traversable'
+         -> Auto m (t a) (t b)
+throughT a = mkAutoM (throughT <$> resumeAuto a)
+                     (saveAuto a)
+                     (liftM (second throughT) . overTraversable a)
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
 -- input action, a (possibly side-effecting) function from an output to
