@@ -44,6 +44,9 @@ module Control.Auto.Effects (
   , sealReader
   , sealReader_
   , readerA
+  -- *** Sealing from sources
+  , sealReaderMVar
+  , sealReaderM
 
   -- ** 'WriterT'
   -- $writer
@@ -70,8 +73,10 @@ import Control.Auto.Blip
 import Control.Auto.Core
 import Control.Auto.Generate
 import Control.Category
+import Control.Concurrent
 import Control.Exception
 import Control.Monad hiding       (mapM, mapM_)
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Reader (ReaderT(ReaderT), runReaderT)
 import Control.Monad.Trans.State  (StateT(StateT), runStateT)
 import Control.Monad.Trans.Writer (WriterT(WriterT), runWriterT)
@@ -375,25 +380,80 @@ sealReader :: (Monad m, Serialize r)
            => Auto (ReaderT r m) a b    -- ^ 'Auto' run over 'Reader'
            -> r                         -- ^ the perpetual environment
            -> Auto m a b
-sealReader a r = mkAutoM (sealReader <$> resumeAuto a <*> get)
-                         (saveAuto a *> put r)
-                       $ \x -> do
-                           (y, a') <- runReaderT (stepAuto a x) r
-                           return (y, sealReader a' r)
+sealReader a0 r = go a0
+  where
+    go a = mkAutoM (sealReader <$> resumeAuto a <*> get)
+                   (saveAuto a *> put r)
+                 $ \x -> do
+                     (y, a') <- runReaderT (stepAuto a x) r
+                     return (y, go a')
 
 -- | The non-resuming/non-serializing version of 'sealReader'.  Does not
 -- serialize/reload the @r@ environment, so that whenever you "resume" the
 -- 'Auto', it uses the new @r@ given when you are trying to resume, instead
 -- of loading the originally given one.
+--
+-- /DOES/ serialize the actual 'Auto'!
 sealReader_ :: Monad m
             => Auto (ReaderT r m) a b   -- ^ 'Auto' run over 'Reader'
             -> r                        -- ^ the perpetual environment
             -> Auto m a b
-sealReader_ a r = mkAutoM (sealReader_ <$> resumeAuto a <*> pure r)
-                          (saveAuto a)
-                        $ \x -> do
-                            (y, a') <- runReaderT (stepAuto a x) r
-                            return (y, sealReader_ a' r)
+sealReader_ a0 r = go a0
+  where
+    go a = mkAutoM (go <$> resumeAuto a)
+                   (saveAuto a)
+                 $ \x -> do
+                     (y, a') <- runReaderT (stepAuto a x) r
+                     return (y, go a')
+
+-- | Takes an 'Auto' that operates under the context of a read-only
+-- environment, an environment value, and turns it into a normal 'Auto'
+-- that always gets its environment value by executing an action every step
+-- in the underlying monad.
+--
+-- This can be abused to write unreadable code really fast if you don't use
+-- it in a disciplined way.   One possible usage is to query a database in
+-- 'IO' (or 'MonadIO') for a value at every step.  If you're using
+-- underlying global state, you can use it to query that too, with 'get' or
+-- 'gets'.  You could even use 'getLine', maybe, to get the result from
+-- standard input at every step.
+--
+-- One disciplined wrapper around this is 'sealReaderMVar', where the
+-- environment at every step comes from reading an 'MVar'.  This can be
+-- used to "hot swap" configuration files.
+--
+sealReaderM :: Monad m
+            => Auto (ReaderT r m) a b
+            -> m r
+            -> Auto m a b
+sealReaderM a0 r' = go a0
+  where
+    go a = mkAutoM (go <$> resumeAuto a)
+                   (saveAuto a)
+                 $ \x -> do
+                     r <- r'
+                     (y, a') <- runReaderT (stepAuto a x) r
+                     return (y, go a')
+
+
+-- | Takes an 'Auto' that operates under the context of a read-only
+-- environment, an environment value, and turns it into a normal 'Auto'
+-- that always gets its environment value from an 'MVar'.
+--
+-- This allows for "hot swapping" configurations.  If your whole program
+-- runs under a configuration data structure as the environment, you can
+-- load the configuration data to the 'MVar' and then "hot swap" it out by
+-- just changing the value in the 'MVar' from a different thread.
+--
+-- Note that this will block on every "step" until the 'MVar' is
+-- readable/full/has a value, if it does not.
+--
+-- Basically a disciplined wrapper/usage over 'sealReaderM'.
+sealReaderMVar :: MonadIO m
+               => Auto (ReaderT r m) a b
+               -> MVar r
+               -> Auto m a b
+sealReaderMVar a0 mv = sealReaderM a0 $ liftIO (readMVar mv)
 
 -- | Transforms an 'Auto' on two input streams ( a "normal input" stream
 -- @a@ and an "environment input stream" @r@) into an 'Auto' on one input
