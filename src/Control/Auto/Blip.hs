@@ -274,7 +274,8 @@ mergeRs = foldl' mergeR NoBlip
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the right.
 --
--- _WARNING_: Be aware that in version @0.5@, this function will change to:
+-- __DEPRECATED__: In its current form, 'foldrB' will disappear in @0.5@.
+-- The new version will be:
 --
 -- @
 -- foldrB :: (a -> a -> a) -> [Blip a] -> Blip b
@@ -283,7 +284,10 @@ mergeRs = foldl' mergeR NoBlip
 -- Which will not emit if nothing emits.  This really was supposed to be
 -- the intended behavior originally.
 --
--- To use this behavior now, you can use:
+-- For this reason, please do not use this anymore.  As it is currently
+-- implemented, it doesn't really make any sense, either.
+--
+-- To begin using the new behavior, you can use:
 --
 -- @
 -- foldr (merge f) mempty
@@ -297,7 +301,8 @@ foldrB f x0 = foldr (merge f) (Blip x0)
 -- | Merge all of the blip streams together, using the given merging
 -- function associating from the left.
 --
--- _WARNING_: Be aware that in version @0.5@, this function will change to:
+-- __DEPRECATED__: In its current form, 'foldlB'' will disappear in @0.5@.
+-- The new version will be:
 --
 -- @
 -- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip b
@@ -306,7 +311,10 @@ foldrB f x0 = foldr (merge f) (Blip x0)
 -- Which will not emit if nothing emits.  This really was supposed to be
 -- the intended behavior originally.
 --
--- To use this behavior now, you can use:
+-- For this reason, please do not use this anymore.  As it is currently
+-- implemented, it doesn't really make any sense, either.
+--
+-- To begin using the new behavior, you can use:
 --
 -- @
 -- foldl' (merge f) mempty
@@ -653,7 +661,6 @@ _iterateBF _        x = (NoBlip, x)
 mscanB :: (Monoid a, Serialize a)
        => Auto m (Blip a) a
 mscanB = scanB (<>) mempty
--- should this be removed? is it worth having here?
 
 -- | The non-serializing/non-resuming version of 'mscanB'.
 mscanB_ :: Monoid a

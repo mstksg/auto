@@ -1,3 +1,47 @@
+0.4.1.0
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.1.0>
+
+*   Adapted to more consistent semantic versioning scheme, where the third
+    number is a new update, and the fourth number is reserved for bug fixes.
+*   **Control.Auto.Blip**: `foldrB` and `foldlB'` officially **deprecated** in
+    their current forms.  From `0.5`, they will have corrected functionality
+    and a new type signature.  The current functionality doesn't really make
+    sense, and was a mistake during their implementation.  You can begin using
+    the new versions now, with:
+
+    ```
+    foldrB  = foldr  (merge f) mempty
+    foldlB' = foldl' (merge f) mempty
+    ```
+*   **Control.Auto.Effects**: New "sealing" mechanisms for underlying
+    `Reader`: `sealReaderMVar` and `sealReaderM`.  `sealReaderMVar` allows
+    things like "hot swapping" configuration data; at every step, the `Auto`
+    asks for its environment from an `MVar`, that could be changed/modified
+    from a different thread with new configuration data.  `sealReaderM` is a
+    more general/potentially dangerous version where the environment is
+    retrieved through an arbitrary action in the underlying monad.
+*   **Control.Auto.Run**: New powerful combinator `throughTraversable`,
+    letting you "lift" an `Auto` to run over/through any `Traversable`.  Can
+    replace `during`, `perBlip`, `accelOverList`, etc.  The specialized
+    versions will remain more performant, though.
+*   **Control.Auto.Run**: In the spirit of the hip and current Foldable
+    Traversable Proposal, `overTraversable` added to complement `overList`, so
+    you can now "stream" `Auto`s over `IntMap`s, `Maybe`s, `Const`s...or any
+    `Traversable`.  Not replacing `overList` completely, though, for
+    performance reasons.
+*   **Control.Auto.Blip**: New blip stream transformer family `iterateB`,
+    `iterateB_`, for condensing blip streams of functions.  Directly inspired
+    by their corresponding partners in the *netwire* library on event streams.
+*   **Control.Auto.Blip**: Removed unnecessary `Monad` constraints on
+    `became_`, `became'`, `noLonger_`, and `noLonger'`.
+*   **Control.Auto.Interval**: Bug fix on `holdFor` and `holdFor_`, where they
+    had the potential to overflow `Int` and begin "holding" forever when
+    given specifically malformed input.
+*   **Control.Auto.Time**: Performance boost on `accelOverList` by using
+    strict `Writer` over lazy.
+
+
 0.4.0.0
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.0.0>

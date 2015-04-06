@@ -39,7 +39,9 @@ description:         (Up to date documentation is maintained at
                      Also, check out the
                      <https://github.com/mstksg/auto-examples auto-examples>
                      repository on github for plenty of real-world and toy
-                     examples to learn from!
+                     examples to learn from; I've also done a
+                     <blog.jle.im/entries/series/+all-about-auto blog series>
+                     on this library, for examples and full tutorials!
                      .
                      Support available on freenode's #haskell-auto,
                      #haskell-game, and also on the github issue

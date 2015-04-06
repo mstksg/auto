@@ -67,11 +67,41 @@ What is it?
 **Auto** is a Haskell DSL and platform providing an API with declarative,
 compositional, denotative semantics for discrete-step, locally stateful,
 interactive programs, games, and automations, with implicitly derived
-serialization.  It is suited for any domain where your program's input or
+serialization.
+
+It is suited for any domain where your program's input or
 output is a stream of values, input events, or output views.  At the
 high-level, it allows you to describe your interactive program or simulation
 as a *value stream transformer*, by composition and transformation of other
-stream transformers.
+stream transformers.  So, things like:
+
+1.  Chat bots
+2.  Turn-based games
+3.  GUIs
+4.  Numerical simulations
+5.  Process controllers
+6.  Text-based interfaces
+7.  (Value) stream transformers, filters, mergers, processors
+
+It's been called "FRP for discrete time contexts".
+
+Intrigued?  Excited?  Start at [the tutorial][tutorial]!
+
+[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
+
+It's a part of this package directory and also on github at the above link.
+The current development documentation server is found at
+<https://mstksg.github.io/auto>.
+
+From there, you can check out my [All About Auto][aaa] series on my blog,
+where I break sample projects and show to approach projects in real life.  You
+can also find examples and demonstrations in the [auto-examples][] repo on
+github.
+
+[aaa]: http://blog.jle.im/entries/series/+all-about-auto
+[auto-examples]: https://github.com/mstksg/auto-examples
+
+### Buzzwords explained!
 
 *   **Haskell DSL/library**: It's a Haskell library that provides a
     domain-specific language for composing and declaring your programs/games.
@@ -150,22 +180,6 @@ stream transformers.
     As it has been called by ertes, it's "save states for free".
 
 [spa]: http://www.haskellforall.com/2014/04/scalable-program-architectures.html
-
-Intrigued?  Excited?  Start at [the tutorial][tutorial]!
-
-[tutorial]: https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md
-
-It's a part of this package directory and also on github at the above link.
-The current development documentation server is found at
-<https://mstksg.github.io/auto>.
-
-From there, you can check out my [All About Auto][aaa] series on my blog,
-where I break sample projects and show to approach projects in real life.  You
-can also find examples and demonstrations in the [auto-examples][] repo on
-github.
-
-[aaa]: http://blog.jle.im/entries/series/+all-about-auto
-[auto-examples]: https://github.com/mstksg/auto-examples
 
 ### Support
 
