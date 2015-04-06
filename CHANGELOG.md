@@ -21,18 +21,15 @@
     from a different thread with new configuration data.  `sealReaderM` is a
     more general/potentially dangerous version where the environment is
     retrieved through an arbitrary action in the underlying monad.
-*   **Control.Auto.Run**: New powerful combinator `throughTraversable`,
-    letting you "lift" an `Auto` to run over/through any `Traversable`.  Can
-    replace `during`, `perBlip`, `accelOverList`, etc.  The specialized
-    versions will remain more performant, though.
+*   **Control.Auto.Run**: New powerful combinator `throughT`, letting you
+    "lift" an `Auto` to run over/through any `Traversable`.  Can replace
+    `during`, `perBlip`, `accelOverList`, etc.  The specialized versions will
+    remain more performant, though.
 *   **Control.Auto.Run**: In the spirit of the hip and current Foldable
     Traversable Proposal, `overTraversable` added to complement `overList`, so
     you can now "stream" `Auto`s over `IntMap`s, `Maybe`s, `Const`s...or any
     `Traversable`.  Not replacing `overList` completely, though, for
     performance reasons.
-*   **Control.Auto.Blip**: New blip stream transformer family `iterateB`,
-    `iterateB_`, for condensing blip streams of functions.  Directly inspired
-    by their corresponding partners in the *netwire* library on event streams.
 *   **Control.Auto.Blip**: Removed unnecessary `Monad` constraints on
     `became_`, `became'`, `noLonger_`, and `noLonger'`.
 *   **Control.Auto.Interval**: Bug fix on `holdFor` and `holdFor_`, where they

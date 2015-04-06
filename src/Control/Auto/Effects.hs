@@ -423,8 +423,8 @@ sealReader_ a0 r = go a0
 -- used to "hot swap" configuration files.
 --
 sealReaderM :: Monad m
-            => Auto (ReaderT r m) a b
-            -> m r
+            => Auto (ReaderT r m) a b   -- ^ 'Auto' run over 'Reader'
+            -> m r                      -- ^ action to draw new @r@ at every step
             -> Auto m a b
 sealReaderM a0 r' = go a0
   where
@@ -450,8 +450,8 @@ sealReaderM a0 r' = go a0
 --
 -- Basically a disciplined wrapper/usage over 'sealReaderM'.
 sealReaderMVar :: MonadIO m
-               => Auto (ReaderT r m) a b
-               -> MVar r
+               => Auto (ReaderT r m) a b    -- ^ 'Auto' run over 'Reader'
+               -> MVar r                    -- ^ 'MVar' containing an @r@ for every step
                -> Auto m a b
 sealReaderMVar a0 mv = sealReaderM a0 $ liftIO (readMVar mv)
 

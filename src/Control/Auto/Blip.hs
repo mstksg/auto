@@ -71,8 +71,6 @@ module Control.Auto.Blip (
   , scanB_
   , mscanB
   , mscanB_
-  , iterateB
-  , iterateB_
   , countB
   -- * Blips on edges
   , onChange
@@ -641,20 +639,6 @@ scanB_ f = accum_ (_scanBF f)
 
 _scanBF :: (b -> a -> b) -> b -> Blip a -> b
 _scanBF f y0 = blip y0 (f y0)
-
-iterateB :: Serialize a
-         => a
-         -> Auto m (Blip (a -> a)) (Blip a)
-iterateB = mkState _iterateBF
-
-iterateB_ :: a
-          -> Auto m (Blip (a -> a)) (Blip a)
-iterateB_ = mkState_ _iterateBF
-
-
-_iterateBF :: Blip (a -> a) -> a -> (Blip a, a)
-_iterateBF (Blip f) x = let y = f x in (Blip y, y)
-_iterateBF _        x = (NoBlip, x)
 
 -- | The output is the 'mconcat' (monoid sum) of all emitted values seen
 -- this far.

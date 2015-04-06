@@ -22,7 +22,7 @@
 
 module Control.Auto.Run (
   -- * Lifting inputs and outputs
-    throughTraversable
+    throughT
   -- * Special 'stepAuto' versions.
   -- ** Streaming over lists
   , streamAuto
@@ -117,9 +117,9 @@ overList a (x:xs) = do
 -- | Like 'overList', but "streams" the 'Auto' over all elements of any
 -- 'Traversable', returning the final updated 'Auto'.
 overTraversable :: (Monad m, Traversable t)
-                => Auto m a b
-                -> t a
-                -> m (t b, Auto m a b)
+                => Auto m a b           -- ^ the 'Auto' to run
+                -> t a                  -- ^ 'Traversable' of inputs to step the 'Auto' with
+                -> m (t b, Auto m a b)  -- ^ 'Traversable' of outputs and the updated 'Auto'
 overTraversable a0 = flip runStateT a0 . mapM f
   where
     f x = do
@@ -154,9 +154,9 @@ overList' a (x:xs) = let (y, a')   = stepAuto' a x
 -- | Like 'overList'', but "streams" the 'Auto'' over all elements of any
 -- 'Traversable'', returning the final updated 'Auto''.
 overTraversable' :: Traversable t
-                 => Auto' a b
-                 -> t a
-                 -> (t b, Auto' a b)
+                 => Auto' a b         -- ^ the 'Auto'' to run
+                 -> t a               -- ^ 'Traversable' of inputs to step the 'Auto'' with
+                 -> (t b, Auto' a b)  -- ^ 'Traversable' of outputs and the updated 'Auto''
 overTraversable' a0 = flip runState a0 . mapM f
   where
     f x = do
@@ -379,9 +379,9 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 -- combinators in this library:
 --
 -- @
--- during        = throughTraversable :: Auto m a b -> Interval m (Maybe a) b
--- perBlip       = throughTraversable :: Auto m a b -> Auto m (Blip a) (Blip b)
--- accelOverList = throughTraversable :: Auto m a b -> Auto m [a] [b]
+-- during        = throughT :: Auto m a b -> Interval m (Maybe a) b
+-- perBlip       = throughT :: Auto m a b -> Auto m (Blip a) (Blip b)
+-- accelOverList = throughT :: Auto m a b -> Auto m [a] [b]
 -- @
 --
 -- The specialized versions will still be more performant, but this will be
@@ -393,16 +393,15 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 -- obey the laws:
 --
 -- @
--- throughTraversable id = id
--- throughTraversable g . throughTraversable f = throughTraversable (g . f)
+-- throughT id = id
+-- throughT g . throughT f = throughT (g . f)
 -- @
-throughTraversable :: (Monad m, Traversable t)
-                   => Auto m a b
-                   -> Auto m (t a) (t b)
-throughTraversable a =
-    mkAutoM (throughTraversable <$> resumeAuto a)
-            (saveAuto a)
-            (liftM (second throughTraversable) . overTraversable a)
+throughT :: (Monad m, Traversable t)
+         => Auto m a b          -- ^ 'Auto' to run "through" a 'Traversable'
+         -> Auto m (t a) (t b)
+throughT a = mkAutoM (throughT <$> resumeAuto a)
+                     (saveAuto a)
+                     (liftM (second throughT) . overTraversable a)
 
 -- | Heavy duty abstraction for "self running" an 'Auto'.  Give a starting
 -- input action, a (possibly side-effecting) function from an output to
