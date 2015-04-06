@@ -5,10 +5,10 @@
 *   Adapted to more consistent semantic versioning scheme, where the third
     number is a new update, and the fourth number is reserved for bug fixes.
 *   **Control.Auto.Blip**: `foldrB` and `foldlB'` officially **deprecated** in
-    their current forms.  From `0.5`, they will have corrected functionality
-    and a new type signature.  The current functionality doesn't really make
-    sense, and was a mistake during their implementation.  You can begin using
-    the new versions now, with:
+    their current forms.  From version `0.5`, they will have corrected
+    functionality and a new type signature.  The current functionality doesn't
+    really make sense, and was a mistake during their implementation.  You can
+    begin using the new versions now, with:
 
     ```
     foldrB  = foldr  (merge f) mempty

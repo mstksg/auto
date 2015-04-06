@@ -1308,8 +1308,8 @@ instance Monad m => Applicative (Auto m a) where
 
 -- | When the underlying 'Monad'/'Applicative' @m@ is an 'Alternative',
 -- fork the input through each one and "squish" their results together
--- inside the 'Alternative' context.  Somewhat rarely used, because who
--- uses an 'Alternative' @m@?
+-- inside the 'Alternative' context.  See 'runTraversableA' for similar use
+-- cases.
 --
 -- >>> streamAuto (arrM (mfilter even . Just)) [1..10]
 -- Nothing
