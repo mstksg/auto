@@ -58,6 +58,8 @@ module Control.Auto.Blip (
   , lagBlips_
   , filterB
   , splitB
+  , collectB
+  , collectB_
   , joinB
   , mapMaybeB
   , takeB
@@ -506,6 +508,25 @@ splitB p = mkFunc $ \x -> case x of
 -- that emits whenever the inner-nested stream emits.
 joinB :: Auto m (Blip (Blip a)) (Blip a)
 joinB = mkFunc (blip NoBlip id)
+
+collectB :: (Serialize a, Serialize b)
+         => Auto m (Blip a, Blip b) (Blip (a, b))
+collectB = mkState _collectBF (Nothing, Nothing)
+
+collectB_ :: Auto m (Blip a, Blip b) (Blip (a, b))
+collectB_ = mkState_ _collectBF (Nothing, Nothing)
+
+_collectBF :: (Blip a, Blip b)
+           -> (Maybe a, Maybe b)
+           -> (Blip (a, b), (Maybe a, Maybe b))
+_collectBF (b1, b2) (st1, st2) =
+    case liftA2 (,) st1' st2' of
+      Just (x, y) -> (Blip (x, y), (Nothing, Nothing))
+      Nothing     -> (NoBlip     , (st1'   , st2'   ))
+  where
+    st1' = st1 <|> blip Nothing Just b1
+    st2' = st2 <|> blip Nothing Just b2
+
 
 -- | Applies the given function to every emitted value, and suppresses all
 -- those for which the result is 'Nothing'.  Otherwise, lets it pass
