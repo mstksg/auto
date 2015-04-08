@@ -61,9 +61,13 @@ module Control.Auto.Collection (
   -- ** Single input, single output
   , mux
   , mux_
+  , muxI
+  , muxI_
   -- ** Multiple input, multiple output
   , muxMany
   , muxMany_
+  , muxManyI
+  , muxManyI_
   -- * "Gathering"/accumulating collections
   -- ** Single input, multiple output
   , gather
@@ -526,8 +530,8 @@ mux_ f = dimap (uncurry M.singleton) (head . M.elems) (muxMany_ f)
 --
 -- See 'mux' for more notes.
 muxMany :: (Serialize k, Ord k, Monad m)
-        => (k -> Auto m a b)    -- ^ function to create a new 'Auto' if
-                                --   none at that key already exists
+        => (k -> Auto m a b)  -- ^ function to create a new 'Auto' if
+                              --   none at that key already exists
         -> Auto m (Map k a) (Map k b)
 muxMany f = go mempty
   where
@@ -541,21 +545,21 @@ muxMany f = go mempty
     t     = _muxManyF f go
 
 -- | The non-serializing/non-resuming version of 'muxMany'.
-muxMany_ :: forall m a b k. (Ord k, Monad m)
-         => (k -> Auto m a b)     -- ^ function to create a new 'Auto' if
-                                  --   none at that key already exists
+muxMany_ :: (Ord k, Monad m)
+         => (k -> Auto m a b) -- ^ function to create a new 'Auto' if
+                              --   none at that key already exists
          -> Auto m (Map k a) (Map k b)
 muxMany_ f = go mempty
   where
-    go :: Map k (Auto m a b) -> Auto m (Map k a) (Map k b)
+    -- go :: Map k (Auto m a b) -> Auto m (Map k a) (Map k b)
     go = mkAutoM_ . _muxManyF f go
 
 _muxManyF :: forall k m a b. (Ord k, Monad m)
-          => (k -> Auto m a b)                           -- ^ f : make new Autos
+          => (k -> Auto m a b)                          -- ^ f : make new Autos
           -> (Map k (Auto m a b) -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
-          -> Map k (Auto m a b)                          -- ^ as: all current Autos
-          -> Map k a                                     -- ^ xs: Inputs
-          -> m (Map k b, Auto m (Map k a) (Map k b))     -- ^ Outputs, and next Auto.
+          -> Map k (Auto m a b)                         -- ^ as: all current Autos
+          -> Map k a                                    -- ^ xs: Inputs
+          -> m (Map k b, Auto m (Map k a) (Map k b))    -- ^ Outputs, and next Auto.
 _muxManyF f go as xs = do
     -- all the outputs of the autos with the present inputs; autos without
     --   inputs are ignored.
@@ -574,6 +578,76 @@ _muxManyF f go as xs = do
     --   corresponding input.
     steps :: Map k (m (b, Auto m a b))
     steps = M.intersectionWith stepAuto allas xs
+
+
+muxI :: (Serialize k, Ord k, Monad m)
+     => (k -> Interval m a b) -- ^ function to create a new 'Auto' if none at
+                              --   that key already exists.
+     -> Auto m (k, a) (Maybe b)
+muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
+
+muxI_ :: (Ord k, Monad m)
+      => (k -> Interval m a b)   -- ^ function to create a new 'Auto' if none at
+                                 --   that key already exists
+      -> Auto m (k, a) (Maybe b)
+muxI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI_ f)
+
+muxManyI :: (Serialize k, Ord k, Monad m)
+         => (k -> Interval m a b) -- ^ function to create a new 'Auto' if
+                                  --   none at that key already exists
+         -> Auto m (Map k a) (Map k b)
+muxManyI f = go mempty
+  where
+    -- go :: Map k (Interval m a b) -> Auto m (Map k a) (Map k b)
+    go as = mkAutoM l (s as) (t as)
+    l     = do
+      ks <- get
+      let as = M.fromList (map (id &&& f) ks)
+      go <$> mapM resumeAuto as
+    s as  = put (M.keys as) *> mapM_ saveAuto as
+    t     = _muxManyIF f go
+
+muxManyI_ :: (Ord k, Monad m)
+          => (k -> Interval m a b) -- ^ function to create a new 'Auto' if
+                                   --   none at that key already exists
+          -> Auto m (Map k a) (Map k b)
+muxManyI_ f = go mempty
+  where
+    -- go :: Map k (Interval m a b) -> Auto m (Map k a) (Map k b)
+    go = mkAutoM_ . _muxManyIF f go
+
+_muxManyIF :: forall k m a b. (Ord k, Monad m)
+           => (k -> Interval m a b)                       -- ^ f : make new Autos
+           -> (Map k (Interval m a b) -> Auto m (Map k a) (Map k b)) -- ^ go: make next step
+           -> Map k (Interval m a b)                      -- ^ as: all current Autos
+           -> Map k a                                     -- ^ xs: Inputs
+           -> m (Map k b, Auto m (Map k a) (Map k b))     -- ^ Outputs, and next Auto.
+_muxManyIF f go as xs = do
+    -- all the outputs of the autos with the present inputs; autos without
+    --   inputs are ignored.
+    outs <- sequence steps
+    let outs'  = M.mapMaybe filterDead outs   -- Nothings removed
+        ys     = fmap fst outs'
+        allas' = M.union (fmap snd outs') leftOuts
+    return (ys, go allas')
+  where
+    -- new Autos, from the function.  Only on new ones not found in `as`.
+    newas :: Map k (Interval m a b)
+    newas = M.mapWithKey (\k _ -> f k) (M.difference xs as)
+    -- all Autos, new and old.  Prefer the old ones.
+    allas :: Map k (Interval m a b)
+    allas = M.union as newas
+    -- Step all the autos with all the inputs.  Lose the Autos that have no
+    --   corresponding input.
+    steps :: Map k (m (Maybe b, Interval m a b))
+    steps = M.intersectionWith stepAuto allas xs
+    -- Autos not being stepped
+    leftOuts :: Map k (Interval m a b)
+    leftOuts = M.difference allas steps
+    -- Get out the result if Just, otherwise erase it all.
+    filterDead :: (Maybe b, Interval m a b) -> Maybe (b, Interval m a b)
+    filterDead (Just x, i) = Just (x, i)
+    filterDead _           = Nothing
 
 e2m :: Either (a, b) b -> (Maybe a, b)
 e2m (Left (x, y)) = (Just x , y)
