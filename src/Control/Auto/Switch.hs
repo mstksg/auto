@@ -33,6 +33,7 @@ module Control.Auto.Switch (
   -- * Sequential switching
     (-->)
   , (-?>)
+  , switchIn
   -- * Arbitrary switching
   , switchFrom_
   , switchOn_
@@ -153,12 +154,36 @@ a1 -?> a2 = mkAutoM l s t
         Nothing -> do
           (y, a2') <- stepAuto a2 x
           return (y, switched a2')
-    switched a = mkAutoM (switched <$> resumeAuto a)
+    switched a = mkAutoM l
                          (put True  *> saveAuto a)
                        $ \x -> do
                            (y, a') <- stepAuto a x
                            return (y, switched a')
 -- TODO: Add tests for the serialization here.
+
+switchIn :: Monad m
+         => Int
+         -> Auto m a b
+         -> Auto m a b
+         -> Auto m a b
+switchIn n a1 a2 | n > 1     = mkAutoM l s t
+                 | otherwise = switched a2
+  where
+    l = do
+      flag <- get
+      if flag
+        then resumeAuto (switched a2)
+        else switchIn <$> get <*> resumeAuto a1 <*> pure a2
+    s = put False *> put n *> saveAuto a1
+    t x = do
+      (y, a1') <- stepAuto a1 x
+      return (y, switchIn (n - 1) a1' a2)
+    switched a = mkAutoM l
+                         (put True *> saveAuto a)
+                       $ \x -> do
+                           (y, a') <- stepAuto a x
+                           return (y, switched a')
+
 
 -- | Takes an 'Auto' who has both a normal output stream and a blip stream
 -- output stream, where the blip stream emits new 'Auto's.
