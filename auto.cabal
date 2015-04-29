@@ -85,7 +85,7 @@ library
                      , Control.Auto.Time
   -- other-modules:
   -- other-extensions:
-  build-depends:       base         >= 4.6
+  build-depends:       base         >= 4.6      && < 5
                      , MonadRandom  >= 0.3.0.1
                      , bytestring   >= 0.10.4.0
                      , cereal       >= 0.4.1.1

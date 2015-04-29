@@ -2,7 +2,7 @@
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.0>
 
-*   Removed all upper bounds on dependencies.
+*   Removed all upper bounds on dependencies except for base.
 *   **Control.Auto.Blip**: Companions to `emitJusts` and `onJusts` added, for
     `Either`: `emitEithers` and `onEithers`.  Emit every item inputted, but
     fork them into one of two output blit streams based on `Right` or `Left`
