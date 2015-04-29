@@ -898,11 +898,15 @@ accumA a = mkAutoM (accumA <$> resumeAuto a)
 -- bar = arrM Just
 -- @
 --
+-- >>> streamAuto foo [2,4,6,7]
+-- Nothing
+-- >>> streamAuto' (runTraversableA foo) [2,4,6,7]
+-- [Just 1, Just 2, Just 3, Nothing]
 -- >>> streamAuto (foo &&& bar) [2,4,6]
 -- Just [(1, 2),(2, 4),(3, 6)]
 -- >>> streamAuto (foo &&& bar) [2,4,6,7]
 -- Nothing
--- >>> streamAuto' ('runTraversableA' foo '<|?>' 'runTraversableA' bar) [2,4,6,7]
+-- >>> streamAuto' (runTraversableA foo <|?> runTraversableA bar) [2,4,6,7]
 -- [Just 1, Just 2, Just 3, Just 7]
 runTraversableA :: (Monad f, Traversable f)
                 => Auto f a b           -- ^ 'Auto' run over traversable structure
@@ -915,6 +919,7 @@ runTraversableA = go . return
                               y  = liftM fst o
                               a' = liftM snd o
                           in  (y, go a')
+
 
 -- | Wraps a "try" over an underlying 'IO' monad; if the Auto encounters a
 -- runtime exception while trying to "step" itself, it'll output a 'Left'

@@ -36,6 +36,7 @@ module Control.Auto.Time (
     count
   , count_
   -- * Manipulating time
+  , priming
   -- ** Delaying
   , lastVal
   , lastVal_
@@ -47,8 +48,6 @@ module Control.Auto.Time (
   , delayList_
   , delayN
   , delayN_
-  -- ** "Priming"
-  , priming
   -- ** Stretching
   , stretch
   , stretch_

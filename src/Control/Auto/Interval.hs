@@ -243,7 +243,7 @@ import Prelude hiding             ((.), id, mapM)
 --     'bindI' i2 . i1 :: 'Interval' m a b c
 -- @
 --
--- >>> let a1        = when (< 5) `compI` offFor 2
+-- >>> let a1        = whenI (< 5) `compI` offFor 2
 -- >>> streamAuto' a1 [1..6]
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing]
 --
@@ -743,3 +743,4 @@ compI :: Monad m
       -> Interval m a b   -- ^ ...to this one
       -> Interval m a c
 compI f g = fmap join (during f) . g
+

@@ -827,7 +827,7 @@ mkAuto = AutoArb
 --         Nothing -> do
 --           (y, a2') <- stepAuto a2 x
 --           return (y, switched a2')
---     switched a = mkAutoM (switched <$> resumeAuto a)
+--     switched a = mkAutoM l
 --                          (put True  *> saveAuto a)
 --                        $ \x -> do
 --                            (y, a') <- stepAuto a x
@@ -1172,6 +1172,19 @@ accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 --
 -- (Compare with the example in 'accum')
 --
+-- Note that this is more or less an encoding of 'scanl', that can be
+-- "decoded" with 'streamAuto'':
+--
+-- >>> let myScanl f z = streamAuto' (accumD f z)
+-- >>> scanl (+) 0 [1..10]
+-- [0,3,6,10,15,21,28,36,45,55]
+-- >>> myScanl (+) 0 [1..10]
+-- [0,3,6,10,15,21,28,36,45]
+--
+-- The only difference is that you don't get the last element.  (You could
+-- force it out, if you wanted, by feeding any nonsense value in --- even
+-- 'undefined'! --- and getting the result)
+--
 accumD :: Serialize b
          => (b -> a -> b)      -- ^ accumulating function
          -> b                  -- ^ initial accumulator
@@ -1308,8 +1321,8 @@ instance Monad m => Applicative (Auto m a) where
 
 -- | When the underlying 'Monad'/'Applicative' @m@ is an 'Alternative',
 -- fork the input through each one and "squish" their results together
--- inside the 'Alternative' context.  Somewhat rarely used, because who
--- uses an 'Alternative' @m@?
+-- inside the 'Alternative' context.  See 'runTraversableA' for similar use
+-- cases.
 --
 -- >>> streamAuto (arrM (mfilter even . Just)) [1..10]
 -- Nothing
