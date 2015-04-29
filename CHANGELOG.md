@@ -1,3 +1,7 @@
+0.4.2.0
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.2.0>
+
 0.4.1.0
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.1.0>

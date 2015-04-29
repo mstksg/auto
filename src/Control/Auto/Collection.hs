@@ -580,18 +580,27 @@ _muxManyF f go as xs = do
     steps = M.intersectionWith stepAuto allas xs
 
 
+-- | Like 'muxI', but holds 'Interval's instead.  When any given 'Interval'
+-- turns "off", it's removed from the collection.  If its key is fed in
+-- again, it'll be restarted with the initializing function.  On the actual
+-- step when it turns "off", 'Nothing' will be returned.
 muxI :: (Serialize k, Ord k, Monad m)
      => (k -> Interval m a b) -- ^ function to create a new 'Auto' if none at
                               --   that key already exists.
      -> Auto m (k, a) (Maybe b)
 muxI f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI f)
 
+-- | The non-serializing/non-resuming version of 'muxI'.
 muxI_ :: (Ord k, Monad m)
       => (k -> Interval m a b)   -- ^ function to create a new 'Auto' if none at
                                  --   that key already exists
       -> Auto m (k, a) (Maybe b)
 muxI_ f = dimap (uncurry M.singleton) (listToMaybe . M.elems) (muxManyI_ f)
 
+-- | Like 'muxManyI', but holds 'Interval's instead.  When any given
+-- 'Interval' turns "off", it's removed from the collection.  Only
+-- 'Interval's that are "on" after the step will be present in the output
+-- 'Map'.
 muxManyI :: (Serialize k, Ord k, Monad m)
          => (k -> Interval m a b) -- ^ function to create a new 'Auto' if
                                   --   none at that key already exists
@@ -607,6 +616,7 @@ muxManyI f = go mempty
     s as  = put (M.keys as) *> mapM_ saveAuto as
     t     = _muxManyIF f go
 
+-- | The non-serializing/non-resuming version of 'muxManyI'.
 muxManyI_ :: (Ord k, Monad m)
           => (k -> Interval m a b) -- ^ function to create a new 'Auto' if
                                    --   none at that key already exists

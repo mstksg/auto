@@ -549,10 +549,19 @@ splitB p = mkFunc $ \x -> case x of
 joinB :: Auto m (Blip (Blip a)) (Blip a)
 joinB = mkFunc (blip NoBlip id)
 
+-- | Waits on two streams, and emits with the first seen items when both
+-- have emitted.  Once it emits, starts over.
+--
+-- >>> streamAuto' collectB [(Blip 1, NoBlip), (Blip 2, Blip 'a'),(Blip 3, Blip 'b')]
+-- [NoBlip, Blip (1, 'a'), Blip (3, 'b')]
+--
+-- Can be used to implement a sort of "parallel wait".
+--
 collectB :: (Serialize a, Serialize b)
          => Auto m (Blip a, Blip b) (Blip (a, b))
 collectB = mkState _collectBF (Nothing, Nothing)
 
+-- | The non-serializing/non-resuming version of 'collectB'.
 collectB_ :: Auto m (Blip a, Blip b) (Blip (a, b))
 collectB_ = mkState_ _collectBF (Nothing, Nothing)
 
