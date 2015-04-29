@@ -161,12 +161,22 @@ a1 -?> a2 = mkAutoM l s t
                            return (y, switched a')
 -- TODO: Add tests for the serialization here.
 
+-- | @'switchIn' n a1 a2@ will behave like @a1@ for @n@ steps of output,
+-- and then behave like @a2@ forever after.
+--
+-- More or less a more efficient/direct implementation of the common idiom:
+--
+-- @
+-- onFor n a1 --> a2
+-- @
+--
+--
 switchIn :: Monad m
-         => Int
+         => Int           -- ^ number of outputs before switching
+         -> Auto m a b    -- ^ initial behavior
+         -> Auto m a b    -- ^ switched behavior
          -> Auto m a b
-         -> Auto m a b
-         -> Auto m a b
-switchIn n a1 a2 | n > 1     = mkAutoM l s t
+switchIn n a1 a2 | n > 0     = mkAutoM l s t
                  | otherwise = switched a2
   where
     l = do

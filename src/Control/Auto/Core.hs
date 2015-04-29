@@ -827,7 +827,7 @@ mkAuto = AutoArb
 --         Nothing -> do
 --           (y, a2') <- stepAuto a2 x
 --           return (y, switched a2')
---     switched a = mkAutoM (switched <$> resumeAuto a)
+--     switched a = mkAutoM l
 --                          (put True  *> saveAuto a)
 --                        $ \x -> do
 --                            (y, a') <- stepAuto a x
@@ -1171,6 +1171,19 @@ accumM_ f = mkStateM_ (\x s -> liftM (join (,)) (f s x))
 -- [13,14,16,19,23,28,34,41,49,58]
 --
 -- (Compare with the example in 'accum')
+--
+-- Note that this is more or less an encoding of 'scanl', that can be
+-- "decoded" with 'streamAuto'':
+--
+-- >>> let myScanl f z = streamAuto' (accumD f z)
+-- >>> scanl (+) 0 [1..10]
+-- [0,3,6,10,15,21,28,36,45,55]
+-- >>> myScanl (+) 0 [1..10]
+-- [0,3,6,10,15,21,28,36,45]
+--
+-- The only difference is that you don't get the last element.  (You could
+-- force it out, if you wanted, by feeding any nonsense value in --- even
+-- 'undefined'! --- and getting the result)
 --
 accumD :: Serialize b
          => (b -> a -> b)      -- ^ accumulating function

@@ -924,23 +924,6 @@ runTraversableA = go . return
                           in  (y, go a')
 
 
--- maybeA :: Monad m => Auto m a (Maybe b) -> Auto (MaybeT m) a b
--- maybeA a = mkAutoM (maybeA <$> resumeAuto a)
---                    (saveAuto a)
---                  $ \x -> do
---                      (y, a') <- lift $ stepAuto a x
---                      y' <- maybe mzero return y
---                      return (y', maybeA a')
-
--- runMaybeA :: Monad m => Auto (MaybeT m) a b -> Auto m a (Maybe b)
--- runMaybeA a = mkAutoM (runMaybeA <$> resumeAuto a)
---                       (saveAuto a)
---                     $ \x -> do
---                         mya' <- runMaybeT . stepAuto a $ x
---                         return $ case mya' of
---                           Nothing      -> (Nothing, runMaybeA a )
---                           Just (y, a') -> (Just y , runMaybeA a')
-
 -- | Wraps a "try" over an underlying 'IO' monad; if the Auto encounters a
 -- runtime exception while trying to "step" itself, it'll output a 'Left'
 -- with the 'Exception'.  Otherwise, will output 'left'.

@@ -31,15 +31,19 @@ module Control.Auto.Blip (
   , mergeRs
   , foldrB
   , foldlB'
-  -- ** Blip stream creation (dangerous!)
+  -- ** "Raw" blip stream creation (dangerous!)
   , emitJusts
-  , emitOn
+  , emitEithers
   , onJusts
+  , onEithers
+  , emitOn
   -- ** Blip stream collapse
   , fromBlips
   , fromBlipsWith
   , holdWith
   , holdWith_
+  , substituteB
+  , asMaybes
   -- * Step/"time" based Blip streams and generators
   , never
   , immediately
@@ -47,6 +51,8 @@ module Control.Auto.Blip (
   , every
   , eachAt
   , eachAt_
+  , collectN
+  , collectN_
   -- * Modifying Blip streams
   , tagBlips
   , modifyBlips
@@ -60,6 +66,8 @@ module Control.Auto.Blip (
   , splitB
   , collectB
   , collectB_
+  , collectBs
+  , collectBs_
   , joinB
   , mapMaybeB
   , takeB
@@ -295,6 +303,9 @@ mergeRs = foldl' mergeR NoBlip
 --
 foldrB :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldrB f x0 = foldr (merge f) (Blip x0)
+{-# DEPRECATED foldrB "Starting in v0.5, will have new functionality." #-}
+
+
 -- foldrB :: (a -> a -> a) -> [Blip a] -> Blip a
 -- foldrB f = foldr (merge f) NoBlip
 
@@ -321,6 +332,8 @@ foldrB f x0 = foldr (merge f) (Blip x0)
 -- @
 foldlB' :: (a -> a -> a) -> a -> [Blip a] -> Blip a
 foldlB' f x0 = foldl' (merge f) (Blip x0)
+{-# DEPRECATED foldlB' "Starting in v0.5, will have new functionality." #-}
+
 -- foldlB' :: (a -> a -> a) -> [Blip a] -> Blip a
 -- foldlB' f = foldl' (merge f) NoBlip
 
@@ -387,6 +400,33 @@ inB = mkState f . Just
     f _ Nothing              = (NoBlip, Nothing)
     f x (Just i) | i <= 1    = (Blip x, Nothing)
                  | otherwise = (NoBlip, Just (i - 1))
+
+-- | A blip stream of lists that emits after the given number of steps,
+-- with a list of all of the received values in that period.
+collectN :: Serialize a => Int -> Auto m a (Blip [a])
+collectN (max 1 -> n) = mkState (_collectBsF n . Blip) (n, [])
+
+-- | The non-serializing/non-resuming version of 'collectN'
+collectN_ :: Int -> Auto m a (Blip [a])
+collectN_ (max 1 -> n) = mkState_ (_collectBsF n . Blip) (n, [])
+
+-- | A blip stream that listens to an input blip stream and emits after the
+-- input stream emits a given number of times.  Emits with a list of all
+-- received emitted values.
+collectBs :: Serialize a => Int -> Auto m (Blip a) (Blip [a])
+collectBs (max 1 -> n) = mkState (_collectBsF n) (n, [])
+
+-- | The non-serializing/non-resuming version of 'collectBs'.
+collectBs_ :: Int -> Auto m (Blip a) (Blip [a])
+collectBs_ (max 1 -> n) = mkState_ (_collectBsF n) (n, [])
+
+-- n expected to be strictly positive
+_collectBsF :: Int -> Blip a -> (Int, [a]) -> (Blip [a], (Int, [a]))
+_collectBsF n = f
+  where
+    f (Blip x) (i, xs) | i == 1    = (Blip (reverse (x:xs)), (n    , []  ))
+                       | otherwise = (NoBlip               , (i - 1, x:xs))
+    f _        s       = (NoBlip, s)
 
 -- | Produces a blip stream that emits the input value whenever the input
 -- satisfies a given predicate.
@@ -777,8 +817,32 @@ _onChangeF x (Just x') | x == x'   = (NoBlip, Just x')
 -- semantics, we have "Control.Auto.Interval".
 --
 -- See the examples of 'emitOn' for more concrete good/bad use cases.
+--
+-- prop> onJusts == emitJusts id
 onJusts :: Auto m (Maybe a) (Blip a)
 onJusts = mkFunc (maybe NoBlip Blip)
+
+-- | Like 'onJusts', except forks into two streams depending on if the
+-- input is 'Left' or 'Right'.
+--
+-- Is only meaningful if you expect every 'Left'/'Right' choice to be
+-- independent of the last.
+--
+-- prop> onEithers == emitEithers id
+onEithers :: Auto m (Either a b) (Blip a, Blip b)
+onEithers = mkFunc $ \ex -> case ex of
+                              Left x  -> (Blip x, NoBlip)
+                              Right x -> (NoBlip, Blip x)
+
+-- | Like 'emitJusts', except forks into two streams depending on the
+-- function's result being 'Left' or 'Right'.
+--
+-- Is only meaningful if you expect every 'Left'/'Right' choice to be
+-- independent of the last.
+emitEithers :: (a -> Either b c) -> Auto m a (Blip b, Blip c)
+emitEithers f = mkFunc $ \x -> case f x of
+                                 Left y  -> (Blip y, NoBlip)
+                                 Right y -> (NoBlip, Blip y)
 
 -- | @'fromBlips' d@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
@@ -786,7 +850,7 @@ onJusts = mkFunc (maybe NoBlip Blip)
 fromBlips :: a  -- ^ the "default value" to output when the input is not
                 --   emitting.
           -> Auto m (Blip a) a
-fromBlips d = mkFunc (blip d id)
+fromBlips d = mkFunc $ blip d id
 
 -- | @'fromBlipsWith' d f@ is an 'Auto' that decomposes the incoming blip
 -- stream by constantly outputting @d@ except when the stream emits, and
@@ -796,8 +860,17 @@ fromBlipsWith :: b          -- ^ the 'default value" to output when the input is
               -> (a -> b)   -- ^ the function to apply to the emitted value
                             --   whenever input is emitting.
               -> Auto m (Blip a) b
-fromBlipsWith d f = mkFunc (blip d f)
+fromBlipsWith d f = mkFunc $ blip d f
 
+-- | Collapse a blip stream of `a`s into a stream of `Maybe a`'s
+asMaybes :: Auto m (Blip a) (Maybe a)
+asMaybes = mkFunc $ blip Nothing Just
+
+-- | Take in a normal stream and a blip stream.  Behave like the normal
+-- stream when the blip stream doesn't emit...but when it does, output the
+-- emitted value instead.
+substituteB :: Auto m (a, Blip a) a
+substituteB = mkFunc $ \(x, b) -> blip x id b
 
 -- | @'holdWith' y0@ is an 'Auto' whose output is always the /most recently
 -- emitted/ value from the input blip stream.  Before anything is emitted,
