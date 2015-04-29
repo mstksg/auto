@@ -61,9 +61,6 @@ module Control.Auto.Effects (
   , stateA
   , accumA
 
-  -- , runMaybeA
-  -- , maybeA
-
   -- ** 'Traversable'
   , runTraversableA
 

@@ -40,10 +40,10 @@ module Control.Auto.Blip (
   -- ** Blip stream collapse
   , fromBlips
   , fromBlipsWith
+  , asMaybes
   , holdWith
   , holdWith_
   , substituteB
-  , asMaybes
   -- * Step/"time" based Blip streams and generators
   , never
   , immediately
@@ -401,8 +401,13 @@ inB = mkState f . Just
     f x (Just i) | i <= 1    = (Blip x, Nothing)
                  | otherwise = (NoBlip, Just (i - 1))
 
--- | A blip stream of lists that emits after the given number of steps,
--- with a list of all of the received values in that period.
+-- | @'collectN' n@ emits every @n@ steps, emitting with the @n@ last items
+-- received.
+--
+-- >>> streamAuto' (collectN 3) [1..10]
+-- [ NoBlip, NoBlip, Blip [1,2,3], NoBlip, NoBlip, Blip [4,5,6]
+-- , NoBlip, NoBlip, Blip [7,8,9], NoBlip ]
+--
 collectN :: Serialize a => Int -> Auto m a (Blip [a])
 collectN (max 1 -> n) = mkState (_collectBsF n . Blip) (n, [])
 

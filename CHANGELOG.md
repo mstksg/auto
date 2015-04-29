@@ -2,6 +2,38 @@
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.0>
 
+*   Removed all upper bounds on dependencies.
+*   **Control.Auto.Blip**: Companions to `emitJusts` and `onJusts` added, for
+    `Either`: `emitEithers` and `onEithers`.  Emit every item inputted, but
+    fork them into one of two output blit streams based on `Right` or `Left`
+    properties.  Only preserves blip semantics/makes sense if any given
+    input's `Right` or `Left`ness is expected to be independent from the last
+    received one.
+*   **Control.Auto.Blip**: New "blip stream collapsers", `asMaybes` and
+    `substituteB`.  `asMaybes` turns a blip stream into a stream of `Maybe`s,
+    `Just` when something was emitted, and `Nothing` when not.  `substituteB`
+    takes a regular stream and a blip stream, and outputs the values of the
+    regular stream whenever the blip stream doesn't emit and the emitted value
+    when it does --- basically a more powerful version of `fromBlips`, where
+    the "default" value now comes from a stream instead of being always the
+    same.
+*   **Control.Auto.Blip**: New blip stream creator, `collectN`, which emits
+    every `n` steps with the last `n` items received.
+*   **Control.Auto.Blip**: New blip stream modifiers, `collectB` and
+    `collectBs`.   `collectB` waits on two blip streams and emits after it has
+    received something from *both*.  `collectBs` is like `collectN`, except
+    emits after every `n` emitted values received with the past `n` emitted
+    values.
+*   **Control.Auto.Collection**: "Intervaled" counterparts to `mux` and
+    `muxMany`, `muxI` and `muxManyI`.  They store `Interval`s instead of
+    `Auto`s...and when the `Interval`s turned "off", they are removed from the
+    collection.
+*   **Control.Auto.Switch**: A new "count-down" swithcer, `switchIn`, which
+    acts a bit like `(-->)` and `(-?>)`, except the switch happens
+    deterministically after a pre-set given number of steps.  Act like the
+    first `Auto` for a given number of steps, and then act like the second
+    ever after.
+
 0.4.1.0
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.1.0>
