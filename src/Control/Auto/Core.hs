@@ -1,6 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 -- |
@@ -198,7 +199,10 @@ data Auto m a b =           AutoFunc    !(a -> b)
                 | forall s. AutoStateM  (Get s, s -> Put) !(a -> s -> m (b, s)) !s
                 |           AutoArb     (Get (Auto m a b)) Put !(a -> (b, Auto m a b))
                 |           AutoArbM    (Get (Auto m a b)) Put !(a -> m (b, Auto m a b))
+#if MIN_VERSION_base(4,7,0)
                 deriving ( Typeable )
+#endif
+
 
 -- | Special case of 'Auto' where the underlying 'Monad' is 'Identity'.
 --
