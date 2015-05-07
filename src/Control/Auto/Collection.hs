@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -98,6 +99,10 @@ import Data.Traversable
 import Prelude hiding               (mapM, mapM_, concat, sequence, (.), id, sequence_)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict    as M
+
+#if !MIN_VERSION_base(4,7,0)
+import Compat()
+#endif
 
 -- | Give a list of @'Auto' m a b@ and get back an @'Auto' m [a] [b]@  ---
 -- take a list of @a@'s and feed them to each of the 'Auto's, and collects
