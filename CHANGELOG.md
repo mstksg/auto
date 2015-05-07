@@ -1,3 +1,9 @@
+0.4.2.1
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.2.1>
+
+*   Added support for building with GHC 7.6.x.
+
 0.4.2.0
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.0>
@@ -28,7 +34,7 @@
     `muxMany`, `muxI` and `muxManyI`.  They store `Interval`s instead of
     `Auto`s...and when the `Interval`s turned "off", they are removed from the
     collection.
-*   **Control.Auto.Switch**: A new "count-down" swithcer, `switchIn`, which
+*   **Control.Auto.Switch**: A new "count-down" switcher, `switchIn`, which
     acts a bit like `(-->)` and `(-?>)`, except the switch happens
     deterministically after a pre-set given number of steps.  Act like the
     first `Auto` for a given number of steps, and then act like the second
