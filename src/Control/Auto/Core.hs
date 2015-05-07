@@ -112,6 +112,10 @@ import Data.Traversable
 import Data.Typeable
 import Prelude hiding         ((.), id, sequence)
 
+#if !MIN_VERSION_base(4,7,0)
+import Compat()
+#endif
+
 
 -- | The 'Auto' type.  For this library, an 'Auto' semantically
 -- represents/denotes a /a relationship/ between an input and an
