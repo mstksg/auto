@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_HADDOCK not-home #-}
 
 -- |
 -- Module      : Control.Auto.Blip.Internal

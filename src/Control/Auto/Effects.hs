@@ -411,9 +411,9 @@ sealReader_ a0 r = go a0
 -- that always gets its environment value by executing an action every step
 -- in the underlying monad.
 --
--- This can be abused to write unreadable code really fast if you don't use
--- it in a disciplined way.   One possible usage is to query a database in
--- 'IO' (or 'MonadIO') for a value at every step.  If you're using
+-- This can be abused to write unmaintainble code really fast if you don't
+-- use it in a disciplined way.   One possible usage is to query a database
+-- in 'IO' (or 'MonadIO') for a value at every step.  If you're using
 -- underlying global state, you can use it to query that too, with 'get' or
 -- 'gets'.  You could even use 'getLine', maybe, to get the result from
 -- standard input at every step.
@@ -671,7 +671,7 @@ writerA a = mkAutoM (writerA <$> resumeAuto a)
 -- Consider this example 'State' 'Auto':
 --
 -- @
--- foo :: Auto (State s) Int Int
+-- foo :: Auto (State Int) Int Int
 -- foo = proc x -> do
 --     execB (modify (+1)) . emitOn odd  -< x
 --     execB (modify (*2)) . emitOn even -< x
@@ -727,6 +727,17 @@ writerA a = mkAutoM (writerA <$> resumeAuto a)
 -- stream is the result of running the stream through @f@, first with an
 -- initial state of @s0@, and afterwards with each next updated state.
 --
+-- If you wanted to "seal" the state and have it be untouchable to the
+-- outside world, yet still have a way to "monitor"/"view" it, you can
+-- modify the original 'Auto' using '&&&', 'effect', and 'get to get
+-- a "view" of the state:
+--
+-- >>> streamAuto' (sealState (foo &&& effect get) 5) [1..10]
+-- [(7,6),(15,12),(19,13),(36,26),(42,27),(75,54),(83,55),(146,110),(156,111),(277,222)]
+--
+-- Now, every output of @'sealState' foo 5@ is tuplied up with a peek of
+-- its state at that point.
+--
 -- For a convenient way of "creating" an 'Auto' under 'StateT' in the first
 -- place, see 'stateA'.
 --
@@ -751,6 +762,29 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
+sealStateM :: Monad m
+           => Auto (StateT s m) a b   -- ^ 'Auto' run over 'State'
+           -> m s                     -- ^ action to draw new @s@ at every step
+           -> (s -> m ())             -- ^ action to "update" the state at every step
+           -> Auto m a b
+sealStateM a0 gt pt = go a0
+  where
+    go a = mkAutoM (go <$> resumeAuto a)
+                   (saveAuto a)
+                 $ \x -> do
+                     s <- gt
+                     ((y, a'), s') <- runStateT (stepAuto a x) s
+                     pt s'
+                     return (y, go a')
+
+sealStateMVar :: MonadIO m
+              => Auto (StateT s m) a b    -- ^ 'Auto' run over 'State'
+              -> MVar s                   -- ^ 'MVar' containing an @s@ for every step
+              -> Auto m a b
+sealStateMVar a0 mv = sealStateM a0
+                                 (liftIO $ takeMVar mv)
+                                 (liftIO . putMVar mv )
+-- TODO: Masking?
 
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
 -- takes in an input state every turn (in addition to the normal input) and
