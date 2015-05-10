@@ -63,16 +63,16 @@ infixr 1 -?>
 
 -- | "This, then that".  Behave like the first 'Interval' (and run its
 -- effects) as long as it is "on" (outputting 'Just').  As soon as it turns
--- off (is 'Nothing), it'll "switch over" and begin behaving like the
+-- off (is 'Nothing'), it'll "switch over" and begin behaving like the
 -- second 'Auto' forever, running the effects of the second 'Auto', too.
 -- Works well if the 'Auto's follow interval semantics from
 -- "Control.Auto.Interval".
 --
--- >>> let a1 = whileI (<= 4) --> pure 0
+-- >>> let a1 = whenI (<= 4) --> pure 0
 -- >>> streamAuto' a1 [1..10]
 -- [1, 2, 3, 4, 0, 0, 0, 0, 0, 0]
 --
--- ('whileI' only lets items satisfying the predicate pass through as "on",
+-- ('whenI' only lets items satisfying the predicate pass through as "on",
 -- and is "off" otherwise; 'pure' is the 'Auto' that always produces the
 -- same output)
 --
@@ -95,7 +95,7 @@ infixr 1 -?>
 -- Note that recursive bindings work just fine, so:
 --
 -- >>> let a3 = onFor 2 . pure "hello"
---          --> onFor 2 . pure "goodbye"
+--          --> onFor 2 . pure "world"
 --          --> a3
 -- >>> let (res3, _) = stepAutoN' 8 a3 ()
 -- >>> res3
@@ -131,7 +131,7 @@ infixr 1 -?>
 a1 --> a2 = fmap fromJust (a1 -?> fmap Just a2)
 
 -- | A variation of '-->', where the right hand side can also be an
--- interval/'Maybe'.  The entire result is, then, a 'Maybe'.  Probably less
+-- 'Interval' / 'Maybe'.  The entire result is, then, a 'Maybe'.  Probably less
 -- useful than '-->' in most situations.
 (-?>) :: Monad m
       => Interval m a b   -- ^ initial behavior
@@ -204,8 +204,8 @@ switchIn n a1 a2 | n > 0     = mkAutoM l s t
 -- contained 'Auto'.
 --
 -- However, as soon as the blip stream of the contained 'Auto' emits a new
--- 'Auto'...it immediately /replaces/ the contained 'Auto' with the /new/
--- one.  And the whole thing starts all over again.
+-- 'Auto', it /replaces/ the contained 'Auto' with the /new/ one (just after
+-- emitting the "normal value"), and the whole thing starts all over again.
 --
 -- @'switchFrom_' a0@ will "start" with @a0@ already in the box.
 --
@@ -249,10 +249,11 @@ switchIn n a1 a2 | n > 0     = mkAutoM l s t
 -- @
 --
 -- >>> streamAuto' (switchFrom_ a2) [101..112]
--- [ 101, 203, 306  -- first 'sumFrom', on first three items
--- , 104, 209, 315  -- second 'sumFrom', on second three items
--- , 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
--- , 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
+-- [ 101, 203, 306 -- first 'sumFrom', on first three items [101, 102, 103]
+-- , 104, 209, 315 -- second 'sumFrom', on second three items [104, 105, 106]
+-- , 107, 215, 324 -- third 'sumFrom', on third three items [107, 108, 109]
+-- , 110, 221, 333 -- final 'sumFrom', on fourth three items [110, 111, 112]
+-- ]
 --
 -- Note that this combinator is inherently unserializable, so you are going
 -- to lose all serialization capabilities if you use this.  So sad, I know!
@@ -335,7 +336,7 @@ switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
 -- new 'Auto'.
 --
 -- Here is the equivalent of the two examples from 'switchFrom_',
--- implemented with 'switchFromF'; see the documentatino for 'switchFrom_'
+-- implemented with 'switchFromF'; see the documentation for 'switchFrom_'
 -- for a description of what they are to do.
 --
 -- @
@@ -349,7 +350,7 @@ switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
 -- a1' = sumFrom 0 &&& (tagBlips 100 . inB 4)
 -- @
 --
--- >>> streamAuto' (switchFrom_ pure a1) [1..10]
+-- >>> streamAuto' (switchFromF (\x -> (x,) <$> never) a1) [1..10]
 -- [1,3,6,10,100,100,100,100,100,100]
 --
 -- @
@@ -357,17 +358,17 @@ switchOn_ a0 = mkAutoM_ $ \(x, ea1) -> do
 -- a2 = proc x -> do
 --     sums       <- sumFrom 0 -< x
 --     switchBlip <- inB 3     -< ()
---     id -< (c, switchBlip)
+--     id -< (sums, switchBlip)
 --
 -- -- alternatively
 -- a2' = sumFrom 0 &&& (tagBlips () . inB 3)
 -- @
 --
 -- >>> streamAuto' (switchFromF (const a2) a2) [101..112]
--- [ 101, 203, 306  -- first 'sumFrom', on first three items
--- , 104, 209, 315  -- second 'sumFrom', on second three items
--- , 107, 215, 324  -- third 'sumFrom', on third three items (107, 108, 109)
--- , 110, 221, 333] -- final 'sumFrom', on fourht three items (110, 111, 112)
+-- [ 101, 203, 306  -- first 'sumFrom', on first three items [101, 102, 103]
+-- , 104, 209, 315  -- second 'sumFrom', on second three items [104, 105, 106]
+-- , 107, 215, 324  -- third 'sumFrom', on third three items [107, 108, 109]
+-- , 110, 221, 333] -- final 'sumFrom', on fourth three items [110, 111, 112]
 --
 -- Or, if you're only ever going to use @a2@ in switching form:
 --
