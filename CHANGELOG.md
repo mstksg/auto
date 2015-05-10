@@ -1,6 +1,17 @@
+0.4.2.2
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.2.2>
+
+*   Using the *base-orphans* library for a more sane compatibility layer than
+    the previous method.
+*   Many documentation fixes including haddoc reconfigurations on specific
+    modules.
+
 0.4.2.1
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.1>
+
+**DEPRECATED:** Please use `0.4.2.2`!
 
 *   Added support for building with GHC 7.6.x.
 

@@ -762,30 +762,6 @@ sealState_ a s0 = mkAutoM (sealState_ <$> resumeAuto a <*> pure s0)
                               ((y, a'), s1) <- runStateT (stepAuto a x) s0
                               return (y, sealState_ a' s1)
 
-sealStateM :: Monad m
-           => Auto (StateT s m) a b   -- ^ 'Auto' run over 'State'
-           -> m s                     -- ^ action to draw new @s@ at every step
-           -> (s -> m ())             -- ^ action to "update" the state at every step
-           -> Auto m a b
-sealStateM a0 gt pt = go a0
-  where
-    go a = mkAutoM (go <$> resumeAuto a)
-                   (saveAuto a)
-                 $ \x -> do
-                     s <- gt
-                     ((y, a'), s') <- runStateT (stepAuto a x) s
-                     pt s'
-                     return (y, go a')
-
-sealStateMVar :: MonadIO m
-              => Auto (StateT s m) a b    -- ^ 'Auto' run over 'State'
-              -> MVar s                   -- ^ 'MVar' containing an @s@ for every step
-              -> Auto m a b
-sealStateMVar a0 mv = sealStateM a0
-                                 (liftIO $ takeMVar mv)
-                                 (liftIO . putMVar mv )
--- TODO: Masking?
-
 -- | "Unrolls" the underlying 'StateT' of an 'Auto' into an 'Auto' that
 -- takes in an input state every turn (in addition to the normal input) and
 -- outputs, along with the original result, the modified state.
