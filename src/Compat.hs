@@ -1,5 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Compat where
 
