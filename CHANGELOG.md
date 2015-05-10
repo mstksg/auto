@@ -8,7 +8,7 @@
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.0>
 
-*   Removed all upper bounds on dependencies.
+*   Removed all upper bounds on dependencies except for base.
 *   **Control.Auto.Blip**: Companions to `emitJusts` and `onJusts` added, for
     `Either`: `emitEithers` and `onEithers`.  Emit every item inputted, but
     fork them into one of two output blit streams based on `Right` or `Left`
@@ -38,7 +38,8 @@
     acts a bit like `(-->)` and `(-?>)`, except the switch happens
     deterministically after a pre-set given number of steps.  Act like the
     first `Auto` for a given number of steps, and then act like the second
-    ever after.
+    ever after.  Basically a direct implementation of the common
+    `onFor n a1 --> a2` idiom.
 
 0.4.1.0
 -------
@@ -91,6 +92,10 @@
 *   **Control.Auto.Effects**: Reverted back to lazy `StateT` and `WriterT`,
     because of situations where *auto* cannot resolve fixed points for
     recursive bindings.
+*   **Control.Auto.Blip**: `forkB` renamed to `splitB` to prevent confusion
+    with "fork", usually used in Haskell to refer to concurrency.  Also
+    anticipating adding concurrency-based `Auto`s, so this is a move to clear
+    the way for any possible conflicts.
 
 0.3.0.0
 -------
