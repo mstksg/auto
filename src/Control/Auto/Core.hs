@@ -105,6 +105,7 @@ import Control.Monad hiding   (sequence)
 import Control.Monad.Fix
 import Data.ByteString hiding (empty)
 import Data.Functor.Identity
+import Data.Orphans           ()
 import Data.Profunctor
 import Data.Semigroup
 import Data.Serialize
@@ -112,10 +113,6 @@ import Data.String
 import Data.Traversable
 import Data.Typeable
 import Prelude hiding         ((.), id, sequence)
-
-#if !MIN_VERSION_base(4,7,0)
-import Compat()
-#endif
 
 
 -- | The 'Auto' type.  For this library, an 'Auto' semantically

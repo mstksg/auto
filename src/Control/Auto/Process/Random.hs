@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 -- |
 -- Module      : Control.Auto.Process.Random
 -- Description : Entropy generationg 'Auto's.
@@ -135,13 +133,10 @@ import Control.Category
 import Control.Monad              (guard)
 import Control.Monad.Random
 import Data.Bits
+import Data.Orphans               ()
 import Data.Serialize
 import Data.Tuple
 import Prelude hiding             (id, (.), concat, concatMap, sum)
-
-#if !MIN_VERSION_base(4,7,0)
-import Compat()
-#endif
 
 
 -- | Given a seed-consuming generating function of form @g -> (b, g)@

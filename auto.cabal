@@ -87,6 +87,7 @@ library
   -- other-extensions:
   build-depends:       base         >= 4.6      && < 5
                      , MonadRandom  >= 0.3.0.1
+                     , base-orphans >= 0.3.1
                      , bytestring   >= 0.10.4.0
                      , cereal       >= 0.4.1.1
                      , containers   >= 0.5.5.1
