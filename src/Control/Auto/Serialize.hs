@@ -67,13 +67,14 @@ module Control.Auto.Serialize (
   , loadFromB
   ) where
 
+import Control.Applicative
 import Control.Auto.Blip.Internal
-import Control.Monad.IO.Class
-import Control.Monad
-import Control.Exception
-import System.IO.Error
 import Control.Auto.Core
-import qualified Data.ByteString as B
+import Control.Exception
+import Control.Monad
+import Control.Monad.IO.Class
+import System.IO.Error
+import qualified Data.ByteString  as B
 
 -- | Give a 'FilePath' and an 'Auto', and 'readAuto' will attempt to resume
 -- the saved state of the 'Auto' from disk, reading from the given
