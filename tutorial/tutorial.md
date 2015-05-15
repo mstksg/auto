@@ -1028,10 +1028,11 @@ the library using the tools described here. You can also look at the
 a different aspect of the library, so you can see how all of these ideas work
 together.
 
-Help is always available on the *#haskell-auto* channel on freenode IRC; you
-can also email me at <justin@jle.im>, or find me on twitter as
-[mstk][twitter].  There is no mailing list or message board yet, but for now,
-feel free to abuse the [github issue tracker][issues].
+Help is always available on the *#haskell-auto* channel on freenode IRC, and
+there's also a [gitter channel][] if IRC is not your thing; you can also email
+me at <justin@jle.im>, or find me on twitter as [mstk][twitter].  There is no
+mailing list or message board yet, but for now, feel free to abuse the [github
+issue tracker][issues].
 
 Now go forth and make locally stateful, denotative, declarative programs!
 
@@ -1039,6 +1040,7 @@ Now go forth and make locally stateful, denotative, declarative programs!
 [auto-examples]: https://github.com/mstksg/auto-examples
 [blog]: http://blog.jle.im
 [docs]: https://mstksg.github.io/auto/
+[gitter channel]: https://gitter.im/mstksg/auto
 [hackage]: http://hackage.haskell.org/package/auto
 [issues]: https://github.com/mstksg/auto/issues
 [mkAutoM]: http://mstksg.github.io/auto/Control-Auto-Core.html#v:mkAutoM

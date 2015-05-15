@@ -185,8 +185,11 @@ github.
 
 The official support and discussion channel is *#haskell-auto* on freenode.
 You can also usually find me (the maintainer and developer) as *jle`* on
-*#haskell-game* or *#haskell*. Also, contributions to documentation and tests
-are welcome! :D
+*#haskell-game* or *#haskell*.  There's also a [gitter channel][gitter] if IRC
+is not your cup of tea.  Also, contributions to documentation and tests are
+welcome! :D
+
+[gitter]: https://gitter.im/mstksg/auto
 
 Why Auto?
 ---------
