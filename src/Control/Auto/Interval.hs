@@ -70,7 +70,7 @@ import Prelude hiding             ((.), id, mapM)
 --
 -- @
 -- type 'Interval' m a b = 'Auto' m a ('Maybe' b)
--- type 'Interval'' a b  = 'Auto'' a ('Maybe' b)
+-- type 'Interval''  a b = 'Auto''  a ('Maybe' b)
 -- @
 --
 -- So, the compiler sees an @'Interval' m a b@ as if it were an @'Auto'
@@ -96,21 +96,21 @@ import Prelude hiding             ((.), id, mapM)
 --
 -- You might find it useful to "sequence" 'Auto's such that they "switch"
 -- from one to the other, dynamically.  For example, an 'Auto' that acts
--- like @'pure' 0@ for three steps, and then like 'count' for the rest:
+-- like @'pure' 100@ for three steps, and then like 'count' for the rest:
 --
--- >>> let a1 = (onFor 3 . pure 0) --> count
+-- >>> let a1 = (onFor 3 . pure 100) --> count
 -- >>> take 8 . streamAuto' a1 $ repeat ()
--- [0, 0, 0, 1, 2, 3, 4, 5]
+-- [100, 100, 100, 0, 1, 2, 3, 4]
 --
 -- (Recall that @'pure' x@ is the 'Auto' that ignores the input stream and
 -- gives an output stream of constant @x@s)
 --
 -- Or in reverse, an 'Auto' that behaves like 'count' until the count is
--- above 3, then switches to @'pure' 0@
+-- above 3, then switches to @'pure' 100@
 --
--- >>> let a2 = (whenI (<= 3) . count) --> pure 0
+-- >>> let a2 = (whenI (<= 3) . count) --> pure 100
 -- >>> take 8 . streamAuto' a2 $ repeat ()
--- [1, 2, 3, 0, 0, 0, 0, 0]
+-- [0, 1, 2, 3, 100, 100, 100, 100]
 --
 -- That's just a small example using one switching combinator, '-->'.  But
 -- hopefully it demonstrates that one powerful motivation behind
@@ -121,7 +121,8 @@ import Prelude hiding             ((.), id, mapM)
 --
 -- The following 'Interval' will be "off" and suppress all of its input
 -- (from 'count') /until/ the blip stream produced by @'inB' 3@ emits
--- something, then it'll allow 'count' to pass.
+-- something, then it'll allow 'count' to pass, beginning with the step
+-- during which the blip was emmitted.
 --
 -- >>> let a3 = after . (count &&& inB 3)
 -- >>> let a3 = proc () -> do
@@ -129,7 +130,7 @@ import Prelude hiding             ((.), id, mapM)
 --             blp <- inB 3 -< ()
 --             after -< (c, blp)
 -- >>> take 5 . streamAuto' a3 $ repeat ()
--- [Nothing, Nothing, Just 3, Just 4, Just 4]
+-- [Nothing, Nothing, Just 2, Just 3, Just 4]
 --
 -- Intervals are also used for things that want their 'Auto's to "signal"
 -- when they are "off".  'Interval' is the universal language for, "you can
@@ -218,7 +219,7 @@ import Prelude hiding             ((.), id, mapM)
 -- a               :: 'Auto' m a b
 -- i               :: 'Interval' m b c
 -- i . 'toOn' . a    :: 'Interval' m a c
--- 'fmap' 'Just' a :: 'Interval' m a b
+-- 'fmap' 'Just' a     :: 'Interval' m a b
 -- i . 'fmap' 'Just' a :: 'Interval' m a c
 -- @
 --
@@ -239,11 +240,11 @@ import Prelude hiding             ((.), id, mapM)
 -- @
 --     i1            :: 'Interval' m a b
 --     i2            :: 'Interval' m b c
---     i2 `'compI'` i1 :: 'Interval' m a b c
+--     i2 ``compI`` i1 :: 'Interval' m a b c
 --     'bindI' i2 . i1 :: 'Interval' m a b c
 -- @
 --
--- >>> let a1        = whenI (< 5) `compI` offFor 2
+-- >>> let a1 = whenI (< 5) `compI` offFor 2
 -- >>> streamAuto' a1 [1..6]
 -- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing]
 --
@@ -273,7 +274,7 @@ infixr 1 `compI`
 -- output can be "on" or "off" (using 'Just' and 'Nothing') for contiguous
 -- chunks of time.
 --
--- "Just" a type alias for @'Auto' m a ('Maybe' b)@.  If you ended up here
+-- \"Just\" a type alias for @'Auto' m a ('Maybe' b)@.  If you ended up here
 -- with a link...no worries!  If you see @'Interval' m a b@, just think
 -- @'Auto' m a ('Maybe' b)@ for type inference/type checking purposes.
 --
@@ -341,12 +342,12 @@ onFor :: Int      -- ^ amount of steps to stay "on" for
 onFor = mkState f . Just . max 0
   where
     f x (Just i) | i > 0 = (Just x , Just (i - 1))
-    f _ _        = (Nothing, Nothing)
+    f _ _                = (Nothing, Nothing)
 
 -- | For @'offFor' n@, the first @n@ items in the output stream are always
 -- "off", suppressing all input; for the rest, the output stream is always
 -- "on", outputting exactly the value of the corresponding input.
-offFor :: Int     -- ^ amount of steps to be "off" for.
+offFor :: Int     -- ^ amount of steps to be "off" for
        -> Interval m a a
 offFor = mkState f . Just . max 0
   where
@@ -389,9 +390,8 @@ whenI p = mkFunc f
 -- | Like 'whenI', but only allows values to pass whenever the input does
 -- not satisfy the predicate.  Blocks whenever the predicate is true.
 --
--- >>> let a = unlessI (\x -> x < 2 &&& x > 4)
+-- >>> let a = unlessI (\x -> x < 2 || x > 4)
 -- >>> steamAuto' a [1..6]
--- >>> res
 -- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --
 unlessI :: (a -> Bool)   -- ^ interval predicate
@@ -409,8 +409,7 @@ unlessI p = mkFunc f
 --
 -- >>> let a = after . (count &&& inB 3)
 -- >>> take 6 . streamAuto' a $ repeat ()
--- >>> res
--- [Nothing, Nothing, Just 3, Just 4, Just 5, Just 6]
+-- [Nothing, Nothing, Just 2, Just 3, Just 4, Just 5]
 --
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
@@ -436,8 +435,7 @@ after = mkState f False
 --
 -- >>> let a = before . (count &&& inB 3)
 -- >>> take 5 . streamAuto' a $ repeat ()
--- >>> res
--- [Just 1, Just 2, Nothing, Nothing, Nothing]
+-- [Just 0, Just 1, Nothing, Nothing, Nothing]
 --
 -- ('count' is the 'Auto' that ignores its input and outputs the current
 -- step count at every step, and @'inB' 3@ is the 'Auto' generating
@@ -463,9 +461,9 @@ before = mkState f False
 -- the first stream toggles this "on"; an emission from the second stream
 -- toggles this "off".
 --
--- >>> let a        = between . (count &&& (inB 3 &&& inB 5))
+-- >>> let a = between . (count &&& (inB 3 &&& inB 5))
 -- >>> take 7 . streamAuto' a $ repeat ()
--- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing, Nothing]
+-- [Nothing, Nothing, Just 2, Just 3, Nothing, Nothing, Nothing]
 between :: Interval m (a, (Blip b, Blip c)) a
 between = mkState f False
   where
@@ -506,8 +504,7 @@ hold_ = accum_ f Nothing
 -- number of steps.
 --
 -- >>> let a = holdFor 2 . inB 3
--- >>> streamAuto' 7 a [1..7]
--- >>> res
+-- >>> streamAuto' a [1..7]
 -- [Nothing, Nothing, Just 3, Just 3, Nothing, Nothing, Nothing]
 --
 holdFor :: Serialize a
@@ -553,7 +550,6 @@ holdJusts_ = accum_ (flip (<|>)) Nothing
 --
 -- >>> let a = (onFor 2 . pure "hello") <|?> (onFor 4 . pure "world")
 -- >>> take 5 . streamAuto' a $ repeat ()
--- >>> res
 -- [Just "hello", Just "hello", Just "world", Just "world", Nothing]
 --
 -- You can drop the parentheses, because of precedence; the above could
@@ -639,7 +635,7 @@ choose = foldr (<|!>)
 -- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,
 -- transforming /intervals/ of @a@s into /intervals/ of @b@.
 --
--- It does this by running the 'Auuto' as normal when the input is "on",
+-- It does this by running the 'Auto' as normal when the input is "on",
 -- and freezing it/being "off" when the input is /off/.
 --
 -- >>> let a1 = during (sumFrom 0) . onFor 2 . pure 1

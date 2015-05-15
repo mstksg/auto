@@ -71,7 +71,6 @@ import Control.Auto.Blip.Internal
 import Control.Monad.IO.Class
 import Control.Monad
 import Control.Exception
-import Control.Applicative
 import System.IO.Error
 import Control.Auto.Core
 import qualified Data.ByteString as B

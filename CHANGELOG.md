@@ -4,7 +4,7 @@
 
 *   Using the *base-orphans* library for a more sane compatibility layer than
     the previous method.
-*   Many documentation fixes including haddoc reconfigurations on specific
+*   Many documentation fixes including haddock reconfigurations on specific
     modules.
 
 0.4.2.1
