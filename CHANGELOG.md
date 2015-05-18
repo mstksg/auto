@@ -1,3 +1,12 @@
+0.4.2.3
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.2.3>
+
+*   **Control.Auto.Process.Random**: Removed self-defeating `Seralize`
+    constraint on the seed parameter of `sealRandom_`.
+*   **Control.Auto.Serialize**: Fixed compiler warning on GHC 7.10 for
+    redundant Applicative import.
+
 0.4.2.2
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.2>
