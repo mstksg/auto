@@ -289,7 +289,7 @@ discreteF_ f = mkState_ $ \_ x -> (f x, succ x)
 -- >>> s'
 -- 10
 --
--- Out 'Auto' @a@ behaves exactly like @'sumFrom' 0@, except at each step,
+-- Our 'Auto' @a@ behaves exactly like @'sumFrom' 0@, except at each step,
 -- it also increments the underlying/global state by one.  It is @'sumFrom'
 -- 0@ with an "attached effect".
 --

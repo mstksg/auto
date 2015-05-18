@@ -505,7 +505,7 @@ sealRandom a g0 = mkAutoM (sealRandom <$> resumeAuto a <*> get)
 -- | The non-serializing/non-resuming version of 'sealRandom_'.  The random
 -- seed is not re-loaded/resumed, so every time you resume, the stream of
 -- available randomness begins afresh.
-sealRandom_ :: (RandomGen g, Serialize g, Monad m)
+sealRandom_ :: (RandomGen g, Monad m)
             => Auto (RandT g m) a b         -- ^ 'Auto' to seal
             -> g                            -- ^ initial seed
             -> Auto m a b
