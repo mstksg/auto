@@ -371,7 +371,7 @@ evalAutoN' n a0 = fst . stepAutoN' n a0
 --            -> Auto' a b
 -- execAutoN' n a0 = snd . stepAutoN' n a0
 
--- | Lifts an @'Auto' m a b@ to one that runs "through a 'Traversable'@,
+-- | Lifts an @'Auto' m a b@ to one that runs "through" a 'Traversable',
 -- @'Auto' m (t a) (t b)@.  It does this by running itself sequentially
 -- over every element "in" the 'Traversable' at every input.
 --
