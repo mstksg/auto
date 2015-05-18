@@ -67,7 +67,6 @@ module Control.Auto.Serialize (
   , loadFromB
   ) where
 
-import Control.Applicative
 import Control.Auto.Blip.Internal
 import Control.Auto.Core
 import Control.Exception
