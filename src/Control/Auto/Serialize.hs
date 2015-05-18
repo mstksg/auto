@@ -73,6 +73,7 @@ import Control.Auto.Core
 import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class
+import Prelude
 import System.IO.Error
 import qualified Data.ByteString  as B
 
