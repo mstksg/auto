@@ -111,8 +111,11 @@ import Data.Semigroup
 import Data.Serialize
 import Data.String
 import Data.Traversable
-import Data.Typeable
 import Prelude hiding         ((.), id, sequence)
+
+#if MIN_VERSION_base(4,7,0)
+import Data.Typeable
+#endif
 
 
 -- | The 'Auto' type.  For this library, an 'Auto' semantically

@@ -64,12 +64,13 @@ module Control.Auto.Blip (
   , lagBlips_
   , filterB
   , splitB
+  , mapMaybeB
+  , splitEitherB
   , collectB
   , collectB_
   , collectBs
   , collectBs_
   , joinB
-  , mapMaybeB
   , takeB
   , takeWhileB
   , dropB
@@ -548,6 +549,21 @@ splitB p = mkFunc $ \x -> case x of
                             Blip x' | p x'      -> (x, NoBlip)
                                     | otherwise -> (NoBlip, x)
                             _                   -> (NoBlip, NoBlip)
+
+-- | "Splits" a blip stream based on a predicate returning an 'Either'.
+-- All 'Left' results go to the first output stream, and all 'Right'
+-- results go to the second.
+--
+-- On an 'a -> Either () b', is roughly analogous to 'mapMaybeB'.  On an 'a
+-- -> Either () ()', is roughly analogous to 'filterB' or 'splitB'.
+splitEitherB :: (a -> Either b c)
+             -> Auto m (Blip a) (Blip b, Blip c)
+splitEitherB f = mkFunc $ \x -> case x of
+                                  Blip x' -> case f x' of
+                                               Left y  -> (Blip y, NoBlip)
+                                               Right y -> (NoBlip, Blip y)
+                                  _       -> (NoBlip, NoBlip)
+
 
 -- | "Collapses" a blip stream of blip streams into single blip stream.
 -- that emits whenever the inner-nested stream emits.
