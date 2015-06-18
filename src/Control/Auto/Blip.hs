@@ -555,7 +555,7 @@ splitB p = mkFunc $ \x -> case x of
 -- results go to the second.
 --
 -- On an 'a -> Either () b', is roughly analogous to 'mapMaybeB'.  On an 'a
--- -> Either () ()', is roughly analogous to 'filterB'.
+-- -> Either () ()', is roughly analogous to 'filterB' or 'splitB'.
 splitEitherB :: (a -> Either b c)
              -> Auto m (Blip a) (Blip b, Blip c)
 splitEitherB f = mkFunc $ \x -> case x of
