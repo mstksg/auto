@@ -1,5 +1,6 @@
 -- {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 
 module Control.Auto.State where
 
@@ -97,3 +98,24 @@ mkStateSM f = arrM $ StateT . f
 
 mkStateS :: Monad m => (a -> s -> (b, s)) -> AutoS s m a b
 mkStateS f = arrM $ state . f
+
+hookAuto :: Monad m => Lens s t a b -> Auto m a b -> Auto m q s -> Auto m q t
+hookAuto l a0 a1 = mkAutoM (hookAuto l <$> resumeAuto a0 <*> resumeAuto a1)
+                           (saveAuto a0 *> saveAuto a1)
+                         $ \x -> do
+                             (y, a1') <- stepAuto a1 x
+                             (z, a0') <- stepAuto a0 (view l y)
+                             return (set l z y, hookAuto l a0' a1')
+
+_1 :: Lens (a, c) (b, c) a b
+_1 f (x, y) = (,y) <$> f x
+
+_2 :: Lens (c, a) (c, b) a b
+_2 f (x, y) = (x,) <$> f y
+
+
+first' :: Monad m => Auto m a b -> Auto m (a, c) (b, c)
+first' a = hookAuto _1 a id
+
+bimap' :: Monad m => Auto m a b -> Auto m c d -> Auto m (a, c) (b, d)
+bimap' a1 a2 = hookAuto _2 a2 . hookAuto _1 a1 $ id
