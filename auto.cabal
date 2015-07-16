@@ -56,7 +56,7 @@ maintainer:          justin@jle.im
 copyright:           (c) Justin Le 2015
 category:            Control
 homepage:            https://github.com/mstksg/auto
-bug-reports:         https://github.com/mstksg/issues
+bug-reports:         https://github.com/mstksg/auto/issues
 build-type:          Simple
 extra-source-files:  README.md
                      CHANGELOG.md
