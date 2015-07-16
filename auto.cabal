@@ -83,6 +83,7 @@ library
                      , Control.Auto.Serialize
                      , Control.Auto.Switch
                      , Control.Auto.Time
+                     , Control.Auto.State
   -- other-modules:
   -- other-extensions:
   build-depends:       base         >= 4.6      && < 5
