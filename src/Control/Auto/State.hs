@@ -5,6 +5,7 @@
 module Control.Auto.State where
 
 import Control.Applicative
+import Data.Function ((&))
 import Data.Functor.Identity
 import Control.Auto.Effects
 import Control.Arrow
@@ -115,7 +116,18 @@ _2 f (x, y) = (x,) <$> f y
 
 
 first' :: Monad m => Auto m a b -> Auto m (a, c) (b, c)
-first' a = hookAuto _1 a id
+first' a = id
+         & hookAuto _1 a
 
 bimap' :: Monad m => Auto m a b -> Auto m c d -> Auto m (a, c) (b, d)
-bimap' a1 a2 = hookAuto _2 a2 . hookAuto _1 a1 $ id
+bimap' a1 a2 = id
+             & hookAuto _1 a1
+             & hookAuto _2 a2
+
+pipeAuto :: Monad m => Lens' s a -> Lens s t q b -> Auto m a b -> Auto m q s -> Auto m q t
+pipeAuto l1 l2 a0 a1 = mkAutoM (pipeAuto l1 l2 <$> resumeAuto a0 <*> resumeAuto a1)
+                               (saveAuto a0 *> saveAuto a1)
+                             $ \x -> do
+                                 (y, a1') <- stepAuto a1 x
+                                 (z, a0') <- stepAuto a0 (view l1 y)
+                                 return (set l2 z y, pipeAuto l1 l2 a0' a1')
