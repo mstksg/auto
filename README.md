@@ -1,6 +1,19 @@
 Auto
 ====
 
+<a href="http://stackage.org/lts-2/package/auto">
+    <img src="http://stackage.org/package/auto/badge/lts-2"
+         alt="auto on Stackage LTS 2">
+</a>
+<a href="http://stackage.org/lts-3/package/auto">
+    <img src="http://stackage.org/package/auto/badge/lts-3"
+         alt="auto on Stackage LTS 3">
+</a>
+<a href="http://stackage.org/nightly/package/auto">
+    <img src="http://stackage.org/package/auto/badge/nightly"
+         alt="auto on Stackage Nightly">
+</a>
+
 [![Join the chat at https://gitter.im/mstksg/auto](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mstksg/auto?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ~~~bash
