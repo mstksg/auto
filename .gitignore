@@ -2,3 +2,5 @@
 /dist
 /.cabal-sandbox
 /tmp
+/.stack-work
+
