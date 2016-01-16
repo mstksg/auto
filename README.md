@@ -17,7 +17,7 @@ Check it out!
 -------------
 
 ~~~haskell
--- Let's impliement a PID feedback controller over a black box system.
+-- Let's implement a PID feedback controller over a black box system.
 
 import Control.Auto
 import Prelude hiding ((.), id)
@@ -31,7 +31,7 @@ type System m = Auto m Double Double
 
 -- A PID controller adjusts the input to the black box system until the
 -- response matches the target.  It does this by adjusting the input based on
--- the current error, the cumulative sum, and the consecutative differences.
+-- the current error, the cumulative sum, and the consecutive differences.
 --
 -- See http://en.wikipedia.org/wiki/PID_controller
 --
@@ -144,7 +144,7 @@ github.
     concepts.  Your building blocks are well-defined *ideas*.
 
 *   **Compositional**: You build your eventually complex program/game out of
-    small, simple components.  These simple components compose with eachother;
+    small, simple components.  These simple components compose with each other;
     and compositions of components compose as well with other components.
     Every "layer" of composition is seamless.  It's the [scalable program
     architecture][spa] principle in practice: If you combine an A with an A,
