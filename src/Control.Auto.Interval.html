@@ -1,0 +1,743 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">-- |</span><span>
+</span><a name="line-2"></a><span class="hs-comment">-- Module      : Control.Auto.Interval</span><span>
+</span><a name="line-3"></a><span class="hs-comment">-- Description : Tools for working with &quot;interval&quot; semantics: &quot;On or off&quot;</span><span>
+</span><a name="line-4"></a><span class="hs-comment">--               'Auto's.</span><span>
+</span><a name="line-5"></a><span class="hs-comment">-- Copyright   : (c) Justin Le 2015</span><span>
+</span><a name="line-6"></a><span class="hs-comment">-- License     : MIT</span><span>
+</span><a name="line-7"></a><span class="hs-comment">-- Maintainer  : justin@jle.im</span><span>
+</span><a name="line-8"></a><span class="hs-comment">-- Stability   : unstable</span><span>
+</span><a name="line-9"></a><span class="hs-comment">-- Portability : portable</span><span>
+</span><a name="line-10"></a><span class="hs-comment">--</span><span>
+</span><a name="line-11"></a><span class="hs-comment">--</span><span>
+</span><a name="line-12"></a><span class="hs-comment">-- This module provides combinators and utilities for working with the</span><span>
+</span><a name="line-13"></a><span class="hs-comment">-- semantic concept of &quot;intervals&quot;: an 'Auto' whose output stream is &quot;on&quot;</span><span>
+</span><a name="line-14"></a><span class="hs-comment">-- or &quot;off&quot; for (conceputally) contiguous chunks of time.</span><span>
+</span><a name="line-15"></a><span class="hs-comment">--</span><span>
+</span><a name="line-16"></a><span>
+</span><a name="line-17"></a><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Interval</span><span> </span><span class="hs-special">(</span><span>
+</span><a name="line-18"></a><span>  </span><span class="hs-comment">-- * Intervals</span><span>
+</span><a name="line-19"></a><span>  </span><span class="hs-comment">-- $intervals</span><span>
+</span><a name="line-20"></a><span>    </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span>
+</span><a name="line-21"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#Interval%27"><span class="hs-identifier hs-type">Interval'</span></a><span>
+</span><a name="line-22"></a><span>  </span><span class="hs-comment">-- * Static 'Interval's</span><span>
+</span><a name="line-23"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#off"><span class="hs-identifier hs-var">off</span></a><span>
+</span><a name="line-24"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#toOn"><span class="hs-identifier hs-var">toOn</span></a><span>
+</span><a name="line-25"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#fromInterval"><span class="hs-identifier hs-var">fromInterval</span></a><span>
+</span><a name="line-26"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#fromIntervalWith"><span class="hs-identifier hs-var">fromIntervalWith</span></a><span>
+</span><a name="line-27"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#onFor"><span class="hs-identifier hs-var">onFor</span></a><span>
+</span><a name="line-28"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#offFor"><span class="hs-identifier hs-var">offFor</span></a><span>
+</span><a name="line-29"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#window"><span class="hs-identifier hs-var">window</span></a><span>
+</span><a name="line-30"></a><span>  </span><span class="hs-comment">-- * Filter 'Interval's</span><span>
+</span><a name="line-31"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#whenI"><span class="hs-identifier hs-var">whenI</span></a><span>
+</span><a name="line-32"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#unlessI"><span class="hs-identifier hs-var">unlessI</span></a><span>
+</span><a name="line-33"></a><span>  </span><span class="hs-comment">-- * Choice</span><span>
+</span><a name="line-34"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#%3C%7C%21%3E"><span class="hs-operator hs-var">&lt;|!&gt;</span></a><span class="hs-special">)</span><span>
+</span><a name="line-35"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#%3C%7C%3F%3E"><span class="hs-operator hs-var">&lt;|?&gt;</span></a><span class="hs-special">)</span><span>
+</span><a name="line-36"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#chooseInterval"><span class="hs-identifier hs-var">chooseInterval</span></a><span>
+</span><a name="line-37"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#choose"><span class="hs-identifier hs-var">choose</span></a><span>
+</span><a name="line-38"></a><span>  </span><span class="hs-comment">-- * Blip-based 'Interval's</span><span>
+</span><a name="line-39"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#after"><span class="hs-identifier hs-var">after</span></a><span>
+</span><a name="line-40"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#before"><span class="hs-identifier hs-var">before</span></a><span>
+</span><a name="line-41"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#between"><span class="hs-identifier hs-var">between</span></a><span>
+</span><a name="line-42"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#hold"><span class="hs-identifier hs-var">hold</span></a><span>
+</span><a name="line-43"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#hold_"><span class="hs-identifier hs-var">hold_</span></a><span>
+</span><a name="line-44"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#holdFor"><span class="hs-identifier hs-var">holdFor</span></a><span>
+</span><a name="line-45"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#holdFor_"><span class="hs-identifier hs-var">holdFor_</span></a><span>
+</span><a name="line-46"></a><span>  </span><span class="hs-comment">-- * Stretching</span><span>
+</span><a name="line-47"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#holdJusts"><span class="hs-identifier hs-var">holdJusts</span></a><span>
+</span><a name="line-48"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#holdJusts_"><span class="hs-identifier hs-var">holdJusts_</span></a><span>
+</span><a name="line-49"></a><span>  </span><span class="hs-comment">-- * Composition with 'Interval'</span><span>
+</span><a name="line-50"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#during"><span class="hs-identifier hs-var">during</span></a><span>
+</span><a name="line-51"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#compI"><span class="hs-identifier hs-var">compI</span></a><span>
+</span><a name="line-52"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#bindI"><span class="hs-identifier hs-var">bindI</span></a><span>
+</span><a name="line-53"></a><span>  </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><a name="line-54"></a><span>
+</span><a name="line-55"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Applicative</span><span>
+</span><a name="line-56"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Arrow</span><span>
+</span><a name="line-57"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Blip.Internal.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Blip</span><span class="hs-operator">.</span><span class="hs-identifier">Internal</span></a><span>
+</span><a name="line-58"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Core.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Core</span></a><span>
+</span><a name="line-59"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Category</span><span>
+</span><a name="line-60"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Monad</span><span>              </span><span class="hs-special">(</span><span class="hs-identifier hs-var">join</span><span class="hs-special">)</span><span>
+</span><a name="line-61"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Maybe</span><span>
+</span><a name="line-62"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Profunctor</span><span>
+</span><a name="line-63"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Serialize</span><span>
+</span><a name="line-64"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Prelude</span><span> </span><span class="hs-keyword">hiding</span><span>             </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="hs-operator hs-var">.</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">id</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">mapM</span><span class="hs-special">)</span><span>
+</span><a name="line-65"></a><span>
+</span><a name="line-66"></a><span class="hs-comment">-- $intervals</span><span>
+</span><a name="line-67"></a><span class="hs-comment">--</span><span>
+</span><a name="line-68"></a><span class="hs-comment">-- An auto that exhibits this &quot;interval&quot; behavior is represented with the</span><span>
+</span><a name="line-69"></a><span class="hs-comment">-- 'Interval' type synonym:</span><span>
+</span><a name="line-70"></a><span class="hs-comment">--</span><span>
+</span><a name="line-71"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-72"></a><span class="hs-comment">-- type 'Interval' m a b = 'Auto' m a ('Maybe' b)</span><span>
+</span><a name="line-73"></a><span class="hs-comment">-- type 'Interval''  a b = 'Auto''  a ('Maybe' b)</span><span>
+</span><a name="line-74"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-75"></a><span class="hs-comment">--</span><span>
+</span><a name="line-76"></a><span class="hs-comment">-- So, the compiler sees an @'Interval' m a b@ as if it were an @'Auto'</span><span>
+</span><a name="line-77"></a><span class="hs-comment">-- m a ('Maybe' b)@.  If it helps you reason about type signatures and type</span><span>
+</span><a name="line-78"></a><span class="hs-comment">-- inference, you can make the substitution in your head too!</span><span>
+</span><a name="line-79"></a><span class="hs-comment">--</span><span>
+</span><a name="line-80"></a><span class="hs-comment">-- An @'Interval' m a b@ takes an input stream of @a@s and output stream of</span><span>
+</span><a name="line-81"></a><span class="hs-comment">-- @b@s that are &quot;on&quot; and &quot;off&quot; for chunks at a time; 'Nothing' is</span><span>
+</span><a name="line-82"></a><span class="hs-comment">-- interpreted as &quot;off&quot;, and @'Just' x@ is interpreted as &quot;on&quot; with a value</span><span>
+</span><a name="line-83"></a><span class="hs-comment">-- of @x@.</span><span>
+</span><a name="line-84"></a><span class="hs-comment">--</span><span>
+</span><a name="line-85"></a><span class="hs-comment">-- A classic example is @'onFor' :: 'Int' -&gt; 'Interval' m a a@.  With</span><span>
+</span><a name="line-86"></a><span class="hs-comment">-- @'onFor' n@, the output stream behaves exactly like the input stream for</span><span>
+</span><a name="line-87"></a><span class="hs-comment">-- the first @n@ steps, then is &quot;off&quot; forever after:</span><span>
+</span><a name="line-88"></a><span class="hs-comment">--</span><span>
+</span><a name="line-89"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' (onFor 3) [1..7]</span><span>
+</span><a name="line-90"></a><span class="hs-comment">-- [Just 1, Just 2, Just 3, Nothing, Nothing, Nothing, Nothing]</span><span>
+</span><a name="line-91"></a><span class="hs-comment">--</span><span>
+</span><a name="line-92"></a><span class="hs-comment">-- == Motivation</span><span>
+</span><a name="line-93"></a><span class="hs-comment">--</span><span>
+</span><a name="line-94"></a><span class="hs-comment">-- Intervals happen to particularly useful when used with the various</span><span>
+</span><a name="line-95"></a><span class="hs-comment">-- /switching/ combinators from &quot;Control.Auto.Switch&quot;.</span><span>
+</span><a name="line-96"></a><span class="hs-comment">--</span><span>
+</span><a name="line-97"></a><span class="hs-comment">-- You might find it useful to &quot;sequence&quot; 'Auto's such that they &quot;switch&quot;</span><span>
+</span><a name="line-98"></a><span class="hs-comment">-- from one to the other, dynamically.  For example, an 'Auto' that acts</span><span>
+</span><a name="line-99"></a><span class="hs-comment">-- like @'pure' 100@ for three steps, and then like 'count' for the rest:</span><span>
+</span><a name="line-100"></a><span class="hs-comment">--</span><span>
+</span><a name="line-101"></a><span class="hs-comment">-- &gt;&gt;&gt; let a1 = (onFor 3 . pure 100) --&gt; count</span><span>
+</span><a name="line-102"></a><span class="hs-comment">-- &gt;&gt;&gt; take 8 . streamAuto' a1 $ repeat ()</span><span>
+</span><a name="line-103"></a><span class="hs-comment">-- [100, 100, 100, 0, 1, 2, 3, 4]</span><span>
+</span><a name="line-104"></a><span class="hs-comment">--</span><span>
+</span><a name="line-105"></a><span class="hs-comment">-- (Recall that @'pure' x@ is the 'Auto' that ignores the input stream and</span><span>
+</span><a name="line-106"></a><span class="hs-comment">-- gives an output stream of constant @x@s)</span><span>
+</span><a name="line-107"></a><span class="hs-comment">--</span><span>
+</span><a name="line-108"></a><span class="hs-comment">-- Or in reverse, an 'Auto' that behaves like 'count' until the count is</span><span>
+</span><a name="line-109"></a><span class="hs-comment">-- above 3, then switches to @'pure' 100@</span><span>
+</span><a name="line-110"></a><span class="hs-comment">--</span><span>
+</span><a name="line-111"></a><span class="hs-comment">-- &gt;&gt;&gt; let a2 = (whenI (&lt;= 3) . count) --&gt; pure 100</span><span>
+</span><a name="line-112"></a><span class="hs-comment">-- &gt;&gt;&gt; take 8 . streamAuto' a2 $ repeat ()</span><span>
+</span><a name="line-113"></a><span class="hs-comment">-- [0, 1, 2, 3, 100, 100, 100, 100]</span><span>
+</span><a name="line-114"></a><span class="hs-comment">--</span><span>
+</span><a name="line-115"></a><span class="hs-comment">-- That's just a small example using one switching combinator, '--&gt;'.  But</span><span>
+</span><a name="line-116"></a><span class="hs-comment">-- hopefully it demonstrates that one powerful motivation behind</span><span>
+</span><a name="line-117"></a><span class="hs-comment">-- &quot;intervals&quot; being a &quot;thing&quot; is because of how it works with switches.</span><span>
+</span><a name="line-118"></a><span class="hs-comment">--</span><span>
+</span><a name="line-119"></a><span class="hs-comment">-- Another neat motivation is that intervals work pretty well with the</span><span>
+</span><a name="line-120"></a><span class="hs-comment">-- 'Blip' semantic tool, as well.</span><span>
+</span><a name="line-121"></a><span class="hs-comment">--</span><span>
+</span><a name="line-122"></a><span class="hs-comment">-- The following 'Interval' will be &quot;off&quot; and suppress all of its input</span><span>
+</span><a name="line-123"></a><span class="hs-comment">-- (from 'count') /until/ the blip stream produced by @'inB' 3@ emits</span><span>
+</span><a name="line-124"></a><span class="hs-comment">-- something, then it'll allow 'count' to pass, beginning with the step</span><span>
+</span><a name="line-125"></a><span class="hs-comment">-- during which the blip was emmitted.</span><span>
+</span><a name="line-126"></a><span class="hs-comment">--</span><span>
+</span><a name="line-127"></a><span class="hs-comment">-- &gt;&gt;&gt; let a3 = after . (count &amp;&amp;&amp; inB 3)</span><span>
+</span><a name="line-128"></a><span class="hs-comment">-- &gt;&gt;&gt; let a3 = proc () -&gt; do</span><span>
+</span><a name="line-129"></a><span class="hs-comment">--             c   &lt;- count -&lt; ()</span><span>
+</span><a name="line-130"></a><span class="hs-comment">--             blp &lt;- inB 3 -&lt; ()</span><span>
+</span><a name="line-131"></a><span class="hs-comment">--             after -&lt; (c, blp)</span><span>
+</span><a name="line-132"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a3 $ repeat ()</span><span>
+</span><a name="line-133"></a><span class="hs-comment">-- [Nothing, Nothing, Just 2, Just 3, Just 4]</span><span>
+</span><a name="line-134"></a><span class="hs-comment">--</span><span>
+</span><a name="line-135"></a><span class="hs-comment">-- Intervals are also used for things that want their 'Auto's to &quot;signal&quot;</span><span>
+</span><a name="line-136"></a><span class="hs-comment">-- when they are &quot;off&quot;.  'Interval' is the universal language for, &quot;you can</span><span>
+</span><a name="line-137"></a><span class="hs-comment">-- be done with me&quot;, when it is needed.  For example, the 'interactAuto'</span><span>
+</span><a name="line-138"></a><span class="hs-comment">-- loop takes an 'Interval String String', and &quot;turns off&quot; on the first</span><span>
+</span><a name="line-139"></a><span class="hs-comment">-- 'Nothing' or &quot;off&quot; value.  'gather' keeps a collection of 'Interval's,</span><span>
+</span><a name="line-140"></a><span class="hs-comment">-- and removes them whenever they output a 'Nothing'/turn &quot;off&quot;.</span><span>
+</span><a name="line-141"></a><span class="hs-comment">--</span><span>
+</span><a name="line-142"></a><span class="hs-comment">-- == The Contract</span><span>
+</span><a name="line-143"></a><span class="hs-comment">--</span><span>
+</span><a name="line-144"></a><span class="hs-comment">-- So, why have an 'Interval' type, and not always just use 'Auto'?</span><span>
+</span><a name="line-145"></a><span class="hs-comment">--</span><span>
+</span><a name="line-146"></a><span class="hs-comment">-- You can say that, if you are given an 'Interval', then it comes with</span><span>
+</span><a name="line-147"></a><span class="hs-comment">-- a &quot;contract&quot; (by documentation) that the 'Auto' will obey /interval</span><span>
+</span><a name="line-148"></a><span class="hs-comment">-- semantics/.</span><span>
+</span><a name="line-149"></a><span class="hs-comment">--</span><span>
+</span><a name="line-150"></a><span class="hs-comment">-- @'Auto' m a ('Maybe' b)@ can mean a lot of things and represent a lot of</span><span>
+</span><a name="line-151"></a><span class="hs-comment">-- things.</span><span>
+</span><a name="line-152"></a><span class="hs-comment">--</span><span>
+</span><a name="line-153"></a><span class="hs-comment">-- However, if you offer something of an 'Interval' type, or if you find</span><span>
+</span><a name="line-154"></a><span class="hs-comment">-- something of an 'Interval' type, it comes with some sort of assurance</span><span>
+</span><a name="line-155"></a><span class="hs-comment">-- that that 'Auto' will /behave/ like an interval: on and off for</span><span>
+</span><a name="line-156"></a><span class="hs-comment">-- contiguous periods of time.</span><span>
+</span><a name="line-157"></a><span class="hs-comment">--</span><span>
+</span><a name="line-158"></a><span class="hs-comment">-- In addition, this allows us to further clarify /what our functions</span><span>
+</span><a name="line-159"></a><span class="hs-comment">-- expect/.  By saying that a function expects an 'Interval':</span><span>
+</span><a name="line-160"></a><span class="hs-comment">--</span><span>
+</span><a name="line-161"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-162"></a><span class="hs-comment">-- chooseInterval :: [Interval m a b]</span><span>
+</span><a name="line-163"></a><span class="hs-comment">--                -&gt; Interval m a b</span><span>
+</span><a name="line-164"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-165"></a><span class="hs-comment">--</span><span>
+</span><a name="line-166"></a><span class="hs-comment">-- 'chooseInterval' has the ability to &quot;state&quot; that it /expects/ things</span><span>
+</span><a name="line-167"></a><span class="hs-comment">-- that follow interval semantics in order to &quot;function&quot; properly and in</span><span>
+</span><a name="line-168"></a><span class="hs-comment">-- order to properly &quot;return&quot; an 'Interval'.</span><span>
+</span><a name="line-169"></a><span class="hs-comment">--</span><span>
+</span><a name="line-170"></a><span class="hs-comment">-- Of course, this is not enforced by the compiler.  However, it's useful</span><span>
+</span><a name="line-171"></a><span class="hs-comment">-- to create a way to clearly state that what you are offering or what you</span><span>
+</span><a name="line-172"></a><span class="hs-comment">-- are expecting does indeed follow this useful pattern.</span><span>
+</span><a name="line-173"></a><span class="hs-comment">--</span><span>
+</span><a name="line-174"></a><span class="hs-comment">-- == Combinators</span><span>
+</span><a name="line-175"></a><span class="hs-comment">--</span><span>
+</span><a name="line-176"></a><span class="hs-comment">-- === Converting back into normal streams</span><span>
+</span><a name="line-177"></a><span class="hs-comment">--</span><span>
+</span><a name="line-178"></a><span class="hs-comment">-- You can take an incoming interval stream and output a &quot;normal&quot;</span><span>
+</span><a name="line-179"></a><span class="hs-comment">-- &quot;always-on&quot; stream by using the 'fromInterval' and 'fromIntervalWith'</span><span>
+</span><a name="line-180"></a><span class="hs-comment">-- 'Auto's, analogous to 'fromMaybe' and 'maybe' from &quot;Data.Maybe&quot;,</span><span>
+</span><a name="line-181"></a><span class="hs-comment">-- respectively:</span><span>
+</span><a name="line-182"></a><span class="hs-comment">--</span><span>
+</span><a name="line-183"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = fromIntervalWith &quot;off&quot; show . onFor 2</span><span>
+</span><a name="line-184"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' a [1..5]</span><span>
+</span><a name="line-185"></a><span class="hs-comment">-- [&quot;1&quot;, &quot;2&quot;, &quot;off&quot;, &quot;off&quot;, &quot;off&quot;]</span><span>
+</span><a name="line-186"></a><span class="hs-comment">--</span><span>
+</span><a name="line-187"></a><span class="hs-comment">-- You can also use '&lt;|!&gt;', coming up next....</span><span>
+</span><a name="line-188"></a><span class="hs-comment">--</span><span>
+</span><a name="line-189"></a><span class="hs-comment">-- === Choice</span><span>
+</span><a name="line-190"></a><span class="hs-comment">--</span><span>
+</span><a name="line-191"></a><span class="hs-comment">-- You can &quot;choose&quot; between interval streams, with choice combinators like</span><span>
+</span><a name="line-192"></a><span class="hs-comment">-- '&lt;|?&gt;' and '&lt;|!&gt;'.</span><span>
+</span><a name="line-193"></a><span class="hs-comment">--</span><span>
+</span><a name="line-194"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = onFor 2 . pure &quot;hello&quot;</span><span>
+</span><a name="line-195"></a><span class="hs-comment">--        &lt;|!&gt; onFor 4 . pure &quot;world&quot;</span><span>
+</span><a name="line-196"></a><span class="hs-comment">--        &lt;|!&gt; pure &quot;goodbye!&quot;</span><span>
+</span><a name="line-197"></a><span class="hs-comment">-- &gt;&gt;&gt; take 6 . streamAuto' a $ repeat ()</span><span>
+</span><a name="line-198"></a><span class="hs-comment">-- [&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;goodbye!&quot;, &quot;goodbye!&quot;]</span><span>
+</span><a name="line-199"></a><span class="hs-comment">--</span><span>
+</span><a name="line-200"></a><span class="hs-comment">-- The above could also be written with 'choose':</span><span>
+</span><a name="line-201"></a><span class="hs-comment">--</span><span>
+</span><a name="line-202"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = choose (pure &quot;goodbye!&quot;)</span><span>
+</span><a name="line-203"></a><span class="hs-comment">--                    [ onFor 2 . pure &quot;hello&quot;</span><span>
+</span><a name="line-204"></a><span class="hs-comment">--                    , onFor 4 . pure &quot;world&quot;</span><span>
+</span><a name="line-205"></a><span class="hs-comment">--                    ]</span><span>
+</span><a name="line-206"></a><span class="hs-comment">--</span><span>
+</span><a name="line-207"></a><span class="hs-comment">-- === Composition</span><span>
+</span><a name="line-208"></a><span class="hs-comment">--</span><span>
+</span><a name="line-209"></a><span class="hs-comment">-- Another tool that makes 'Interval's powerful is the ability to compose</span><span>
+</span><a name="line-210"></a><span class="hs-comment">-- them.</span><span>
+</span><a name="line-211"></a><span class="hs-comment">--</span><span>
+</span><a name="line-212"></a><span class="hs-comment">-- If you have an @'Auto' m a b@ and an @'Auto' m b c@, then you can</span><span>
+</span><a name="line-213"></a><span class="hs-comment">-- compose them with '.'.</span><span>
+</span><a name="line-214"></a><span class="hs-comment">--</span><span>
+</span><a name="line-215"></a><span class="hs-comment">-- If you have an @'Auto' m a b@ and an @'Interval' m b c@, then you can</span><span>
+</span><a name="line-216"></a><span class="hs-comment">-- compose them by throwing in a 'toOn' in the chain, or @'fmap' 'Just'@:</span><span>
+</span><a name="line-217"></a><span class="hs-comment">--</span><span>
+</span><a name="line-218"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-219"></a><span class="hs-comment">-- a               :: 'Auto' m a b</span><span>
+</span><a name="line-220"></a><span class="hs-comment">-- i               :: 'Interval' m b c</span><span>
+</span><a name="line-221"></a><span class="hs-comment">-- i . 'toOn' . a    :: 'Interval' m a c</span><span>
+</span><a name="line-222"></a><span class="hs-comment">-- 'fmap' 'Just' a     :: 'Interval' m a b</span><span>
+</span><a name="line-223"></a><span class="hs-comment">-- i . 'fmap' 'Just' a :: 'Interval' m a c</span><span>
+</span><a name="line-224"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-225"></a><span class="hs-comment">--</span><span>
+</span><a name="line-226"></a><span class="hs-comment">-- If you have an @'Interval' m a b@ and an @'Auto' m b c@, you can &quot;lift&quot;</span><span>
+</span><a name="line-227"></a><span class="hs-comment">-- the second 'Auto' to be an 'Auto' that only &quot;acts&quot; on &quot;on&quot;/'Just'</span><span>
+</span><a name="line-228"></a><span class="hs-comment">-- outputs of the 'Interval':</span><span>
+</span><a name="line-229"></a><span class="hs-comment">--</span><span>
+</span><a name="line-230"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-231"></a><span class="hs-comment">--     i            :: 'Interval' m a b</span><span>
+</span><a name="line-232"></a><span class="hs-comment">--     a            :: 'Auto' m b c</span><span>
+</span><a name="line-233"></a><span class="hs-comment">--     'during' a     :: 'Auto' m ('Maybe' a) ('Maybe' b)</span><span>
+</span><a name="line-234"></a><span class="hs-comment">--     'during' a . i :: 'Interval' m a c</span><span>
+</span><a name="line-235"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-236"></a><span class="hs-comment">--</span><span>
+</span><a name="line-237"></a><span class="hs-comment">-- Finally, the kleisli composition: if you have an @'Interval' m a b@ and</span><span>
+</span><a name="line-238"></a><span class="hs-comment">-- an @'Interval' m b c@, you can use 'compI': (or also 'bindI')</span><span>
+</span><a name="line-239"></a><span class="hs-comment">--</span><span>
+</span><a name="line-240"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-241"></a><span class="hs-comment">--     i1            :: 'Interval' m a b</span><span>
+</span><a name="line-242"></a><span class="hs-comment">--     i2            :: 'Interval' m b c</span><span>
+</span><a name="line-243"></a><span class="hs-comment">--     i2 ``compI`` i1 :: 'Interval' m a b c</span><span>
+</span><a name="line-244"></a><span class="hs-comment">--     'bindI' i2 . i1 :: 'Interval' m a b c</span><span>
+</span><a name="line-245"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-246"></a><span class="hs-comment">--</span><span>
+</span><a name="line-247"></a><span class="hs-comment">-- &gt;&gt;&gt; let a1 = whenI (&lt; 5) `compI` offFor 2</span><span>
+</span><a name="line-248"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' a1 [1..6]</span><span>
+</span><a name="line-249"></a><span class="hs-comment">-- [Nothing, Nothing, Just 3, Just 4, Nothing, Nothing]</span><span>
+</span><a name="line-250"></a><span class="hs-comment">--</span><span>
+</span><a name="line-251"></a><span class="hs-comment">-- The implementation works so that any &quot;on&quot;/'Just' inputs will step the</span><span>
+</span><a name="line-252"></a><span class="hs-comment">-- lifted 'Auto' like normal, with the contents of the 'Just', and any</span><span>
+</span><a name="line-253"></a><span class="hs-comment">-- &quot;off&quot;/'Nothing' inputs cause the lifted 'Auto' to be skipped.</span><span>
+</span><a name="line-254"></a><span class="hs-comment">--</span><span>
+</span><a name="line-255"></a><span class="hs-comment">-- 'compI' adds a lot of power to 'Interval' because now you can always</span><span>
+</span><a name="line-256"></a><span class="hs-comment">-- work &quot;with 'Interval's&quot;, bind them just like normal 'Auto's, and then</span><span>
+</span><a name="line-257"></a><span class="hs-comment">-- finally &quot;exit&quot; them after composing and combining many.</span><span>
+</span><a name="line-258"></a><span class="hs-comment">--</span><span>
+</span><a name="line-259"></a><span class="hs-comment">-- == Warning: Switching</span><span>
+</span><a name="line-260"></a><span class="hs-comment">--</span><span>
+</span><a name="line-261"></a><span class="hs-comment">-- Note that when any of these combinators &quot;block&quot; (or &quot;inhibit&quot; or</span><span>
+</span><a name="line-262"></a><span class="hs-comment">-- &quot;suppress&quot;, whatever you call it) their input as a part of a composition</span><span>
+</span><a name="line-263"></a><span class="hs-comment">-- pipeline (as in for 'off', 'onFor', 'offFor', etc.), the /input/ 'Auto's</span><span>
+</span><a name="line-264"></a><span class="hs-comment">-- are /still stepped/ and &quot;run&quot;.  If the inputs had any monad effects,</span><span>
+</span><a name="line-265"></a><span class="hs-comment">-- they would too be executed at every step.  In order to &quot;freeze&quot; and not</span><span>
+</span><a name="line-266"></a><span class="hs-comment">-- run or step an 'Auto' at all, you have to use switches.</span><span>
+</span><a name="line-267"></a><span class="hs-comment">--</span><span>
+</span><a name="line-268"></a><span>
+</span><a name="line-269"></a><span class="hs-keyword">infixr</span><span> </span><span class="hs-number">3</span><span> </span><span class="hs-operator">&lt;|?&gt;</span><span>
+</span><a name="line-270"></a><span class="hs-keyword">infixr</span><span> </span><span class="hs-number">3</span><span> </span><span class="hs-operator">&lt;|!&gt;</span><span>
+</span><a name="line-271"></a><span class="hs-keyword">infixr</span><span> </span><span class="hs-number">1</span><span> </span><span class="hs-special">`</span><span class="hs-identifier">compI</span><span class="hs-special">`</span><span>
+</span><a name="line-272"></a><span>
+</span><a name="line-273"></a><span class="hs-comment">-- | Represents a relationship between an input and an output, where the</span><span>
+</span><a name="line-274"></a><span class="hs-comment">-- output can be &quot;on&quot; or &quot;off&quot; (using 'Just' and 'Nothing') for contiguous</span><span>
+</span><a name="line-275"></a><span class="hs-comment">-- chunks of time.</span><span>
+</span><a name="line-276"></a><span class="hs-comment">--</span><span>
+</span><a name="line-277"></a><span class="hs-comment">-- \&quot;Just\&quot; a type alias for @'Auto' m a ('Maybe' b)@.  If you ended up here</span><span>
+</span><a name="line-278"></a><span class="hs-comment">-- with a link...no worries!  If you see @'Interval' m a b@, just think</span><span>
+</span><a name="line-279"></a><span class="hs-comment">-- @'Auto' m a ('Maybe' b)@ for type inference/type checking purposes.</span><span>
+</span><a name="line-280"></a><span class="hs-comment">--</span><span>
+</span><a name="line-281"></a><span class="hs-comment">-- If you see something of type 'Interval', you can rest assured that it</span><span>
+</span><a name="line-282"></a><span class="hs-comment">-- has &quot;interval semantics&quot; --- it is on and off for meaningfully</span><span>
+</span><a name="line-283"></a><span class="hs-comment">-- contiguous chunks of time, instead of just on and off willy nilly.  If</span><span>
+</span><a name="line-284"></a><span class="hs-comment">-- you have a function that expects an 'Interval', then the function</span><span>
+</span><a name="line-285"></a><span class="hs-comment">-- expects its argument to behave in this way.</span><span>
+</span><a name="line-286"></a><span class="hs-comment">--</span><span>
+</span><a name="line-287"></a><span class="hs-keyword">type</span><span> </span><a name="Interval"><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier">Interval</span></a></a><span> </span><a name="local-1627459835"><a href="#local-1627459835"><span class="hs-identifier">m</span></a></a><span> </span><a name="local-1627459836"><a href="#local-1627459836"><span class="hs-identifier">a</span></a></a><span> </span><a name="local-1627459837"><a href="#local-1627459837"><span class="hs-identifier">b</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459835"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459836"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459837"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">)</span><span>
+</span><a name="line-288"></a><span>
+</span><a name="line-289"></a><span class="hs-comment">-- | 'Interval', specialized with 'Identity' as its underlying 'Monad'.</span><span>
+</span><a name="line-290"></a><span class="hs-comment">-- Analogous to 'Auto'' for 'Auto'.</span><span>
+</span><a name="line-291"></a><span class="hs-keyword">type</span><span> </span><a name="Interval%27"><a href="Control.Auto.Interval.html#Interval%27"><span class="hs-identifier">Interval'</span></a></a><span>  </span><a name="local-1627459833"><a href="#local-1627459833"><span class="hs-identifier">a</span></a></a><span> </span><a name="local-1627459834"><a href="#local-1627459834"><span class="hs-identifier">b</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#Auto%27"><span class="hs-identifier hs-type">Auto'</span></a><span>  </span><a href="#local-1627459833"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459834"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">)</span><span>
+</span><a name="line-292"></a><span>
+</span><a name="line-293"></a><span class="hs-comment">-- | The output stream is alwayas off, regardless of the input.</span><span>
+</span><a name="line-294"></a><span class="hs-comment">--</span><span>
+</span><a name="line-295"></a><span class="hs-comment">-- Note that any monadic effects of the input 'Auto' when composed with</span><span>
+</span><a name="line-296"></a><span class="hs-comment">-- 'off' are still executed, even though their result value is suppressed.</span><span>
+</span><a name="line-297"></a><span class="hs-comment">--</span><span>
+</span><a name="line-298"></a><span class="hs-comment">-- prop&gt; off == pure Nothing</span><span>
+</span><a name="line-299"></a><span class="hs-identifier">off</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459900"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459901"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459902"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-300"></a><a name="off"><a href="Control.Auto.Interval.html#off"><span class="hs-identifier">off</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkConst"><span class="hs-identifier hs-var">mkConst</span></a><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-301"></a><span>
+</span><a name="line-302"></a><span class="hs-comment">-- | The output stream is always on, with exactly the value of the</span><span>
+</span><a name="line-303"></a><span class="hs-comment">-- corresponding input.</span><span>
+</span><a name="line-304"></a><span class="hs-comment">--</span><span>
+</span><a name="line-305"></a><span class="hs-comment">-- prop&gt; toOn == arr Just</span><span>
+</span><a name="line-306"></a><span class="hs-identifier">toOn</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459898"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459899"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459899"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-307"></a><a name="toOn"><a href="Control.Auto.Interval.html#toOn"><span class="hs-identifier">toOn</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkFunc"><span class="hs-identifier hs-var">mkFunc</span></a><span> </span><span class="hs-identifier hs-var">Just</span><span>
+</span><a name="line-308"></a><span>
+</span><a name="line-309"></a><span class="hs-comment">-- | An &quot;interval collapsing&quot; 'Auto'.  A stream of on/off values comes in;</span><span>
+</span><a name="line-310"></a><span class="hs-comment">-- the output is the value of the input when the input is on, and the</span><span>
+</span><a name="line-311"></a><span class="hs-comment">-- &quot;default value&quot; when the input is off.</span><span>
+</span><a name="line-312"></a><span class="hs-comment">--</span><span>
+</span><a name="line-313"></a><span class="hs-comment">-- Much like 'fromMaybe' from &quot;Data.Maybe&quot;.</span><span>
+</span><a name="line-314"></a><span class="hs-comment">--</span><span>
+</span><a name="line-315"></a><span class="hs-comment">-- prop&gt; fromInterval d = arr (fromMaybe d)</span><span>
+</span><a name="line-316"></a><span class="hs-identifier">fromInterval</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="#local-1627459896"><span class="hs-identifier hs-type">a</span></a><span>       </span><span class="hs-comment">-- ^ value to output for &quot;off&quot; periods</span><span>
+</span><a name="line-317"></a><span>             </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459897"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459896"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459896"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-318"></a><a name="fromInterval"><a href="Control.Auto.Interval.html#fromInterval"><span class="hs-identifier">fromInterval</span></a></a><span> </span><a name="local-1627459903"><a href="#local-1627459903"><span class="hs-identifier">d</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkFunc"><span class="hs-identifier hs-var">mkFunc</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">fromMaybe</span><span> </span><a href="#local-1627459903"><span class="hs-identifier hs-var">d</span></a><span class="hs-special">)</span><span>
+</span><a name="line-319"></a><span>
+</span><a name="line-320"></a><span class="hs-comment">-- | An &quot;interval collapsing&quot; 'Auto'.  A stream of on/off values comes in;</span><span>
+</span><a name="line-321"></a><span class="hs-comment">-- when the input is off, the output is the &quot;default value&quot;.  When the</span><span>
+</span><a name="line-322"></a><span class="hs-comment">-- input is off, the output is the given function applied to the &quot;on&quot;</span><span>
+</span><a name="line-323"></a><span class="hs-comment">-- value.</span><span>
+</span><a name="line-324"></a><span class="hs-comment">--</span><span>
+</span><a name="line-325"></a><span class="hs-comment">-- Much like 'maybe' from &quot;Data.Maybe&quot;.</span><span>
+</span><a name="line-326"></a><span class="hs-comment">--</span><span>
+</span><a name="line-327"></a><span class="hs-comment">-- prop&gt; fromIntervalWith d f = arr (maybe d f)</span><span>
+</span><a name="line-328"></a><span class="hs-identifier">fromIntervalWith</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="#local-1627459893"><span class="hs-identifier hs-type">b</span></a><span>             </span><span class="hs-comment">-- ^ default value, when input is off</span><span>
+</span><a name="line-329"></a><span>                 </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><a href="#local-1627459894"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-glyph">-&gt;</span><span> </span><a href="#local-1627459893"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">)</span><span>      </span><span class="hs-comment">-- ^ function to apply when input is on</span><span>
+</span><a name="line-330"></a><span>                 </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459895"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459894"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459893"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-331"></a><a name="fromIntervalWith"><a href="Control.Auto.Interval.html#fromIntervalWith"><span class="hs-identifier">fromIntervalWith</span></a></a><span> </span><a name="local-1627459904"><a href="#local-1627459904"><span class="hs-identifier">d</span></a></a><span> </span><a name="local-1627459905"><a href="#local-1627459905"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkFunc"><span class="hs-identifier hs-var">mkFunc</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">maybe</span><span> </span><a href="#local-1627459904"><span class="hs-identifier hs-var">d</span></a><span> </span><a href="#local-1627459905"><span class="hs-identifier hs-var">f</span></a><span class="hs-special">)</span><span>
+</span><a name="line-332"></a><span>
+</span><a name="line-333"></a><span class="hs-comment">-- | For @'onFor' n@, the first @n@ items in the output stream are always</span><span>
+</span><a name="line-334"></a><span class="hs-comment">-- &quot;on&quot; (passing through with exactly the value of the corresponding</span><span>
+</span><a name="line-335"></a><span class="hs-comment">-- input); for the rest, the output stream is always &quot;off&quot;, suppressing all</span><span>
+</span><a name="line-336"></a><span class="hs-comment">-- input values forevermore.</span><span>
+</span><a name="line-337"></a><span class="hs-comment">--</span><span>
+</span><a name="line-338"></a><span class="hs-comment">-- If a number less than 0 is passed, 0 is used.</span><span>
+</span><a name="line-339"></a><span class="hs-comment">--</span><span>
+</span><a name="line-340"></a><span class="hs-identifier">onFor</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Int</span><span>      </span><span class="hs-comment">-- ^ amount of steps to stay &quot;on&quot; for</span><span>
+</span><a name="line-341"></a><span>      </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459891"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459892"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459892"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-342"></a><a name="onFor"><a href="Control.Auto.Interval.html#onFor"><span class="hs-identifier">onFor</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459906"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-operator hs-var">.</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-operator hs-var">.</span><span> </span><span class="hs-identifier hs-var">max</span><span> </span><span class="hs-number">0</span><span>
+</span><a name="line-343"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-344"></a><span>    </span><a name="local-1627459906"><a href="#local-1627459906"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459907"><a href="#local-1627459907"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a name="local-1627459908"><a href="#local-1627459908"><span class="hs-identifier">i</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459908"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">&gt;</span><span> </span><span class="hs-number">0</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459907"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-special">(</span><a href="#local-1627459908"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-glyph">-</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-345"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span>                </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-346"></a><span>
+</span><a name="line-347"></a><span class="hs-comment">-- | For @'offFor' n@, the first @n@ items in the output stream are always</span><span>
+</span><a name="line-348"></a><span class="hs-comment">-- &quot;off&quot;, suppressing all input; for the rest, the output stream is always</span><span>
+</span><a name="line-349"></a><span class="hs-comment">-- &quot;on&quot;, outputting exactly the value of the corresponding input.</span><span>
+</span><a name="line-350"></a><span class="hs-identifier">offFor</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Int</span><span>     </span><span class="hs-comment">-- ^ amount of steps to be &quot;off&quot; for</span><span>
+</span><a name="line-351"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459889"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459890"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459890"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-352"></a><a name="offFor"><a href="Control.Auto.Interval.html#offFor"><span class="hs-identifier">offFor</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459909"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-operator hs-var">.</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-operator hs-var">.</span><span> </span><span class="hs-identifier hs-var">max</span><span> </span><span class="hs-number">0</span><span>
+</span><a name="line-353"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-354"></a><span>    </span><a name="local-1627459909"><a href="#local-1627459909"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a name="local-1627459910"><a href="#local-1627459910"><span class="hs-identifier">i</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459910"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">&gt;</span><span> </span><span class="hs-number">0</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-special">(</span><a href="#local-1627459910"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-glyph">-</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-355"></a><span>    </span><span class="hs-identifier">f</span><span> </span><a name="local-1627459911"><a href="#local-1627459911"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-identifier">_</span><span>                </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459911"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>     </span><span class="hs-special">)</span><span>
+</span><a name="line-356"></a><span>
+</span><a name="line-357"></a><span class="hs-comment">-- | A combination of 'onFor' and 'offFor'; for @'window' b e@, the output</span><span>
+</span><a name="line-358"></a><span class="hs-comment">-- stream will be &quot;on&quot; from item @b@ to item @e@ inclusive with the value</span><span>
+</span><a name="line-359"></a><span class="hs-comment">-- of the corresponding input; for all other times, the output stream is</span><span>
+</span><a name="line-360"></a><span class="hs-comment">-- always off, suppressing any input.</span><span>
+</span><a name="line-361"></a><span class="hs-identifier">window</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Int</span><span>     </span><span class="hs-comment">-- ^ start of window</span><span>
+</span><a name="line-362"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-identifier hs-type">Int</span><span>     </span><span class="hs-comment">-- ^ end of window (inclusive)</span><span>
+</span><a name="line-363"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459887"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459888"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459888"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-364"></a><a name="window"><a href="Control.Auto.Interval.html#window"><span class="hs-identifier">window</span></a></a><span> </span><a name="local-1627459912"><a href="#local-1627459912"><span class="hs-identifier">b</span></a></a><span> </span><a name="local-1627459913"><a href="#local-1627459913"><span class="hs-identifier">e</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459914"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span>
+</span><a name="line-365"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-366"></a><span>    </span><a name="local-1627459914"><a href="#local-1627459914"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>              </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-367"></a><span>    </span><span class="hs-identifier">f</span><span> </span><a name="local-1627459915"><a href="#local-1627459915"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a name="local-1627459916"><a href="#local-1627459916"><span class="hs-identifier">i</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459916"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">&gt;</span><span> </span><a href="#local-1627459913"><span class="hs-identifier hs-var">e</span></a><span>     </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-368"></a><span>                 </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459916"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">&lt;</span><span> </span><a href="#local-1627459912"><span class="hs-identifier hs-var">b</span></a><span>     </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-special">(</span><a href="#local-1627459916"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">+</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-369"></a><span>                 </span><span class="hs-glyph">|</span><span> </span><span class="hs-identifier hs-var">otherwise</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459915"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-special">(</span><a href="#local-1627459916"><span class="hs-identifier hs-var">i</span></a><span> </span><span class="hs-operator hs-var">+</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-370"></a><span>
+</span><a name="line-371"></a><span class="hs-comment">-- | The output is &quot;on&quot; with exactly the value of he corresponding input</span><span>
+</span><a name="line-372"></a><span class="hs-comment">-- when the input passes the predicate, and is &quot;off&quot; otherwise.</span><span>
+</span><a name="line-373"></a><span class="hs-comment">--</span><span>
+</span><a name="line-374"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = whenI (\x -&gt; x &gt;= 2 &amp;&amp; x &lt;= 4)</span><span>
+</span><a name="line-375"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' a [1..6]</span><span>
+</span><a name="line-376"></a><span class="hs-comment">-- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]</span><span>
+</span><a name="line-377"></a><span class="hs-comment">--</span><span>
+</span><a name="line-378"></a><span class="hs-comment">-- Careful when using this; you could exactly create an 'Interval' that</span><span>
+</span><a name="line-379"></a><span class="hs-comment">-- &quot;breaks&quot; &quot;interval semantics&quot;; for example, 'whenI even', when you know</span><span>
+</span><a name="line-380"></a><span class="hs-comment">-- your input stream does not consist of chunks of even numbers and odd</span><span>
+</span><a name="line-381"></a><span class="hs-comment">-- numbers at a time.</span><span>
+</span><a name="line-382"></a><span class="hs-comment">--</span><span>
+</span><a name="line-383"></a><span class="hs-identifier">whenI</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><a href="#local-1627459885"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-identifier hs-type">Bool</span><span class="hs-special">)</span><span>   </span><span class="hs-comment">-- ^ interval predicate</span><span>
+</span><a name="line-384"></a><span>     </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459886"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459885"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459885"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-385"></a><a name="whenI"><a href="Control.Auto.Interval.html#whenI"><span class="hs-identifier">whenI</span></a></a><span> </span><a name="local-1627459917"><a href="#local-1627459917"><span class="hs-identifier">p</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkFunc"><span class="hs-identifier hs-var">mkFunc</span></a><span> </span><a href="#local-1627459918"><span class="hs-identifier hs-var">f</span></a><span>
+</span><a name="line-386"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-387"></a><span>    </span><a name="local-1627459918"><a href="#local-1627459918"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459919"><a href="#local-1627459919"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459917"><span class="hs-identifier hs-var">p</span></a><span> </span><a href="#local-1627459919"><span class="hs-identifier hs-var">x</span></a><span>       </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459919"><span class="hs-identifier hs-var">x</span></a><span>
+</span><a name="line-388"></a><span>        </span><span class="hs-glyph">|</span><span> </span><span class="hs-identifier hs-var">otherwise</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-389"></a><span>
+</span><a name="line-390"></a><span class="hs-comment">-- | Like 'whenI', but only allows values to pass whenever the input does</span><span>
+</span><a name="line-391"></a><span class="hs-comment">-- not satisfy the predicate.  Blocks whenever the predicate is true.</span><span>
+</span><a name="line-392"></a><span class="hs-comment">--</span><span>
+</span><a name="line-393"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = unlessI (\x -&gt; x &lt; 2 || x &gt; 4)</span><span>
+</span><a name="line-394"></a><span class="hs-comment">-- &gt;&gt;&gt; steamAuto' a [1..6]</span><span>
+</span><a name="line-395"></a><span class="hs-comment">-- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]</span><span>
+</span><a name="line-396"></a><span class="hs-comment">--</span><span>
+</span><a name="line-397"></a><span class="hs-identifier">unlessI</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><a href="#local-1627459883"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-identifier hs-type">Bool</span><span class="hs-special">)</span><span>   </span><span class="hs-comment">-- ^ interval predicate</span><span>
+</span><a name="line-398"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459884"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459883"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459883"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-399"></a><a name="unlessI"><a href="Control.Auto.Interval.html#unlessI"><span class="hs-identifier">unlessI</span></a></a><span> </span><a name="local-1627459920"><a href="#local-1627459920"><span class="hs-identifier">p</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkFunc"><span class="hs-identifier hs-var">mkFunc</span></a><span> </span><a href="#local-1627459921"><span class="hs-identifier hs-var">f</span></a><span>
+</span><a name="line-400"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-401"></a><span>    </span><a name="local-1627459921"><a href="#local-1627459921"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459922"><a href="#local-1627459922"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459920"><span class="hs-identifier hs-var">p</span></a><span> </span><a href="#local-1627459922"><span class="hs-identifier hs-var">x</span></a><span>       </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-402"></a><span>        </span><span class="hs-glyph">|</span><span> </span><span class="hs-identifier hs-var">otherwise</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459922"><span class="hs-identifier hs-var">x</span></a><span>
+</span><a name="line-403"></a><span>
+</span><a name="line-404"></a><span class="hs-comment">-- | Takes two input streams --- a stream of normal values, and a blip</span><span>
+</span><a name="line-405"></a><span class="hs-comment">-- stream.  Before the first emitted value of the input blip stream, the</span><span>
+</span><a name="line-406"></a><span class="hs-comment">-- output is always &quot;off&quot;, suppressing all inputs.  /After/ the first</span><span>
+</span><a name="line-407"></a><span class="hs-comment">-- emitted value of the input blip stream, the output is always &quot;on&quot; with</span><span>
+</span><a name="line-408"></a><span class="hs-comment">-- the corresponding value of the first input stream.</span><span>
+</span><a name="line-409"></a><span class="hs-comment">--</span><span>
+</span><a name="line-410"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = after . (count &amp;&amp;&amp; inB 3)</span><span>
+</span><a name="line-411"></a><span class="hs-comment">-- &gt;&gt;&gt; take 6 . streamAuto' a $ repeat ()</span><span>
+</span><a name="line-412"></a><span class="hs-comment">-- [Nothing, Nothing, Just 2, Just 3, Just 4, Just 5]</span><span>
+</span><a name="line-413"></a><span class="hs-comment">--</span><span>
+</span><a name="line-414"></a><span class="hs-comment">-- ('count' is the 'Auto' that ignores its input and outputs the current</span><span>
+</span><a name="line-415"></a><span class="hs-comment">-- step count at every step, and @'inB' 3@ is the 'Auto' generating</span><span>
+</span><a name="line-416"></a><span class="hs-comment">-- a blip stream that emits at the third step.)</span><span>
+</span><a name="line-417"></a><span class="hs-comment">--</span><span>
+</span><a name="line-418"></a><span class="hs-comment">-- Be careful to remember that in the above example, 'count' is still &quot;run&quot;</span><span>
+</span><a name="line-419"></a><span class="hs-comment">-- at every step, and is progressed (and if it were an 'Auto' with monadic</span><span>
+</span><a name="line-420"></a><span class="hs-comment">-- effects, they would still be executed).  It just isn't allowed to pass</span><span>
+</span><a name="line-421"></a><span class="hs-comment">-- its output values through 'after' until the blip stream emits.</span><span>
+</span><a name="line-422"></a><span class="hs-comment">--</span><span>
+</span><a name="line-423"></a><span class="hs-identifier">after</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459880"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="#local-1627459881"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459882"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459881"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-424"></a><a name="after"><a href="Control.Auto.Interval.html#after"><span class="hs-identifier">after</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459923"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-identifier hs-var">False</span><span>
+</span><a name="line-425"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-426"></a><span>    </span><a name="local-1627459923"><a href="#local-1627459923"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-special">(</span><a name="local-1627459924"><a href="#local-1627459924"><span class="hs-identifier">x</span></a></a><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">True</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459924"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-427"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-special">(</span><a name="local-1627459925"><a href="#local-1627459925"><span class="hs-identifier">x</span></a></a><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-var">Blip</span></a><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">False</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459925"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-428"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-identifier">_</span><span>           </span><span class="hs-identifier hs-var">False</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">False</span><span class="hs-special">)</span><span>
+</span><a name="line-429"></a><span>
+</span><a name="line-430"></a><span class="hs-comment">-- | Takes two input streams --- a stream of normal values, and a blip</span><span>
+</span><a name="line-431"></a><span class="hs-comment">-- stream.  Before the first emitted value of the input blip stream, the</span><span>
+</span><a name="line-432"></a><span class="hs-comment">-- output is always &quot;on&quot; with the corresponding value of the first input</span><span>
+</span><a name="line-433"></a><span class="hs-comment">-- stream.  /After/ the first emitted value of the input blip stream, the</span><span>
+</span><a name="line-434"></a><span class="hs-comment">-- output will be &quot;off&quot; forever, suppressing all input.</span><span>
+</span><a name="line-435"></a><span class="hs-comment">--</span><span>
+</span><a name="line-436"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = before . (count &amp;&amp;&amp; inB 3)</span><span>
+</span><a name="line-437"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a $ repeat ()</span><span>
+</span><a name="line-438"></a><span class="hs-comment">-- [Just 0, Just 1, Nothing, Nothing, Nothing]</span><span>
+</span><a name="line-439"></a><span class="hs-comment">--</span><span>
+</span><a name="line-440"></a><span class="hs-comment">-- ('count' is the 'Auto' that ignores its input and outputs the current</span><span>
+</span><a name="line-441"></a><span class="hs-comment">-- step count at every step, and @'inB' 3@ is the 'Auto' generating</span><span>
+</span><a name="line-442"></a><span class="hs-comment">-- a blip stream that emits at the third step.)</span><span>
+</span><a name="line-443"></a><span class="hs-comment">--</span><span>
+</span><a name="line-444"></a><span class="hs-comment">-- Be careful to remember that in the above example, 'count' is still &quot;run&quot;</span><span>
+</span><a name="line-445"></a><span class="hs-comment">-- at every step, and is progressed (and if it were an 'Auto' with monadic</span><span>
+</span><a name="line-446"></a><span class="hs-comment">-- effects, they would still be executed).  It just isn't allowed to pass</span><span>
+</span><a name="line-447"></a><span class="hs-comment">-- its output values through 'before' after the blip stream emits.</span><span>
+</span><a name="line-448"></a><span class="hs-comment">--</span><span>
+</span><a name="line-449"></a><span class="hs-identifier">before</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459877"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="#local-1627459878"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459879"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459878"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-450"></a><a name="before"><a href="Control.Auto.Interval.html#before"><span class="hs-identifier">before</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459926"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-identifier hs-var">False</span><span>
+</span><a name="line-451"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-452"></a><span>    </span><a name="local-1627459926"><a href="#local-1627459926"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-identifier">_</span><span>           </span><span class="hs-identifier hs-var">True</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-453"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-var">Blip</span></a><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">False</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-454"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-special">(</span><a name="local-1627459927"><a href="#local-1627459927"><span class="hs-identifier">x</span></a></a><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">False</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459927"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">False</span><span class="hs-special">)</span><span>
+</span><a name="line-455"></a><span>
+</span><a name="line-456"></a><span class="hs-comment">-- | Takes three input streams: a stream of normal values, a blip stream of</span><span>
+</span><a name="line-457"></a><span class="hs-comment">-- &quot;turning-on&quot; blips, and a blip stream of &quot;turning-off&quot; blips.  After the</span><span>
+</span><a name="line-458"></a><span class="hs-comment">-- first blip stream emits, the output will switch to &quot;on&quot; with the value</span><span>
+</span><a name="line-459"></a><span class="hs-comment">-- of the first input stream.  After the second blip stream emits, the</span><span>
+</span><a name="line-460"></a><span class="hs-comment">-- output will switch to &quot;off&quot;, supressing all inputs.  An emission from</span><span>
+</span><a name="line-461"></a><span class="hs-comment">-- the first stream toggles this &quot;on&quot;; an emission from the second stream</span><span>
+</span><a name="line-462"></a><span class="hs-comment">-- toggles this &quot;off&quot;.</span><span>
+</span><a name="line-463"></a><span class="hs-comment">--</span><span>
+</span><a name="line-464"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = between . (count &amp;&amp;&amp; (inB 3 &amp;&amp;&amp; inB 5))</span><span>
+</span><a name="line-465"></a><span class="hs-comment">-- &gt;&gt;&gt; take 7 . streamAuto' a $ repeat ()</span><span>
+</span><a name="line-466"></a><span class="hs-comment">-- [Nothing, Nothing, Just 2, Just 3, Nothing, Nothing, Nothing]</span><span>
+</span><a name="line-467"></a><span class="hs-identifier">between</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459873"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="#local-1627459874"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459875"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459876"><span class="hs-identifier hs-type">c</span></a><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><a href="#local-1627459874"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-468"></a><a name="between"><a href="Control.Auto.Interval.html#between"><span class="hs-identifier">between</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><a href="#local-1627459928"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-identifier hs-var">False</span><span>
+</span><a name="line-469"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-470"></a><span>    </span><a name="local-1627459928"><a href="#local-1627459928"><span class="hs-identifier">f</span></a></a><span> </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-var">Blip</span></a><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">False</span><span class="hs-special">)</span><span>
+</span><a name="line-471"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-special">(</span><a name="local-1627459929"><a href="#local-1627459929"><span class="hs-identifier">x</span></a></a><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-var">Blip</span></a><span> </span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459929"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-472"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-special">(</span><a name="local-1627459930"><a href="#local-1627459930"><span class="hs-identifier">x</span></a></a><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span>          </span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">True</span><span>  </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459930"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">True</span><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-473"></a><span>    </span><span class="hs-identifier">f</span><span> </span><span class="hs-identifier">_</span><span>                </span><span class="hs-identifier hs-var">False</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">False</span><span class="hs-special">)</span><span>
+</span><a name="line-474"></a><span>
+</span><a name="line-475"></a><span class="hs-comment">-- | The output is constantly &quot;on&quot; with the last emitted value of the input</span><span>
+</span><a name="line-476"></a><span class="hs-comment">-- blip stream.  However, before the first emitted value, it is &quot;off&quot;.</span><span>
+</span><a name="line-477"></a><span class="hs-comment">-- value of the input blip stream.  From then on, the output is always the</span><span>
+</span><a name="line-478"></a><span class="hs-comment">-- last emitted value</span><span>
+</span><a name="line-479"></a><span class="hs-comment">--</span><span>
+</span><a name="line-480"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = hold . inB 3</span><span>
+</span><a name="line-481"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' a [1..5]</span><span>
+</span><a name="line-482"></a><span class="hs-comment">-- [Nothing, Nothing, Just 3, Just 3, Just 3]</span><span>
+</span><a name="line-483"></a><span class="hs-comment">--</span><span>
+</span><a name="line-484"></a><span class="hs-comment">-- If you want an @'Auto' m ('Blip' a) a@ (no 'Nothing'...just a &quot;default</span><span>
+</span><a name="line-485"></a><span class="hs-comment">-- value&quot; before everything else), then you can use 'holdWith' from</span><span>
+</span><a name="line-486"></a><span class="hs-comment">-- &quot;Control.Auto.Blip&quot;...or also just 'hold' with '&lt;|!&gt;' or 'fromInterval'.</span><span>
+</span><a name="line-487"></a><span class="hs-identifier">hold</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Serialize</span><span> </span><a href="#local-1627459871"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-488"></a><span>     </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459872"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459871"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459871"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-489"></a><a name="hold"><a href="Control.Auto.Interval.html#hold"><span class="hs-identifier">hold</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#accum"><span class="hs-identifier hs-var">accum</span></a><span> </span><a href="#local-1627459931"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-490"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-491"></a><span>    </span><a name="local-1627459931"><a href="#local-1627459931"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459932"><a href="#local-1627459932"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Blip.Internal.html#blip"><span class="hs-identifier hs-var">blip</span></a><span> </span><a href="#local-1627459932"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-identifier hs-var">Just</span><span>
+</span><a name="line-492"></a><span>
+</span><a name="line-493"></a><span class="hs-comment">-- | The non-serializing/non-resuming version of 'hold'.</span><span>
+</span><a name="line-494"></a><span class="hs-identifier">hold_</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459869"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459870"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459870"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-495"></a><a name="hold_"><a href="Control.Auto.Interval.html#hold_"><span class="hs-identifier">hold_</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#accum_"><span class="hs-identifier hs-var">accum_</span></a><span> </span><a href="#local-1627459933"><span class="hs-identifier hs-var">f</span></a><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-496"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-497"></a><span>    </span><a name="local-1627459933"><a href="#local-1627459933"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459934"><a href="#local-1627459934"><span class="hs-identifier">x</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Blip.Internal.html#blip"><span class="hs-identifier hs-var">blip</span></a><span> </span><a href="#local-1627459934"><span class="hs-identifier hs-var">x</span></a><span> </span><span class="hs-identifier hs-var">Just</span><span>
+</span><a name="line-498"></a><span>
+</span><a name="line-499"></a><span class="hs-comment">-- | For @'holdFor' n@, The output is only &quot;on&quot; if there was an emitted</span><span>
+</span><a name="line-500"></a><span class="hs-comment">-- value from the input blip stream in the last @n@ steps.  Otherwise, is</span><span>
+</span><a name="line-501"></a><span class="hs-comment">-- off.</span><span>
+</span><a name="line-502"></a><span class="hs-comment">--</span><span>
+</span><a name="line-503"></a><span class="hs-comment">-- Like 'hold', but it only &quot;holds&quot; the last emitted value for the given</span><span>
+</span><a name="line-504"></a><span class="hs-comment">-- number of steps.</span><span>
+</span><a name="line-505"></a><span class="hs-comment">--</span><span>
+</span><a name="line-506"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = holdFor 2 . inB 3</span><span>
+</span><a name="line-507"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' a [1..7]</span><span>
+</span><a name="line-508"></a><span class="hs-comment">-- [Nothing, Nothing, Just 3, Just 3, Nothing, Nothing, Nothing]</span><span>
+</span><a name="line-509"></a><span class="hs-comment">--</span><span>
+</span><a name="line-510"></a><span class="hs-identifier">holdFor</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Serialize</span><span> </span><a href="#local-1627459867"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-511"></a><span>        </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-identifier hs-type">Int</span><span>      </span><span class="hs-comment">-- ^ number of steps to hold the last emitted value for</span><span>
+</span><a name="line-512"></a><span>        </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459868"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459867"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459867"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-513"></a><a name="holdFor"><a href="Control.Auto.Interval.html#holdFor"><span class="hs-identifier">holdFor</span></a></a><span> </span><a name="local-1627459935"><a href="#local-1627459935"><span class="hs-identifier">n</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#_holdForF"><span class="hs-identifier hs-var">_holdForF</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">max</span><span> </span><span class="hs-number">0</span><span> </span><a href="#local-1627459935"><span class="hs-identifier hs-var">n</span></a><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-514"></a><span>
+</span><a name="line-515"></a><span class="hs-comment">-- | The non-serializing/non-resuming version of 'holdFor'.</span><span>
+</span><a name="line-516"></a><span class="hs-identifier">holdFor_</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Int</span><span>   </span><span class="hs-comment">-- ^ number of steps to hold the last emitted value for</span><span>
+</span><a name="line-517"></a><span>         </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459865"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459866"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459866"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-518"></a><a name="holdFor_"><a href="Control.Auto.Interval.html#holdFor_"><span class="hs-identifier">holdFor_</span></a></a><span> </span><a name="local-1627459936"><a href="#local-1627459936"><span class="hs-identifier">n</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#mkState_"><span class="hs-identifier hs-var">mkState_</span></a><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#_holdForF"><span class="hs-identifier hs-var">_holdForF</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">max</span><span> </span><span class="hs-number">0</span><span> </span><a href="#local-1627459936"><span class="hs-identifier hs-var">n</span></a><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-519"></a><span>
+</span><a name="line-520"></a><span class="hs-identifier">_holdForF</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Int</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span> </span><a href="#local-1627459864"><span class="hs-identifier hs-type">a</span></a><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459864"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-type">Maybe</span><span> </span><span class="hs-identifier hs-type">Int</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459864"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459864"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-type">Maybe</span><span> </span><span class="hs-identifier hs-type">Int</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-521"></a><a name="_holdForF"><a href="Control.Auto.Interval.html#_holdForF"><span class="hs-identifier">_holdForF</span></a></a><span> </span><a name="local-1627459937"><a href="#local-1627459937"><span class="hs-identifier">n</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="#local-1627459938"><span class="hs-identifier hs-var">f</span></a><span>   </span><span class="hs-comment">-- n should be &gt;= 0</span><span>
+</span><a name="line-522"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-523"></a><span>    </span><a name="local-1627459938"><a href="#local-1627459938"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627459939"><a href="#local-1627459939"><span class="hs-identifier">x</span></a></a><span> </span><a name="local-1627459940"><a href="#local-1627459940"><span class="hs-identifier">s</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><a href="#local-1627459941"><span class="hs-identifier hs-var">y</span></a><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="#local-1627459941"><span class="hs-identifier hs-var">y</span></a><span class="hs-special">,</span><span> </span><a href="#local-1627459942"><span class="hs-identifier hs-var">i</span></a><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-524"></a><span>      </span><span class="hs-keyword">where</span><span>
+</span><a name="line-525"></a><span>        </span><span class="hs-special">(</span><a name="local-1627459941"><a href="#local-1627459941"><span class="hs-identifier">y</span></a></a><span class="hs-special">,</span><span> </span><a name="local-1627459942"><a href="#local-1627459942"><span class="hs-identifier">i</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="hs-special">(</span><a href="#local-1627459939"><span class="hs-identifier hs-var">x</span></a><span class="hs-special">,</span><span> </span><a href="#local-1627459940"><span class="hs-identifier hs-var">s</span></a><span class="hs-special">)</span><span> </span><span class="hs-keyword">of</span><span>
+</span><a name="line-526"></a><span>                   </span><span class="hs-special">(</span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-var">Blip</span></a><span> </span><a name="local-1627459943"><a href="#local-1627459943"><span class="hs-identifier">b</span></a></a><span class="hs-special">,</span><span>  </span><span class="hs-identifier">_</span><span>    </span><span class="hs-special">)</span><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459943"><span class="hs-identifier hs-var">b</span></a><span> </span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><a href="#local-1627459937"><span class="hs-identifier hs-var">n</span></a><span> </span><span class="hs-special">)</span><span>
+</span><a name="line-527"></a><span>                   </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span>     </span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a name="local-1627459944"><a href="#local-1627459944"><span class="hs-identifier">z</span></a></a><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><a name="local-1627459945"><a href="#local-1627459945"><span class="hs-identifier">j</span></a></a><span> </span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">|</span><span> </span><a href="#local-1627459945"><span class="hs-identifier hs-var">j</span></a><span> </span><span class="hs-operator hs-var">&gt;</span><span> </span><span class="hs-number">1</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><a href="#local-1627459944"><span class="hs-identifier hs-var">z</span></a><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Just</span><span> </span><span class="hs-special">(</span><a href="#local-1627459945"><span class="hs-identifier hs-var">j</span></a><span> </span><span class="hs-glyph">-</span><span> </span><span class="hs-number">1</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><a name="line-528"></a><span>                   </span><span class="hs-identifier">_</span><span>                      </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-529"></a><span>
+</span><a name="line-530"></a><span class="hs-comment">-- | &quot;Stretches&quot; the last &quot;on&quot;/'Just' input over the entire range of</span><span>
+</span><a name="line-531"></a><span class="hs-comment">-- following &quot;off&quot;/'Nothing' inputs.  Holds on to the last 'Just' until</span><span>
+</span><a name="line-532"></a><span class="hs-comment">-- another one comes along.</span><span>
+</span><a name="line-533"></a><span class="hs-comment">--</span><span>
+</span><a name="line-534"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' holdJusts [Nothing, Just 1, Just 3, Nothing, Nothing, Just 5]</span><span>
+</span><a name="line-535"></a><span class="hs-comment">-- [Nothing, Just 1, Just 3, Just 3, Just 3, Just 5]</span><span>
+</span><a name="line-536"></a><span class="hs-comment">--</span><span>
+</span><a name="line-537"></a><span class="hs-identifier">holdJusts</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Serialize</span><span> </span><a href="#local-1627459862"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-538"></a><span>          </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459863"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459862"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459862"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-539"></a><a name="holdJusts"><a href="Control.Auto.Interval.html#holdJusts"><span class="hs-identifier">holdJusts</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#accum"><span class="hs-identifier hs-var">accum</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">flip</span><span> </span><span class="hs-special">(</span><span class="hs-operator hs-var">&lt;|&gt;</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-540"></a><span>
+</span><a name="line-541"></a><span class="hs-comment">-- | The non-resuming/non-serializing version of 'holdJusts'.</span><span>
+</span><a name="line-542"></a><span class="hs-comment">--</span><span>
+</span><a name="line-543"></a><span class="hs-identifier">holdJusts_</span><span> </span><span class="hs-glyph">::</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459860"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459861"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459861"><span class="hs-identifier hs-type">a</span></a><span>
+</span><a name="line-544"></a><a name="holdJusts_"><a href="Control.Auto.Interval.html#holdJusts_"><span class="hs-identifier">holdJusts_</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><a href="Control.Auto.Core.html#accum_"><span class="hs-identifier hs-var">accum_</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">flip</span><span> </span><span class="hs-special">(</span><span class="hs-operator hs-var">&lt;|&gt;</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span>
+</span><a name="line-545"></a><span>
+</span><a name="line-546"></a><span class="hs-comment">-- | Forks a common input stream between the two 'Interval's and returns,</span><span>
+</span><a name="line-547"></a><span class="hs-comment">-- itself, an 'Interval'.  If the output of the first one is &quot;on&quot;, the</span><span>
+</span><a name="line-548"></a><span class="hs-comment">-- whole thing is on with that output. Otherwise, the output is exactly</span><span>
+</span><a name="line-549"></a><span class="hs-comment">-- that of the second one.</span><span>
+</span><a name="line-550"></a><span class="hs-comment">--</span><span>
+</span><a name="line-551"></a><span class="hs-comment">-- &gt;&gt;&gt; let a = (onFor 2 . pure &quot;hello&quot;) &lt;|?&gt; (onFor 4 . pure &quot;world&quot;)</span><span>
+</span><a name="line-552"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a $ repeat ()</span><span>
+</span><a name="line-553"></a><span class="hs-comment">-- [Just &quot;hello&quot;, Just &quot;hello&quot;, Just &quot;world&quot;, Just &quot;world&quot;, Nothing]</span><span>
+</span><a name="line-554"></a><span class="hs-comment">--</span><span>
+</span><a name="line-555"></a><span class="hs-comment">-- You can drop the parentheses, because of precedence; the above could</span><span>
+</span><a name="line-556"></a><span class="hs-comment">-- have been written as:</span><span>
+</span><a name="line-557"></a><span class="hs-comment">--</span><span>
+</span><a name="line-558"></a><span class="hs-comment">-- &gt;&gt;&gt; let a' = onFor 2 . pure &quot;hello&quot; &lt;|?&gt; onFor 4 . pure &quot;world&quot;</span><span>
+</span><a name="line-559"></a><span class="hs-comment">--</span><span>
+</span><a name="line-560"></a><span class="hs-comment">-- Warning: If your underlying monad produces effects, remember that /both/</span><span>
+</span><a name="line-561"></a><span class="hs-comment">-- 'Auto's are run at every step, along with any monadic effects,</span><span>
+</span><a name="line-562"></a><span class="hs-comment">-- regardless of whether they are &quot;on&quot; or &quot;off&quot;.</span><span>
+</span><a name="line-563"></a><span class="hs-comment">--</span><span>
+</span><a name="line-564"></a><span class="hs-comment">-- Note that more often than not, '&lt;|!&gt;' is probably more useful.  This</span><span>
+</span><a name="line-565"></a><span class="hs-comment">-- is useful only in the case that you really, really want an interval at</span><span>
+</span><a name="line-566"></a><span class="hs-comment">-- the end of it all.</span><span>
+</span><a name="line-567"></a><span class="hs-comment">--</span><span>
+</span><a name="line-568"></a><span class="hs-special">(</span><span class="hs-operator">&lt;|?&gt;</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459857"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-569"></a><span>       </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459857"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459858"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459859"><span class="hs-identifier hs-type">b</span></a><span>    </span><span class="hs-comment">-- ^ choice 1</span><span>
+</span><a name="line-570"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459857"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459858"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459859"><span class="hs-identifier hs-type">b</span></a><span>    </span><span class="hs-comment">-- ^ choice 2</span><span>
+</span><a name="line-571"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459857"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459858"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459859"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-572"></a><span class="hs-special">(</span><a name="%3C%7C%3F%3E"><a href="Control.Auto.Interval.html#%3C%7C%3F%3E"><span class="hs-operator">&lt;|?&gt;</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">liftA2</span><span> </span><span class="hs-special">(</span><span class="hs-operator hs-var">&lt;|&gt;</span><span class="hs-special">)</span><span>
+</span><a name="line-573"></a><span>
+</span><a name="line-574"></a><span class="hs-comment">-- | Forks a common input stream between an 'Interval' and an 'Auto', and</span><span>
+</span><a name="line-575"></a><span class="hs-comment">-- returns, itself, a normal non-interval 'Auto'..  If the</span><span>
+</span><a name="line-576"></a><span class="hs-comment">-- output of the first one is &quot;on&quot;, the output of the whole thing is that</span><span>
+</span><a name="line-577"></a><span class="hs-comment">-- &quot;on&quot; value.  Otherwise, the output is exactly that of the second one.</span><span>
+</span><a name="line-578"></a><span class="hs-comment">--</span><span>
+</span><a name="line-579"></a><span class="hs-comment">-- &gt;&gt;&gt; let a1 = (onFor 2 . pure &quot;hello&quot;) &lt;|!&gt; pure &quot;world&quot;</span><span>
+</span><a name="line-580"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a1 $ repeat ()</span><span>
+</span><a name="line-581"></a><span class="hs-comment">-- [&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;world&quot;]</span><span>
+</span><a name="line-582"></a><span class="hs-comment">--</span><span>
+</span><a name="line-583"></a><span class="hs-comment">-- This one is neat because it associates from the right, so it can be</span><span>
+</span><a name="line-584"></a><span class="hs-comment">-- &quot;chained&quot;:</span><span>
+</span><a name="line-585"></a><span class="hs-comment">--</span><span>
+</span><a name="line-586"></a><span class="hs-comment">-- &gt;&gt;&gt; let a2 = onFor 2 . pure &quot;hello&quot;</span><span>
+</span><a name="line-587"></a><span class="hs-comment">--         &lt;|!&gt; onFor 4 . pure &quot;world&quot;</span><span>
+</span><a name="line-588"></a><span class="hs-comment">--         &lt;|!&gt; pure &quot;goodbye!&quot;</span><span>
+</span><a name="line-589"></a><span class="hs-comment">-- &gt;&gt;&gt; take 6 . streamAuto' a2 $ repeat ()</span><span>
+</span><a name="line-590"></a><span class="hs-comment">-- [&quot;hello&quot;, &quot;hello&quot;, &quot;world&quot;, &quot;world&quot;, &quot;goodbye!&quot;, &quot;goodbye!&quot;]</span><span>
+</span><a name="line-591"></a><span class="hs-comment">--</span><span>
+</span><a name="line-592"></a><span class="hs-comment">-- &gt;  a &lt;|!&gt; b &lt;|!&gt; c</span><span>
+</span><a name="line-593"></a><span class="hs-comment">--</span><span>
+</span><a name="line-594"></a><span class="hs-comment">-- associates as</span><span>
+</span><a name="line-595"></a><span class="hs-comment">--</span><span>
+</span><a name="line-596"></a><span class="hs-comment">-- &gt;  a &lt;|!&gt; (b &lt;|!&gt; c)</span><span>
+</span><a name="line-597"></a><span class="hs-comment">--</span><span>
+</span><a name="line-598"></a><span class="hs-comment">-- So using this, you can &quot;chain&quot; a bunch of choices between intervals, and</span><span>
+</span><a name="line-599"></a><span class="hs-comment">-- then at the right-most, &quot;final&quot; one, provide the default behavior.</span><span>
+</span><a name="line-600"></a><span class="hs-comment">--</span><span>
+</span><a name="line-601"></a><span class="hs-comment">-- Warning: If your underlying monad produces effects, remember that /both/</span><span>
+</span><a name="line-602"></a><span class="hs-comment">-- 'Auto's are run at every step, along with any monadic effects,</span><span>
+</span><a name="line-603"></a><span class="hs-comment">-- regardless of whether they are &quot;on&quot; or &quot;off&quot;.</span><span>
+</span><a name="line-604"></a><span class="hs-special">(</span><span class="hs-operator">&lt;|!&gt;</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459854"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-605"></a><span>       </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459854"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459855"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459856"><span class="hs-identifier hs-type">b</span></a><span>        </span><span class="hs-comment">-- ^ interval 'Auto'</span><span>
+</span><a name="line-606"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459854"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459855"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459856"><span class="hs-identifier hs-type">b</span></a><span>            </span><span class="hs-comment">-- ^ &quot;normal&quot; 'Auto'</span><span>
+</span><a name="line-607"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459854"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459855"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459856"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-608"></a><span class="hs-special">(</span><a name="%3C%7C%21%3E"><a href="Control.Auto.Interval.html#%3C%7C%21%3E"><span class="hs-operator">&lt;|!&gt;</span></a></a><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">liftA2</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">flip</span><span> </span><span class="hs-identifier hs-var">fromMaybe</span><span class="hs-special">)</span><span>
+</span><a name="line-609"></a><span>
+</span><a name="line-610"></a><span class="hs-comment">-- | Forks an input stream between all 'Interval's in the list.  The result</span><span>
+</span><a name="line-611"></a><span class="hs-comment">-- is an 'Interval' whose output is &quot;on&quot; when any of the original</span><span>
+</span><a name="line-612"></a><span class="hs-comment">-- 'Interval's is on, with the value of the /first/ &quot;on&quot; one.</span><span>
+</span><a name="line-613"></a><span class="hs-comment">--</span><span>
+</span><a name="line-614"></a><span class="hs-comment">-- prop&gt; chooseInterval == foldr (&lt;|?&gt;) off</span><span>
+</span><a name="line-615"></a><span class="hs-identifier">chooseInterval</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459851"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-616"></a><span>               </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459851"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459852"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459853"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">]</span><span>    </span><span class="hs-comment">-- ^ the 'Auto's to run and</span><span>
+</span><a name="line-617"></a><span>                                      </span><span class="hs-comment">--   choose from</span><span>
+</span><a name="line-618"></a><span>               </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459851"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459852"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459853"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-619"></a><a name="chooseInterval"><a href="Control.Auto.Interval.html#chooseInterval"><span class="hs-identifier">chooseInterval</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">foldr</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#%3C%7C%3F%3E"><span class="hs-operator hs-var">&lt;|?&gt;</span></a><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">pure</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span>
+</span><a name="line-620"></a><span>
+</span><a name="line-621"></a><span class="hs-comment">-- | Forks an input stream between all 'Interval's in the list, plus</span><span>
+</span><a name="line-622"></a><span class="hs-comment">-- a &quot;default 'Auto'.  The output is the value of the first &quot;on&quot;</span><span>
+</span><a name="line-623"></a><span class="hs-comment">-- 'Interval'; if there isn't any, the output from the &quot;default 'Auto'&quot; is</span><span>
+</span><a name="line-624"></a><span class="hs-comment">-- used.</span><span>
+</span><a name="line-625"></a><span class="hs-comment">--</span><span>
+</span><a name="line-626"></a><span class="hs-comment">-- prop&gt; choose == foldr (&lt;|!&gt;)</span><span>
+</span><a name="line-627"></a><span class="hs-identifier">choose</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459848"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-628"></a><span>       </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459848"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459849"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459850"><span class="hs-identifier hs-type">b</span></a><span>          </span><span class="hs-comment">-- ^ the 'Auto' to behave like if all</span><span>
+</span><a name="line-629"></a><span>                              </span><span class="hs-comment">--   others are 'Nothing'</span><span>
+</span><a name="line-630"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459848"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459849"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459850"><span class="hs-identifier hs-type">b</span></a><span class="hs-special">]</span><span>    </span><span class="hs-comment">-- ^ 'Auto's to run and choose from</span><span>
+</span><a name="line-631"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459848"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459849"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459850"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-632"></a><a name="choose"><a href="Control.Auto.Interval.html#choose"><span class="hs-identifier">choose</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">foldr</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#%3C%7C%21%3E"><span class="hs-operator hs-var">&lt;|!&gt;</span></a><span class="hs-special">)</span><span>
+</span><a name="line-633"></a><span>
+</span><a name="line-634"></a><span class="hs-comment">-- | &quot;Lifts&quot; an @'Auto' m a b@ (transforming @a@s into @b@s) into an</span><span>
+</span><a name="line-635"></a><span class="hs-comment">-- @'Auto' m ('Maybe' a) ('Maybe' b)@ (or, @'Interval' m ('Maybe' a) b@,</span><span>
+</span><a name="line-636"></a><span class="hs-comment">-- transforming /intervals/ of @a@s into /intervals/ of @b@.</span><span>
+</span><a name="line-637"></a><span class="hs-comment">--</span><span>
+</span><a name="line-638"></a><span class="hs-comment">-- It does this by running the 'Auto' as normal when the input is &quot;on&quot;,</span><span>
+</span><a name="line-639"></a><span class="hs-comment">-- and freezing it/being &quot;off&quot; when the input is /off/.</span><span>
+</span><a name="line-640"></a><span class="hs-comment">--</span><span>
+</span><a name="line-641"></a><span class="hs-comment">-- &gt;&gt;&gt; let a1 = during (sumFrom 0) . onFor 2 . pure 1</span><span>
+</span><a name="line-642"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a1 $ repeat ()</span><span>
+</span><a name="line-643"></a><span class="hs-comment">-- [Just 1, Just 2, Nothing, Nothing, Nothing]</span><span>
+</span><a name="line-644"></a><span class="hs-comment">--</span><span>
+</span><a name="line-645"></a><span class="hs-comment">-- &gt;&gt;&gt; let a2 = during (sumFrom 0) . offFor 2 . pure 1</span><span>
+</span><a name="line-646"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a2 $ repeat ()</span><span>
+</span><a name="line-647"></a><span class="hs-comment">-- [Nothing, Nothing, Just 1, Just 2, Just 3]</span><span>
+</span><a name="line-648"></a><span class="hs-comment">--</span><span>
+</span><a name="line-649"></a><span class="hs-comment">-- (Remember that @'pure' x@ is the 'Auto' that ignores its input and</span><span>
+</span><a name="line-650"></a><span class="hs-comment">-- constantly just pumps out @x@ at every step)</span><span>
+</span><a name="line-651"></a><span class="hs-comment">--</span><span>
+</span><a name="line-652"></a><span class="hs-comment">-- Note the difference between putting the 'sumFrom' &quot;after&quot; the</span><span>
+</span><a name="line-653"></a><span class="hs-comment">-- 'offFor' in the chain with 'during' (like the previous example)</span><span>
+</span><a name="line-654"></a><span class="hs-comment">-- and putting the 'sumFrom' &quot;before&quot;:</span><span>
+</span><a name="line-655"></a><span class="hs-comment">--</span><span>
+</span><a name="line-656"></a><span class="hs-comment">-- &gt;&gt;&gt; let a3 = offFor 2 . sumFrom 0 . pure 1</span><span>
+</span><a name="line-657"></a><span class="hs-comment">-- &gt;&gt;&gt; take 5 . streamAuto' a3 $ repeat ()</span><span>
+</span><a name="line-658"></a><span class="hs-comment">-- [Nothing, Nothing, Just 3, Just 4, Just 5]</span><span>
+</span><a name="line-659"></a><span class="hs-comment">--</span><span>
+</span><a name="line-660"></a><span class="hs-comment">-- In the first case (with @a2@), the output of @'pure' 1@ was suppressed</span><span>
+</span><a name="line-661"></a><span class="hs-comment">-- by 'offFor', and @'during' ('sumFrom' 0)@ was only summing on the times</span><span>
+</span><a name="line-662"></a><span class="hs-comment">-- that the 1's were &quot;allowed through&quot;...so it only &quot;starts counting&quot; on</span><span>
+</span><a name="line-663"></a><span class="hs-comment">-- the third step.</span><span>
+</span><a name="line-664"></a><span class="hs-comment">--</span><span>
+</span><a name="line-665"></a><span class="hs-comment">-- In the second case (with @a3@), the output of the @'pure' 1@ is never</span><span>
+</span><a name="line-666"></a><span class="hs-comment">-- suppressed, and went straight into the @'sumFrom' 0@.  'sumFrom' is</span><span>
+</span><a name="line-667"></a><span class="hs-comment">-- always summing, the entire time.  The final output of that @'sumFrom' 0@</span><span>
+</span><a name="line-668"></a><span class="hs-comment">-- is suppressed at the end with @'offFor' 2@.</span><span>
+</span><a name="line-669"></a><span class="hs-comment">--</span><span>
+</span><a name="line-670"></a><span class="hs-identifier">during</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459845"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-671"></a><span>       </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span> </span><a href="#local-1627459845"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459846"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459847"><span class="hs-identifier hs-type">b</span></a><span>      </span><span class="hs-comment">-- ^ 'Auto' to lift to work over intervals</span><span>
+</span><a name="line-672"></a><span>       </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459845"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459846"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459847"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-673"></a><a name="during"><a href="Control.Auto.Interval.html#during"><span class="hs-identifier">during</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">dimap</span><span> </span><a href="#local-1627460999"><span class="hs-identifier hs-var">to</span></a><span> </span><a href="#local-1627460998"><span class="hs-identifier hs-var">from</span></a><span> </span><span class="hs-operator hs-var">.</span><span> </span><span class="hs-identifier hs-var">right</span><span>
+</span><a name="line-674"></a><span>  </span><span class="hs-keyword">where</span><span>
+</span><a name="line-675"></a><span>    </span><a name="local-1627460998"><a href="#local-1627460998"><span class="hs-identifier">from</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">either</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">const</span><span> </span><span class="hs-identifier hs-var">Nothing</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">Just</span><span>
+</span><a name="line-676"></a><span>    </span><a name="local-1627460999"><a href="#local-1627460999"><span class="hs-identifier">to</span></a></a><span>   </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">maybe</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">Left</span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">Right</span><span>
+</span><a name="line-677"></a><span>
+</span><a name="line-678"></a><span class="hs-comment">-- | &quot;Lifts&quot; (more technically, &quot;binds&quot;) an @'Interval' m a b@ into</span><span>
+</span><a name="line-679"></a><span class="hs-comment">-- an @'Interval' m ('Maybe' a) b@.</span><span>
+</span><a name="line-680"></a><span class="hs-comment">--</span><span>
+</span><a name="line-681"></a><span class="hs-comment">-- Does this by running the 'Auto' as normal when the input is &quot;on&quot;, and</span><span>
+</span><a name="line-682"></a><span class="hs-comment">-- freezing it/being &quot;off&quot; when the input is /off/.</span><span>
+</span><a name="line-683"></a><span class="hs-comment">--</span><span>
+</span><a name="line-684"></a><span class="hs-comment">-- It's kind of like 'during', but the resulting @'Maybe' ('Maybe' b))@ is</span><span>
+</span><a name="line-685"></a><span class="hs-comment">-- &quot;joined&quot; back into a @'Maybe' b@.</span><span>
+</span><a name="line-686"></a><span class="hs-comment">--</span><span>
+</span><a name="line-687"></a><span class="hs-comment">-- prop&gt; bindI a == fmap join (during a)</span><span>
+</span><a name="line-688"></a><span class="hs-comment">--</span><span>
+</span><a name="line-689"></a><span class="hs-comment">-- This is really an alternative formulation of 'compI'; typically, you</span><span>
+</span><a name="line-690"></a><span class="hs-comment">-- will be using 'compI' more often, but this form can also be useful (and</span><span>
+</span><a name="line-691"></a><span class="hs-comment">-- slightly more general).  Note that:</span><span>
+</span><a name="line-692"></a><span class="hs-comment">--</span><span>
+</span><a name="line-693"></a><span class="hs-comment">-- prop&gt; bindI f == compI f id</span><span>
+</span><a name="line-694"></a><span class="hs-comment">--</span><span>
+</span><a name="line-695"></a><span class="hs-comment">-- This combinator allows you to properly &quot;chain&quot; (&quot;bind&quot;) together series</span><span>
+</span><a name="line-696"></a><span class="hs-comment">-- of inhibiting 'Auto's.  If you have an @'Interval' m a b@ and an</span><span>
+</span><a name="line-697"></a><span class="hs-comment">-- @'Interval' m b c@, you can chain them into an @'Interval' m a c@.</span><span>
+</span><a name="line-698"></a><span class="hs-comment">--</span><span>
+</span><a name="line-699"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-700"></a><span class="hs-comment">-- f             :: 'Interval' m a b</span><span>
+</span><a name="line-701"></a><span class="hs-comment">-- g             :: 'Interval' m b c</span><span>
+</span><a name="line-702"></a><span class="hs-comment">-- 'bindI' g . f :: 'Interval' m a c</span><span>
+</span><a name="line-703"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-704"></a><span class="hs-comment">--</span><span>
+</span><a name="line-705"></a><span class="hs-comment">-- (Users of libraries with built-in inhibition semantics like Yampa and</span><span>
+</span><a name="line-706"></a><span class="hs-comment">-- netwire might recognize this as the &quot;default&quot; composition in those other</span><span>
+</span><a name="line-707"></a><span class="hs-comment">-- libraries)</span><span>
+</span><a name="line-708"></a><span class="hs-comment">--</span><span>
+</span><a name="line-709"></a><span class="hs-comment">-- See 'compI' for examples of this use case.</span><span>
+</span><a name="line-710"></a><span class="hs-comment">--</span><span>
+</span><a name="line-711"></a><span class="hs-identifier">bindI</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459842"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-712"></a><span>      </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459842"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459843"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459844"><span class="hs-identifier hs-type">b</span></a><span>       </span><span class="hs-comment">-- ^ 'Interval' to bind</span><span>
+</span><a name="line-713"></a><span>      </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459842"><span class="hs-identifier hs-type">m</span></a><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-type">Maybe</span><span> </span><a href="#local-1627459843"><span class="hs-identifier hs-type">a</span></a><span class="hs-special">)</span><span> </span><a href="#local-1627459844"><span class="hs-identifier hs-type">b</span></a><span>
+</span><a name="line-714"></a><a name="bindI"><a href="Control.Auto.Interval.html#bindI"><span class="hs-identifier">bindI</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">fmap</span><span> </span><span class="hs-identifier hs-var">join</span><span> </span><span class="hs-operator hs-var">.</span><span> </span><a href="Control.Auto.Interval.html#during"><span class="hs-identifier hs-var">during</span></a><span>
+</span><a name="line-715"></a><span>
+</span><a name="line-716"></a><span class="hs-comment">-- | Composes two 'Interval's, the same way that '.' composes two 'Auto's:</span><span>
+</span><a name="line-717"></a><span class="hs-comment">--</span><span>
+</span><a name="line-718"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-719"></a><span class="hs-comment">-- (.)   :: Auto     m b c -&gt; Auto     m a b -&gt; Auto     m a c</span><span>
+</span><a name="line-720"></a><span class="hs-comment">-- compI :: Interval m b c -&gt; Interval m a b -&gt; Interval m a c</span><span>
+</span><a name="line-721"></a><span class="hs-comment">-- @</span><span>
+</span><a name="line-722"></a><span class="hs-comment">--</span><span>
+</span><a name="line-723"></a><span class="hs-comment">-- Basically, if any 'Interval' in the chain is &quot;off&quot;, then the entire rest</span><span>
+</span><a name="line-724"></a><span class="hs-comment">-- of the chain is &quot;skipped&quot;, short-circuiting a la 'Maybe'.</span><span>
+</span><a name="line-725"></a><span class="hs-comment">--</span><span>
+</span><a name="line-726"></a><span class="hs-comment">-- (Users of libraries with built-in inhibition semantics like Yampa and</span><span>
+</span><a name="line-727"></a><span class="hs-comment">-- netwire might recognize this as the &quot;default&quot; composition in those other</span><span>
+</span><a name="line-728"></a><span class="hs-comment">-- libraries)</span><span>
+</span><a name="line-729"></a><span class="hs-comment">--</span><span>
+</span><a name="line-730"></a><span class="hs-comment">-- As a contrived example, how about an 'Auto' that only allows values</span><span>
+</span><a name="line-731"></a><span class="hs-comment">-- through during a window...between, say, the second and fourth steps:</span><span>
+</span><a name="line-732"></a><span class="hs-comment">--</span><span>
+</span><a name="line-733"></a><span class="hs-comment">-- &gt;&gt;&gt; let window' start dur = onFor dur `compI` offFor (start - 1)</span><span>
+</span><a name="line-734"></a><span class="hs-comment">-- &gt;&gt;&gt; streamAuto' (window' 2 3)</span><span>
+</span><a name="line-735"></a><span class="hs-comment">-- [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]</span><span>
+</span><a name="line-736"></a><span class="hs-comment">--</span><span>
+</span><a name="line-737"></a><span class="hs-identifier">compI</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">Monad</span><span> </span><a href="#local-1627459838"><span class="hs-identifier hs-type">m</span></a><span>
+</span><a name="line-738"></a><span>      </span><span class="hs-glyph">=&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459838"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459839"><span class="hs-identifier hs-type">b</span></a><span> </span><a href="#local-1627459840"><span class="hs-identifier hs-type">c</span></a><span>   </span><span class="hs-comment">-- ^ compose this 'Interval'...</span><span>
+</span><a name="line-739"></a><span>      </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459838"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459841"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459839"><span class="hs-identifier hs-type">b</span></a><span>   </span><span class="hs-comment">-- ^ ...to this one</span><span>
+</span><a name="line-740"></a><span>      </span><span class="hs-glyph">-&gt;</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span> </span><a href="#local-1627459838"><span class="hs-identifier hs-type">m</span></a><span> </span><a href="#local-1627459841"><span class="hs-identifier hs-type">a</span></a><span> </span><a href="#local-1627459840"><span class="hs-identifier hs-type">c</span></a><span>
+</span><a name="line-741"></a><a name="compI"><a href="Control.Auto.Interval.html#compI"><span class="hs-identifier">compI</span></a></a><span> </span><a name="local-1627461000"><a href="#local-1627461000"><span class="hs-identifier">f</span></a></a><span> </span><a name="local-1627461001"><a href="#local-1627461001"><span class="hs-identifier">g</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">fmap</span><span> </span><span class="hs-identifier hs-var">join</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Interval.html#during"><span class="hs-identifier hs-var">during</span></a><span> </span><a href="#local-1627461000"><span class="hs-identifier hs-var">f</span></a><span class="hs-special">)</span><span> </span><span class="hs-operator hs-var">.</span><span> </span><a href="#local-1627461001"><span class="hs-identifier hs-var">g</span></a><span>
+</span><a name="line-742"></a><span>
+</span><a name="line-743"></a></pre></body></html>

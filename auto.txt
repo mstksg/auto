@@ -128,6 +128,7 @@ merge' :: (a -> c) -> (b -> c) -> (a -> b -> c) -> Blip a -> Blip b -> Blip c
 --   
 --   If we discount laziness, this is <tt><a>merge</a> <a>const</a></tt>.
 mergeL :: Blip a -> Blip a -> Blip a
+infixr 5 `mergeL`
 
 -- | Merges two blip streams together into one, which emits <i>either</i>
 --   of the original blip streams emit. If both emit at the same time, the
@@ -138,6 +139,7 @@ mergeL :: Blip a -> Blip a -> Blip a
 --   If we discount laziness, this is <tt><a>merge</a> (<a>flip</a>
 --   <a>const</a>)</tt>.
 mergeR :: Blip a -> Blip a -> Blip a
+infixl 5 `mergeR`
 
 -- | Deconstruct a <a>Blip</a> by giving a default result if the
 --   <a>Blip</a> is non-occuring and a function to apply on the contents,
@@ -150,9 +152,6 @@ mergeR :: Blip a -> Blip a -> Blip a
 --   
 --   Analogous to <a>maybe</a> from <a>Prelude</a>.
 blip :: b -> (a -> b) -> Blip a -> b
-instance GHC.Generics.Constructor Control.Auto.Blip.Internal.C1_1Blip
-instance GHC.Generics.Constructor Control.Auto.Blip.Internal.C1_0Blip
-instance GHC.Generics.Datatype Control.Auto.Blip.Internal.D1Blip
 instance GHC.Generics.Generic (Control.Auto.Blip.Internal.Blip a)
 instance GHC.Show.Show a => GHC.Show.Show (Control.Auto.Blip.Internal.Blip a)
 instance GHC.Base.Functor Control.Auto.Blip.Internal.Blip
@@ -1171,6 +1170,7 @@ unlessI :: (a -> Bool) -> Interval m a a
 --   <i>both</i> <a>Auto</a>s are run at every step, along with any monadic
 --   effects, regardless of whether they are "on" or "off".
 (<|!>) :: Monad m => Interval m a b -> Auto m a b -> Auto m a b
+infixr 3 <|!>
 
 -- | Forks a common input stream between the two <a>Interval</a>s and
 --   returns, itself, an <a>Interval</a>. If the output of the first one is
@@ -1199,6 +1199,7 @@ unlessI :: (a -> Bool) -> Interval m a a
 --   useful. This is useful only in the case that you really, really want
 --   an interval at the end of it all.
 (<|?>) :: Monad m => Interval m a b -> Interval m a b -> Interval m a b
+infixr 3 <|?>
 
 -- | Forks an input stream between all <a>Interval</a>s in the list. The
 --   result is an <a>Interval</a> whose output is "on" when any of the
@@ -1415,6 +1416,7 @@ during :: Monad m => Auto m a b -> Interval m (Maybe a) b
 --   [Nothing, Just 2, Just 3, Just 4, Nothing, Nothing]
 --   </pre>
 compI :: Monad m => Interval m b c -> Interval m a b -> Interval m a c
+infixr 1 `compI`
 
 -- | <a>Lifts</a> (more technically, "binds") an <tt><a>Interval</a> m a
 --   b</tt> into an <tt><a>Interval</a> m (<a>Maybe</a> a) b</tt>.
@@ -3543,7 +3545,7 @@ gather__ :: (Ord k, Monad m) => (k -> Interval m a b) -> Auto m (k, a) (Map k b)
 --   </pre>
 --   
 --   See <a>gather</a> for more notes.
-gatherMany :: (Ord k, Monad m, Serialize k, Serialize b) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
+gatherMany :: forall k a m b. (Ord k, Monad m, Serialize k, Serialize b) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
 
 -- | The non-serializing/non-resuming version of <a>gatherMany</a>:
 --   
@@ -3554,13 +3556,13 @@ gatherMany :: (Ord k, Monad m, Serialize k, Serialize b) => (k -> Interval m a b
 --   Does <b>not</b> serialize the "last outputs", so resumed <a>Auto</a>s
 --   that have not yet been re-run/accessed to get a fresh output are not
 --   represented in the output map at first.
-gatherMany_ :: (Ord k, Monad m, Serialize k) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
+gatherMany_ :: forall k a m b. (Ord k, Monad m, Serialize k) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
 
 -- | The non-serializing/non-resuming vervsion of <a>gatherMany</a>:
 --   
 --   Serializes neither the <a>Auto</a>s themselves nor the "last outputs"
 --   --- essentially, serializes/resumes nothing.
-gatherMany__ :: (Ord k, Monad m) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
+gatherMany__ :: forall k a m b. (Ord k, Monad m) => (k -> Interval m a b) -> Auto m (Map k a) (Map k b)
 
 
 -- | This module provides tools for generating and manipulating "blip
@@ -3638,6 +3640,7 @@ merge :: (a -> a -> a) -> Blip a -> Blip a -> Blip a
 --   
 --   If we discount laziness, this is <tt><a>merge</a> <a>const</a></tt>.
 mergeL :: Blip a -> Blip a -> Blip a
+infixr 5 `mergeL`
 
 -- | Merges two blip streams together into one, which emits <i>either</i>
 --   of the original blip streams emit. If both emit at the same time, the
@@ -3648,6 +3651,7 @@ mergeL :: Blip a -> Blip a -> Blip a
 --   If we discount laziness, this is <tt><a>merge</a> (<a>flip</a>
 --   <a>const</a>)</tt>.
 mergeR :: Blip a -> Blip a -> Blip a
+infixl 5 `mergeR`
 
 -- | Merge all the blip streams together into one, favoring the first
 --   emitted value.
@@ -3926,6 +3930,7 @@ modifyBlips :: (a -> b) -> Auto m (Blip a) (Blip b)
 --   a1 &lt;&amp; a2 == mergeL &lt;$&gt; a1 &lt;*&gt; a2
 --   </pre>
 (<&) :: Monad m => Auto m a (Blip b) -> Auto m a (Blip b) -> Auto m a (Blip b)
+infixr 5 <&
 
 -- | Takes two <a>Auto</a>s producing blip streams and returns a "merged"
 --   <a>Auto</a> that emits when either of the original <a>Auto</a>s emit.
@@ -3935,6 +3940,7 @@ modifyBlips :: (a -> b) -> Auto m (Blip a) (Blip b)
 --   a1 &amp;&gt; a2 == mergeR &lt;$&gt; a1 &lt;*&gt; a2
 --   </pre>
 (&>) :: Monad m => Auto m a (Blip b) -> Auto m a (Blip b) -> Auto m a (Blip b)
+infixl 5 &>
 
 -- | Supress all upstream emitted values except for the very first.
 once :: Auto m (Blip a) (Blip a)
@@ -4852,12 +4858,14 @@ module Control.Auto.Switch
 --   until it is off (<a>Nothing</a>)...then runs <i>only</i> the second
 --   <a>Auto</a>. This transition is one-way, as well.
 (-->) :: Monad m => Interval m a b -> Auto m a b -> Auto m a b
+infixr 1 -->
 
 -- | A variation of <a>--&gt;</a>, where the right hand side can also be an
 --   <a>Interval</a> / <a>Maybe</a>. The entire result is, then, a
 --   <a>Maybe</a>. Probably less useful than <a>--&gt;</a> in most
 --   situations.
 (-?>) :: Monad m => Interval m a b -> Interval m a b -> Interval m a b
+infixr 1 -?>
 
 -- | <tt><a>switchIn</a> n a1 a2</tt> will behave like <tt>a1</tt> for
 --   <tt>n</tt> steps of output, and then behave like <tt>a2</tt> forever
@@ -6581,12 +6589,14 @@ count :: (Serialize b, Num b) => Auto m a b
 --   until it is off (<a>Nothing</a>)...then runs <i>only</i> the second
 --   <a>Auto</a>. This transition is one-way, as well.
 (-->) :: Monad m => Interval m a b -> Auto m a b -> Auto m a b
+infixr 1 -->
 
 -- | A variation of <a>--&gt;</a>, where the right hand side can also be an
 --   <a>Interval</a> / <a>Maybe</a>. The entire result is, then, a
 --   <a>Maybe</a>. Probably less useful than <a>--&gt;</a> in most
 --   situations.
 (-?>) :: Monad m => Interval m a b -> Interval m a b -> Interval m a b
+infixr 1 -?>
 
 -- | An <a>Auto</a> that runs every input through a <tt>a -&gt;
 --   <a>Maybe</a> b</tt> test and produces a blip stream that emits the

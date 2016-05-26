@@ -1,0 +1,149 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">-- |</span><span>
+</span><a name="line-2"></a><span class="hs-comment">-- Module      : Control.Auto</span><span>
+</span><a name="line-3"></a><span class="hs-comment">-- Description : Main entry point to the /auto/ library.</span><span>
+</span><a name="line-4"></a><span class="hs-comment">-- Copyright   : (c) Justin Le 2015</span><span>
+</span><a name="line-5"></a><span class="hs-comment">-- License     : MIT</span><span>
+</span><a name="line-6"></a><span class="hs-comment">-- Maintainer  : justin@jle.im</span><span>
+</span><a name="line-7"></a><span class="hs-comment">-- Stability   : unstable</span><span>
+</span><a name="line-8"></a><span class="hs-comment">-- Portability : portable</span><span>
+</span><a name="line-9"></a><span class="hs-comment">--</span><span>
+</span><a name="line-10"></a><span class="hs-comment">-- This module serves as the main entry point for the library; these are</span><span>
+</span><a name="line-11"></a><span class="hs-comment">-- all basically re-exports.  The re-exports are chosen so you can start</span><span>
+</span><a name="line-12"></a><span class="hs-comment">-- doing &quot;normal things&quot; off the bat, including all of the types used in</span><span>
+</span><a name="line-13"></a><span class="hs-comment">-- this library.</span><span>
+</span><a name="line-14"></a><span class="hs-comment">--</span><span>
+</span><a name="line-15"></a><span class="hs-comment">-- Conspicuously missing are the most of the tools for working with</span><span>
+</span><a name="line-16"></a><span class="hs-comment">-- 'Interval', 'Blip' streams, switches, and the &quot;collection&quot; autos; those</span><span>
+</span><a name="line-17"></a><span class="hs-comment">-- are all pretty heavy, and if you do end up working with any of those</span><span>
+</span><a name="line-18"></a><span class="hs-comment">-- tools, simply importing the appropriate module should give you all you</span><span>
+</span><a name="line-19"></a><span class="hs-comment">-- need.</span><span>
+</span><a name="line-20"></a><span class="hs-comment">--</span><span>
+</span><a name="line-21"></a><span class="hs-comment">-- See the &lt;https://github.com/mstksg/auto/blob/master/tutorial/tutorial.md tutorial&gt;</span><span>
+</span><a name="line-22"></a><span class="hs-comment">-- if you need help getting started!</span><span>
+</span><a name="line-23"></a><span class="hs-comment">--</span><span>
+</span><a name="line-24"></a><span>
+</span><a name="line-25"></a><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span> </span><span class="hs-special">(</span><span>
+</span><a name="line-26"></a><span>  </span><span class="hs-comment">-- * Types</span><span>
+</span><a name="line-27"></a><span>  </span><span class="hs-comment">-- ** Auto</span><span>
+</span><a name="line-28"></a><span>    </span><a href="Control.Auto.Core.html#Auto"><span class="hs-identifier hs-type">Auto</span></a><span>
+</span><a name="line-29"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#Auto%27"><span class="hs-identifier hs-type">Auto'</span></a><span>
+</span><a name="line-30"></a><span>  </span><span class="hs-comment">-- ** Misc</span><span>
+</span><a name="line-31"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.Internal.html#Blip"><span class="hs-identifier hs-type">Blip</span></a><span>
+</span><a name="line-32"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#Interval"><span class="hs-identifier hs-type">Interval</span></a><span>
+</span><a name="line-33"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#Interval%27"><span class="hs-identifier hs-type">Interval'</span></a><span>
+</span><a name="line-34"></a><span>  </span><span class="hs-comment">-- * Working with 'Auto'</span><span>
+</span><a name="line-35"></a><span>  </span><span class="hs-comment">-- ** Running</span><span>
+</span><a name="line-36"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#stepAuto"><span class="hs-identifier hs-var">stepAuto</span></a><span>
+</span><a name="line-37"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#stepAuto%27"><span class="hs-identifier hs-var">stepAuto'</span></a><span>
+</span><a name="line-38"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#evalAuto"><span class="hs-identifier hs-var">evalAuto</span></a><span>
+</span><a name="line-39"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#evalAuto%27"><span class="hs-identifier hs-var">evalAuto'</span></a><span>
+</span><a name="line-40"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#streamAuto"><span class="hs-identifier hs-var">streamAuto</span></a><span>
+</span><a name="line-41"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#streamAuto%27"><span class="hs-identifier hs-var">streamAuto'</span></a><span>
+</span><a name="line-42"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#stepAutoN"><span class="hs-identifier hs-var">stepAutoN</span></a><span>
+</span><a name="line-43"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#stepAutoN%27"><span class="hs-identifier hs-var">stepAutoN'</span></a><span>
+</span><a name="line-44"></a><span>  </span><span class="hs-comment">-- ** Serializing</span><span>
+</span><a name="line-45"></a><span>  </span><span class="hs-comment">-- | See the header of the &quot;serializing&quot; section of &quot;Control.Auto.Core&quot;</span><span>
+</span><a name="line-46"></a><span>  </span><span class="hs-comment">-- for more detail on how these work.</span><span>
+</span><a name="line-47"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#encodeAuto"><span class="hs-identifier hs-var">encodeAuto</span></a><span>
+</span><a name="line-48"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#decodeAuto"><span class="hs-identifier hs-var">decodeAuto</span></a><span>
+</span><a name="line-49"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Serialize.html#readAuto"><span class="hs-identifier hs-var">readAuto</span></a><span>
+</span><a name="line-50"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Serialize.html#writeAuto"><span class="hs-identifier hs-var">writeAuto</span></a><span>
+</span><a name="line-51"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#unserialize"><span class="hs-identifier hs-var">unserialize</span></a><span>
+</span><a name="line-52"></a><span>  </span><span class="hs-comment">-- ** Strictness</span><span>
+</span><a name="line-53"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#forcer"><span class="hs-identifier hs-var">forcer</span></a><span>
+</span><a name="line-54"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#seqer"><span class="hs-identifier hs-var">seqer</span></a><span>
+</span><a name="line-55"></a><span>  </span><span class="hs-comment">-- ** Internal monad</span><span>
+</span><a name="line-56"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#hoistA"><span class="hs-identifier hs-var">hoistA</span></a><span>
+</span><a name="line-57"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#generalizeA"><span class="hs-identifier hs-var">generalizeA</span></a><span>
+</span><a name="line-58"></a><span>  </span><span class="hs-comment">-- * Auto constructors</span><span>
+</span><a name="line-59"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Effects.html#arrM"><span class="hs-identifier hs-var">arrM</span></a><span>
+</span><a name="line-60"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#arrD"><span class="hs-identifier hs-var">arrD</span></a><span>
+</span><a name="line-61"></a><span>  </span><span class="hs-comment">-- ** from Accumulators</span><span>
+</span><a name="line-62"></a><span>  </span><span class="hs-comment">-- *** Result-first</span><span>
+</span><a name="line-63"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accum"><span class="hs-identifier hs-var">accum</span></a><span>
+</span><a name="line-64"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accum_"><span class="hs-identifier hs-var">accum_</span></a><span>
+</span><a name="line-65"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumM"><span class="hs-identifier hs-var">accumM</span></a><span>
+</span><a name="line-66"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumM_"><span class="hs-identifier hs-var">accumM_</span></a><span>
+</span><a name="line-67"></a><span>  </span><span class="hs-comment">-- *** Initial accumulator-first</span><span>
+</span><a name="line-68"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumD"><span class="hs-identifier hs-var">accumD</span></a><span>
+</span><a name="line-69"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumD_"><span class="hs-identifier hs-var">accumD_</span></a><span>
+</span><a name="line-70"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumMD"><span class="hs-identifier hs-var">accumMD</span></a><span>
+</span><a name="line-71"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#accumMD_"><span class="hs-identifier hs-var">accumMD_</span></a><span>
+</span><a name="line-72"></a><span>  </span><span class="hs-comment">-- ** from State transformers</span><span>
+</span><a name="line-73"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#mkState"><span class="hs-identifier hs-var">mkState</span></a><span>
+</span><a name="line-74"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#mkStateM"><span class="hs-identifier hs-var">mkStateM</span></a><span>
+</span><a name="line-75"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#mkState_"><span class="hs-identifier hs-var">mkState_</span></a><span>
+</span><a name="line-76"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Core.html#mkStateM_"><span class="hs-identifier hs-var">mkStateM_</span></a><span>
+</span><a name="line-77"></a><span>  </span><span class="hs-comment">-- ** Generators</span><span>
+</span><a name="line-78"></a><span>  </span><span class="hs-comment">-- *** Effects</span><span>
+</span><a name="line-79"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Generate.html#effect"><span class="hs-identifier hs-var">effect</span></a><span>
+</span><a name="line-80"></a><span>  </span><span class="hs-comment">-- , exec</span><span>
+</span><a name="line-81"></a><span>  </span><span class="hs-comment">-- *** Iterators</span><span>
+</span><a name="line-82"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Generate.html#iterator"><span class="hs-identifier hs-var">iterator</span></a><span>
+</span><a name="line-83"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Generate.html#iterator_"><span class="hs-identifier hs-var">iterator_</span></a><span>
+</span><a name="line-84"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Generate.html#iteratorM"><span class="hs-identifier hs-var">iteratorM</span></a><span>
+</span><a name="line-85"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Generate.html#iteratorM_"><span class="hs-identifier hs-var">iteratorM_</span></a><span>
+</span><a name="line-86"></a><span>  </span><span class="hs-comment">-- * Common 'Auto's and combinators</span><span>
+</span><a name="line-87"></a><span>  </span><span class="hs-comment">-- ** Processes</span><span>
+</span><a name="line-88"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#sumFrom"><span class="hs-identifier hs-var">sumFrom</span></a><span>
+</span><a name="line-89"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#sumFrom_"><span class="hs-identifier hs-var">sumFrom_</span></a><span>
+</span><a name="line-90"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#sumFromD"><span class="hs-identifier hs-var">sumFromD</span></a><span>
+</span><a name="line-91"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#sumFromD_"><span class="hs-identifier hs-var">sumFromD_</span></a><span>
+</span><a name="line-92"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#productFrom"><span class="hs-identifier hs-var">productFrom</span></a><span>
+</span><a name="line-93"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#productFrom_"><span class="hs-identifier hs-var">productFrom_</span></a><span>
+</span><a name="line-94"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#mappender"><span class="hs-identifier hs-var">mappender</span></a><span>
+</span><a name="line-95"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#mappender_"><span class="hs-identifier hs-var">mappender_</span></a><span>
+</span><a name="line-96"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Process.html#mappendFrom"><span class="hs-identifier hs-var">mappendFrom</span></a><span>
+</span><a name="line-97"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#lastVal"><span class="hs-identifier hs-var">lastVal</span></a><span>
+</span><a name="line-98"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#lastVal_"><span class="hs-identifier hs-var">lastVal_</span></a><span>
+</span><a name="line-99"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#delay"><span class="hs-identifier hs-var">delay</span></a><span>
+</span><a name="line-100"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#delay_"><span class="hs-identifier hs-var">delay_</span></a><span>
+</span><a name="line-101"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Time.html#count"><span class="hs-identifier hs-var">count</span></a><span>
+</span><a name="line-102"></a><span>  </span><span class="hs-comment">-- ** Switches</span><span>
+</span><a name="line-103"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="hs-comment">--&gt;)</span><span>
+</span><a name="line-104"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><a href="Control.Auto.Switch.html#-%3F%3E"><span class="hs-operator hs-var">-?&gt;</span></a><span class="hs-special">)</span><span>
+</span><a name="line-105"></a><span>  </span><span class="hs-comment">-- ** Blips</span><span>
+</span><a name="line-106"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#emitJusts"><span class="hs-identifier hs-var">emitJusts</span></a><span>
+</span><a name="line-107"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#emitOn"><span class="hs-identifier hs-var">emitOn</span></a><span>
+</span><a name="line-108"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#fromBlips"><span class="hs-identifier hs-var">fromBlips</span></a><span>
+</span><a name="line-109"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#fromBlipsWith"><span class="hs-identifier hs-var">fromBlipsWith</span></a><span>
+</span><a name="line-110"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#holdWith"><span class="hs-identifier hs-var">holdWith</span></a><span>
+</span><a name="line-111"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#holdWith_"><span class="hs-identifier hs-var">holdWith_</span></a><span>
+</span><a name="line-112"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#perBlip"><span class="hs-identifier hs-var">perBlip</span></a><span>
+</span><a name="line-113"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#never"><span class="hs-identifier hs-var">never</span></a><span>
+</span><a name="line-114"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Blip.html#immediately"><span class="hs-identifier hs-var">immediately</span></a><span>
+</span><a name="line-115"></a><span>  </span><span class="hs-comment">-- ** Intervals</span><span>
+</span><a name="line-116"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#onFor"><span class="hs-identifier hs-var">onFor</span></a><span>
+</span><a name="line-117"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#during"><span class="hs-identifier hs-var">during</span></a><span>
+</span><a name="line-118"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#off"><span class="hs-identifier hs-var">off</span></a><span>
+</span><a name="line-119"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#toOn"><span class="hs-identifier hs-var">toOn</span></a><span>
+</span><a name="line-120"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Interval.html#fromInterval"><span class="hs-identifier hs-var">fromInterval</span></a><span>
+</span><a name="line-121"></a><span>  </span><span class="hs-comment">-- * Running</span><span>
+</span><a name="line-122"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#interactAuto"><span class="hs-identifier hs-var">interactAuto</span></a><span>
+</span><a name="line-123"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#interactRS"><span class="hs-identifier hs-var">interactRS</span></a><span>
+</span><a name="line-124"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#streamAutoEffects"><span class="hs-identifier hs-var">streamAutoEffects</span></a><span>
+</span><a name="line-125"></a><span>  </span><span class="hs-special">,</span><span> </span><a href="Control.Auto.Run.html#toEffectStream"><span class="hs-identifier hs-var">toEffectStream</span></a><span>
+</span><a name="line-126"></a><span>  </span><span class="hs-comment">-- * Re-exports</span><span>
+</span><a name="line-127"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Applicative</span><span>
+</span><a name="line-128"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Arrow</span><span>
+</span><a name="line-129"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Category</span><span>
+</span><a name="line-130"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Functor</span><span class="hs-operator">.</span><span class="hs-identifier">Identity</span><span>
+</span><a name="line-131"></a><span>  </span><span class="hs-special">,</span><span> </span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Semigroup</span><span>
+</span><a name="line-132"></a><span>  </span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><a name="line-133"></a><span>
+</span><a name="line-134"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Applicative</span><span>
+</span><a name="line-135"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Arrow</span><span> </span><span class="hs-keyword">hiding</span><span>   </span><span class="hs-special">(</span><span class="hs-identifier hs-var">loop</span><span class="hs-special">)</span><span>
+</span><a name="line-136"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Blip.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Blip</span></a><span>
+</span><a name="line-137"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Core.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Core</span></a><span>
+</span><a name="line-138"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Effects.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Effects</span></a><span>
+</span><a name="line-139"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Generate.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Generate</span></a><span>
+</span><a name="line-140"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Interval.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Interval</span></a><span>
+</span><a name="line-141"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Process.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Process</span></a><span>
+</span><a name="line-142"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Run.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Run</span></a><span>
+</span><a name="line-143"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Serialize.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Serialize</span></a><span>
+</span><a name="line-144"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Switch.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Switch</span></a><span>
+</span><a name="line-145"></a><span class="hs-keyword">import</span><span> </span><a href="Control.Auto.Time.html"><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Auto</span><span class="hs-operator">.</span><span class="hs-identifier">Time</span></a><span>
+</span><a name="line-146"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Control</span><span class="hs-operator">.</span><span class="hs-identifier">Category</span><span>
+</span><a name="line-147"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Functor</span><span class="hs-operator">.</span><span class="hs-identifier">Identity</span><span>
+</span><a name="line-148"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">Data</span><span class="hs-operator">.</span><span class="hs-identifier">Semigroup</span><span>
+</span><a name="line-149"></a></pre></body></html>
