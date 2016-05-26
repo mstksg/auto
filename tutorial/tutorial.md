@@ -752,7 +752,7 @@ with me", when it is needed.  For example, the `interactAuto` loop takes an
 value.
 
 ~~~haskell
-ghci> interactAuto (onFor 4 . (++ "!!!"))
+ghci> interactAuto (onFor 4 . arr (++ "!!!"))
 > hello
 hello!!!
 > how

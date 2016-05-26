@@ -1,6 +1,12 @@
 Auto
 ====
 
+[![auto on Stackage LTS 2](http://stackage.org/package/auto/badge/lts-2)](http://stackage.org/lts-2/package/auto)
+[![auto on Stackage LTS 3](http://stackage.org/package/auto/badge/lts-3)](http://stackage.org/lts-3/package/auto)
+[![auto on Stackage LTS 4](http://stackage.org/package/auto/badge/lts-4)](http://stackage.org/lts-4/package/auto)
+[![auto on Stackage LTS](http://stackage.org/package/auto/badge/lts)](http://stackage.org/lts/package/auto)
+[![auto on Stackage Nightly](http://stackage.org/package/auto/badge/nightly)](http://stackage.org/nightly/package/auto)
+
 [![Join the chat at https://gitter.im/mstksg/auto](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mstksg/auto?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ~~~bash
@@ -11,7 +17,7 @@ Check it out!
 -------------
 
 ~~~haskell
--- Let's impliement a PID feedback controller over a black box system.
+-- Let's implement a PID feedback controller over a black box system.
 
 import Control.Auto
 import Prelude hiding ((.), id)
@@ -25,7 +31,7 @@ type System m = Auto m Double Double
 
 -- A PID controller adjusts the input to the black box system until the
 -- response matches the target.  It does this by adjusting the input based on
--- the current error, the cumulative sum, and the consecutative differences.
+-- the current error, the cumulative sum, and the consecutive differences.
 --
 -- See http://en.wikipedia.org/wiki/PID_controller
 --
@@ -138,7 +144,7 @@ github.
     concepts.  Your building blocks are well-defined *ideas*.
 
 *   **Compositional**: You build your eventually complex program/game out of
-    small, simple components.  These simple components compose with eachother;
+    small, simple components.  These simple components compose with each other;
     and compositions of components compose as well with other components.
     Every "layer" of composition is seamless.  It's the [scalable program
     architecture][spa] principle in practice: If you combine an A with an A,
