@@ -1,11 +1,10 @@
 Auto
 ====
 
-[![auto on Stackage LTS 2](http://stackage.org/package/auto/badge/lts-2)](http://stackage.org/lts-2/package/auto)
-[![auto on Stackage LTS 3](http://stackage.org/package/auto/badge/lts-3)](http://stackage.org/lts-3/package/auto)
-[![auto on Stackage LTS 4](http://stackage.org/package/auto/badge/lts-4)](http://stackage.org/lts-4/package/auto)
+[![auto on Hackage](https://img.shields.io/hackage/v/auto.svg?maxAge=2592000)](https://hackage.haskell.org/package/auto)
 [![auto on Stackage LTS](http://stackage.org/package/auto/badge/lts)](http://stackage.org/lts/package/auto)
 [![auto on Stackage Nightly](http://stackage.org/package/auto/badge/nightly)](http://stackage.org/nightly/package/auto)
+[![Build Status](https://travis-ci.org/mstksg/auto.svg?branch=master)](https://travis-ci.org/mstksg/auto)
 
 [![Join the chat at https://gitter.im/mstksg/auto](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mstksg/auto?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
