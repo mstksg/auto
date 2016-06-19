@@ -180,7 +180,7 @@ import Prelude hiding             (id, (.), concat, concatMap, sum)
 -- deterministic behavior over re-loads...if "reloading", it'll ignore the
 -- seed you pass in, and use the original seed given when originally saved.
 --
-rands :: (Serialize g, RandomGen g)
+rands :: Serialize g
       => (g -> (b, g)) -- ^ random generating function
       -> g             -- ^ random generator seed
       -> Auto m a b
@@ -201,8 +201,7 @@ stdRands r = mkState' (read <$> get) (put . show) (\_ g -> r g)
 
 
 -- | The non-serializing/non-resuming version of 'rands'.
-rands_ :: RandomGen g
-       => (g -> (b, g))   -- ^ random generating function
+rands_ :: (g -> (b, g))   -- ^ random generating function
        -> g               -- ^ random generator seed
        -> Auto m a b
 rands_ r = mkState_ (\_ g -> r g)
@@ -222,7 +221,7 @@ rands_ r = mkState_ (\_ g -> r g)
 --            => 'RandT' g m b -> (g -> m (b, g))
 -- @
 --
-randsM :: (Serialize g, RandomGen g, Monad m)
+randsM :: Serialize g
        => (g -> m (b, g))     -- ^ (monadic) random generating function
        -> g                   -- ^ random generator seed
        -> Auto m a b
@@ -235,16 +234,14 @@ randsM r = mkStateM (\_ g -> r g)
 --
 -- See the documentation of 'randsM' for more information on this 'Auto'.
 --
-stdRandsM :: Monad m
-          => (StdGen -> m (b, StdGen))  -- ^ (monadic) random generating function
+stdRandsM :: (StdGen -> m (b, StdGen))  -- ^ (monadic) random generating function
           -> StdGen                     -- ^ random generator seed
           -> Auto m a b
 stdRandsM r = mkStateM' (read <$> get) (put . show) (\_ g -> r g)
 {-# INLINE stdRandsM #-}
 
 -- | The non-serializing/non-resuming version of 'randsM'.
-randsM_ :: (RandomGen g, Monad m)
-        => (g -> m (b, g))    -- ^ (monadic) random generating function
+randsM_ :: (g -> m (b, g))    -- ^ (monadic) random generating function
         -> g                  -- ^ random generator seed
         -> Auto m a b
 randsM_ r = mkStateM_ (\_ g -> r g)
@@ -271,7 +268,7 @@ randsM_ r = mkStateM_ (\_ g -> r g)
 -- @
 --
 -- (This is basically 'mkState', specialized.)
-arrRand :: (Serialize g, RandomGen g)
+arrRand :: Serialize g
         => (a -> g -> (b, g))   -- ^ random arrow
         -> g                    -- ^ random generator seed
         -> Auto m a b
@@ -288,7 +285,7 @@ arrRand = mkState
 -- @
 -- ('runRandT' .) :: 'RandomGen' g => (a -> 'RandT' g b) -> (a -> g -> m (b, g))
 -- @
-arrRandM :: (Monad m, Serialize g, RandomGen g)
+arrRandM :: Serialize g
          => (a -> g -> m (b, g))    -- ^ (monadic) random arrow
          -> g                       -- ^ random generator seed
          -> Auto m a b
@@ -317,15 +314,13 @@ arrRandStdM :: (a -> StdGen -> m (b, StdGen)) -- ^ (mondic) random arrow
 arrRandStdM = mkStateM' (read <$> get) (put . show)
 
 -- | The non-serializing/non-resuming version of 'arrRand'.
-arrRand_ :: RandomGen g
-         => (a -> g -> (b, g))        -- ^ random arrow
+arrRand_ :: (a -> g -> (b, g))        -- ^ random arrow
          -> g                         -- ^ random generator seed
          -> Auto m a b
 arrRand_ = mkState_
 
 -- | The non-serializing/non-resuming version of 'arrRandM'.
-arrRandM_ :: RandomGen g
-          => (a -> g -> m (b, g))     -- ^ (monadic) random arrow
+arrRandM_ :: (a -> g -> m (b, g))     -- ^ (monadic) random arrow
           -> g                        -- ^ random generator seed
           -> Auto m a b
 arrRandM_ = mkStateM_

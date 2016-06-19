@@ -152,7 +152,7 @@ _execOnceF m = go
 
 -- | The input stream is a stream of monadic actions, and the output stream
 -- is the result of their executions, through executing them.
-effects :: Monad m => Auto m (m a) a
+effects :: Auto m (m a) a
 effects = arrM id
 
 -- | Applies the given "monadic function" (function returning a monadic

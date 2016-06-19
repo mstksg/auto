@@ -144,8 +144,7 @@ arrD :: Serialize b
 arrD f = mkState $ \x s -> (s, f x)
 
 -- | The non-resuming/non-serializing version of 'arrD'.
-arrD_ :: Serialize b
-      => (a -> b)       -- ^ function to apply
+arrD_ :: (a -> b)       -- ^ function to apply
       -> b              -- ^ initial value
       -> Auto m a b
 arrD_ f = mkState_ $ \x s -> (s, f x)
