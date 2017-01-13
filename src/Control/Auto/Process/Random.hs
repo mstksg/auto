@@ -137,6 +137,7 @@ import Data.Orphans               ()
 import Data.Serialize
 import Data.Tuple
 import Prelude hiding             (id, (.), concat, concatMap, sum)
+import System.Random
 
 
 -- | Given a seed-consuming generating function of form @g -> (b, g)@
