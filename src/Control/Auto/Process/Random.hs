@@ -131,13 +131,13 @@ import Control.Auto.Effects
 import Control.Auto.Interval
 import Control.Category
 import Control.Monad              (guard)
-import Control.Monad.Random
+import Control.Monad.Random       (MonadRandom(..), RandT, runRandT)
 import Data.Bits
 import Data.Orphans               ()
 import Data.Serialize
 import Data.Tuple
 import Prelude hiding             (id, (.), concat, concatMap, sum)
-import System.Random
+import System.Random              (RandomGen(..), Random(..), StdGen)
 
 
 -- | Given a seed-consuming generating function of form @g -> (b, g)@

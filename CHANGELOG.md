@@ -1,3 +1,18 @@
+0.4.3.1
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.3.1>
+
+*   Compatibility support for *MonadRandom-0.5*.
+
+0.4.3.0
+-------
+<https://github.com/mstksg/auto/releases/tag/v0.4.3.0>
+
+*   **Control.Auto.Blip**: New blip stream splitter `onEitherB`, which splits
+    an incoming blip stream into two output streams based on whether the
+    emitted items resolve to `Left` or `Right` when applied to the splitting
+    function.
+
 0.4.2.4
 -------
 <https://github.com/mstksg/auto/releases/tag/v0.4.2.4>
