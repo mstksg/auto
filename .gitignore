@@ -3,4 +3,4 @@
 /.cabal-sandbox
 /tmp
 /.stack-work
-
+/auto.cabal
