@@ -96,7 +96,7 @@ license: MIT
 homepage: https://github.com/mstksg/auto
 git: git://github.com/mstksg/auto.git
 bug-reports: https://github.com/mstksg/auto/issues
-tested-with: GHC >= 7.6 && < 8.8
+tested-with: GHC >= 8.0
 
 extra-source-files:
 - README.md
